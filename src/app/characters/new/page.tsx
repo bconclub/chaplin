@@ -132,11 +132,13 @@ function activeBuildStage(elapsedSeconds: number) {
 
 function appearanceDirectionFromBible(bible: CharacterProductionBible) {
   return [
+    bible.visual.medium,
     bible.visual.perceivedAge,
     bible.visual.faceAnchors.join("; "),
     bible.visual.hair,
     bible.visual.wardrobe,
     bible.visual.silhouette,
+    ...(bible.visual.recognitionLocks ?? []),
   ].filter(Boolean).join(". ");
 }
 

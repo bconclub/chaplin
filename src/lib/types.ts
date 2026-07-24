@@ -1,3 +1,5 @@
+import type { CameraMovementId } from "@/lib/camera-movements";
+
 // Project Chaplin: core data model.
 // This is the traceability spine: every entity below carries the IDs that
 // let you walk the full chain, character -> castings -> stories -> scenes
@@ -55,6 +57,8 @@ export interface CharacterProductionBible {
   };
   visual: {
     perceivedAge: string;
+    medium?: string;
+    recognitionLocks?: string[];
     faceAnchors: string[];
     hair: string;
     wardrobe: string;
@@ -128,6 +132,7 @@ export interface Scene {
   durationSeconds?: number;
   previewImageUrl?: string;
   previewAssetId?: string;
+  cameraMovementId?: CameraMovementId;
   lines: Line[];
 }
 

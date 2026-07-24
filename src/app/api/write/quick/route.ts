@@ -42,9 +42,9 @@ const FIELD_RULES: Record<QuickField, string> = {
   dialogue: "Write a concise, performable line in this actor's established personality and locked voice. Preserve the user's intent, use subtext rather than exposition, and make it memorable without catchphrase clichés. Output spoken words only: no speaker label, parentheses, brackets, stage directions, or written pause cues. Use punctuation for cadence. Output dialogue only.",
   sfx: "Write only an ElevenLabs 1-2 second non-musical signature-sound prompt. Translate the actor's personality into one physical source, a precise material texture, a close acoustic distance, one unusual identifying detail, and a clean stop. It must work as a short repeatable sonic logo, not a sequence, biography, ambience bed, or score. No speech, voice, melody, riser, or trailer braam. 30-55 words.",
   theme: "Write only an Eleven Music prompt for a 12-second instrumental ident. Include BPM, key, a three-note motif, exact instruments, 0-3s / 3-8s / 8-12s development, mix priority, and final cadence. No biography, sound-effect sequence, vocals, choir, lyrics, or copyrighted imitation. 55-95 words.",
-  "identity-image": "Write only a concise Seedream 16:9 Identity Hero prompt for the actor's definitive casting image. Unless the user explicitly requests a stylized medium, require a visually striking live-action cinematic photograph of a real human: natural facial asymmetry, pores, fine hair, believable hands, tactile fabric, grounded body weight, optical depth, physically motivated light, and restrained film grain. Use coherent natural-language blocks in this order: ACTOR with repeatable face anchors; VISIBLE PERFORMANCE through expression, hands, posture, weight, and eyeline; SIGNATURE LOOK; one restrained WORLD detail; CAMERA; LIGHT; LOCKS AND EXCLUSIONS. One person. No biography, plot montage, fashion pose, generic hero stance, dialogue, text, logo, UI, or watermark. Keep only generation-critical facts. 90-140 words.",
+  "identity-image": "Write only a concise 16:9 identity-image prompt, 90-140 words. Treat the requested visual medium as binding: preserve manga, animation, illustration, or other explicit styling exactly; default to cinematic live-action photography only when no medium is requested. Use one direct paragraph covering medium and rendering language, visible subject anatomy, exact hair and wardrobe, expression and gesture, restrained world detail, camera, light, and palette. Then add one short Negative line and one Recognition locks line containing exactly four short visible invariants. Those four carry recognition; everything else may move between scenes. No biography, plot summary, symbolism essay, generic hero pose, dialogue, text, logo, UI, or watermark.",
   image: "Write only a concise Seedream 16:9 story first-frame prompt. Unless the user explicitly requests a stylized medium, require a visually striking live-action cinematic photograph of a real human with natural skin, believable anatomy, tactile materials, optical depth, physical camera character, and motivated light. Use coherent natural-language blocks: SUBJECT identity anchors; PLAYABLE MOMENT; SET; CAMERA; LIGHT; CONTINUITY; EXCLUSIONS. Show one decision through face, hands, weight, and eyeline. No biography, plot summary, camera movement, dialogue, typography, logo, or watermark. Keep only generation-critical facts. 80-130 words.",
-  video: "Write only a Seedance five-second IMAGE-TO-VIDEO motion plan. State that the supplied image is exact first frame/source of truth; do not redescribe the actor, wardrobe, set, palette, or biography. Specify 0.0-1.2s, 1.2-3.5s, and 3.5-5.0s subject action; one facial beat; one camera path; fixed source-image axis/lens/horizon; light continuity; secondary motion; final frame; identity and geometry locks. Silent plate: no lip-sync, speech, subtitles, text, logo, or watermark. Keep it direct and executable. 75-120 words.",
+  video: "Inspect the supplied image as the exact first frame. Write only a 30-60 word Seedance motion prompt using actions physically possible inside its visible crop. Never introduce an object, body part, doorway, prop, or environmental effect that is not visible. Use one clear subject-motion beat, one simple named camera move, optional subtle motion already supported by the frame, and one ending state. Use ordering words, not timestamps, percentages, lens notes, source-of-truth preambles, or lighting restatements. Add exactly four relevant failure negatives and end with --duration 5.",
 };
 
 function clean(value: unknown, max = 4000) {
@@ -104,7 +104,11 @@ export async function POST(request: Request) {
     if (!writingConfig.enabled) throw new Error("AI writing is paused by Super Admin.");
     const model = writingConfig.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
     const production = VISUAL_FIELDS.has(field) ? await getCharacterProductionState(character.id) : null;
-    const visualReference = production?.visualReference ?? null;
+    const canonicalReference = production?.visualReference ?? null;
+    const requestedReference = clean(body.referenceImage, 12000);
+    const visualReferenceUrl = requestedReference || canonicalReference?.url || "";
+    const visualReferenceSource = requestedReference ? "exact-first-frame" : canonicalReference?.source ?? null;
+    const visualReferenceAssetId = requestedReference ? null : canonicalReference?.assetId ?? null;
     const promptPayload = JSON.stringify({
       field,
       currentText: currentText || null,
@@ -122,14 +126,16 @@ export async function POST(request: Request) {
         brollLine: character.brollLine ?? null,
         brollScene: character.brollScene ?? null,
         productionBible: character.productionBible ?? buildProductionBible(character),
-        visualReference: visualReference ? { source: visualReference.source, assetId: visualReference.assetId } : null,
+        visualReference: visualReferenceUrl ? { source: visualReferenceSource, assetId: visualReferenceAssetId } : null,
       },
       relatedCurrentFields: context,
     });
-    const messageContent = visualReference
+    const messageContent = visualReferenceUrl
       ? [
-          await anthropicImageBlock(visualReference.url),
-          { type: "text" as const, text: `The image above is ${character.name}'s canonical visual identity seed. Base composition and continuity on what is actually visible. Do not invent a conflicting face, age, hair, body, wardrobe, palette, or material.` },
+          await anthropicImageBlock(visualReferenceUrl),
+          { type: "text" as const, text: field === "video"
+            ? "This image is the exact first frame. Inspect its crop and visible geometry. Animate only what is actually present and physically able to move inside this frame; do not import scene fiction from the current text."
+            : `The image above is ${character.name}'s canonical visual identity seed. Base composition and continuity on what is actually visible. Do not invent a conflicting face, age, hair, body, wardrobe, palette, or material.` },
           { type: "text" as const, text: promptPayload },
         ]
       : promptPayload;
@@ -192,7 +198,7 @@ export async function POST(request: Request) {
     await completeGeneration(
       jobId,
       undefined,
-      { field, characterId: character.id, visualReference: visualReference?.url ?? null, visualReferenceSource: visualReference?.source ?? null },
+      { field, characterId: character.id, visualReference: visualReferenceUrl || null, visualReferenceSource },
       await calculateGenerationBilling({ kind: "anthropic-prompt", usage })
     );
     return Response.json({ text, provider: "anthropic", model, usage, configured: true });

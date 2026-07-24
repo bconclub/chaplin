@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChaplinStore } from "@/lib/store";
 import HeroGridCard, { type HomepageBroll } from "@/components/HeroGridCard";
 
@@ -13,7 +13,6 @@ export default function InfiniteCharacterGallery() {
   const [activeGridId, setActiveGridId] = useState<string | null>(null);
   const [automaticGridId, setAutomaticGridId] = useState<string | null>(null);
   const [brolls, setBrolls] = useState<HomepageBroll[]>([]);
-  const gridRef = useRef<HTMLDivElement | null>(null);
 
   const brollByCharacter = useMemo(
     () => new Map(brolls.map((broll) => [broll.characterId, broll])),
@@ -61,57 +60,34 @@ export default function InfiniteCharacterGallery() {
     };
   }, []);
 
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid || !readyBrollIds.length) return;
-    const ratios = new Map<Element, number>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) ratios.set(entry.target, entry.intersectionRatio);
-
-      if (activeGridId) {
-        const activeVisible = [...ratios.entries()].some(
-          ([element, ratio]) =>
-            (element as HTMLElement).dataset.heroCharacterId === activeGridId && ratio >= 0.28,
-        );
-        if (!activeVisible) setActiveGridId(null);
-      }
-
-      const best = [...ratios.entries()]
-        .filter(([, ratio]) => ratio >= 0.58)
-        .sort((a, b) => b[1] - a[1])
-        .map(([element]) => (element as HTMLElement).dataset.heroCharacterId)
-        .find((id): id is string => Boolean(id && readyBrollIds.includes(id)));
-      if (best) setAutomaticGridId((current) => current === best ? current : best);
-    }, {
-      rootMargin: "-16% 0px -22% 0px",
-      threshold: [0, 0.28, 0.58, 0.78, 0.95],
-    });
-
-    const cards = grid.querySelectorAll<HTMLElement>("[data-home-video-ready='true']");
-    cards.forEach((card) => observer.observe(card));
-    return () => observer.disconnect();
-  }, [activeGridId, readyBrollIds]);
 
   function advanceBroll(completedCharacterId: string) {
     if (readyBrollIds.length < 2) return;
-    const currentIndex = readyBrollIds.indexOf(completedCharacterId);
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % readyBrollIds.length;
+    const nextIds = readyBrollIds.filter((characterId) => characterId !== completedCharacterId);
+    const nextId = nextIds[Math.floor(Math.random() * nextIds.length)];
     setActiveGridId(null);
-    setAutomaticGridId(readyBrollIds[nextIndex]);
+    setAutomaticGridId(nextId);
   }
 
   if (!characters.length) return null;
+  const totalBaseTiles = characters.length + 1;
+  const fillerCount = (8 - (totalBaseTiles % 8)) % 8;
+  const repeatedCharacters = Array.from(
+    { length: fillerCount },
+    (_, index) => characters[index % characters.length],
+  );
+
 
   return (
-    <main className="relative min-h-[calc(100svh-4rem)] overflow-x-clip pb-32">
+    <main className="relative flex h-[calc(100dvh-10rem)] min-h-0 flex-col overflow-hidden" data-home-gallery>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(242,78,112,0.12),transparent_28%),radial-gradient(circle_at_78%_16%,rgba(7,210,190,0.14),transparent_27%)]" />
-      <section className="relative mx-auto w-full max-w-6xl px-4 py-6 lg:px-6 lg:py-10" aria-label="AI actor gallery">
-        <div className="mx-auto mb-6 max-w-3xl text-center lg:mb-9">
+      <section className="relative mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col px-3 py-2 sm:px-4 sm:py-3 lg:px-6" aria-label="AI actor gallery">
+        <div className="mx-auto mb-2 max-w-3xl shrink-0 text-center sm:mb-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-accent">The Chaplin cast</p>
-          <h1 className="marquee-title mt-2 text-[clamp(2.25rem,9vw,5rem)] uppercase leading-[0.92] text-ink">
+          <h1 className="marquee-title mt-1 text-[clamp(1.55rem,4.6vh,3.5rem)] uppercase leading-[0.92] text-ink">
             The World of AI Actors
           </h1>
-          <p className="mt-3 text-sm leading-6 text-grey sm:text-xl sm:leading-8" aria-live="polite">
+          <p className="mt-1 text-xs leading-5 text-grey sm:text-base" aria-live="polite">
             Ready to cast AI actors for{" "}
             <span
               key={CASTING_FORMATS[castingFormatIndex]}
@@ -120,39 +96,47 @@ export default function InfiniteCharacterGallery() {
               {CASTING_FORMATS[castingFormatIndex]}.
             </span>
           </p>
-          <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/35">
-            Scroll to preview · tap once to play · tap again to open
-          </p>
         </div>
 
-        <div ref={gridRef} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
+        <div className="grid min-h-0 flex-1 grid-cols-4 auto-rows-[minmax(0,1fr)] gap-1.5 sm:grid-cols-8 sm:gap-2" data-home-gallery-grid>
           {characters.map((character) => (
             <HeroGridCard
               key={character.id}
               character={character}
+              fillCell
               active={character.id === currentFeaturedId}
               onActivate={() => setActiveGridId(character.id)}
               broll={brollByCharacter.get(character.id)}
               onPlaybackComplete={advanceBroll}
             />
           ))}
+          {repeatedCharacters.map((character, index) => (
+            <HeroGridCard
+              key={`repeat-${character.id}-${index}`}
+              character={character}
+              active={false}
+              onActivate={() => setActiveGridId(character.id)}
+              broll={brollByCharacter.get(character.id)}
+              fillCell
+            />
+          ))}
           <Link
             href="/characters/new"
-            className="flex aspect-[4/5] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line p-3 text-center text-grey transition-colors hover:border-accent hover:text-accent"
+            className="flex h-full min-h-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line p-1.5 text-center text-grey transition-colors hover:border-accent hover:text-accent"
           >
-            <span className="text-2xl leading-none">+</span>
-            <span className="text-[11px] font-semibold leading-tight">Create your AI actor</span>
+            <span className="text-lg leading-none">+</span>
+            <span className="text-[8px] font-semibold leading-tight sm:text-[10px]">Create your AI actor</span>
           </Link>
         </div>
 
-        <div className="mx-auto mt-7 flex w-full items-center justify-between gap-4 lg:mt-10">
-          <p className="text-xs text-grey">
+        <div className="mx-auto mt-2 flex w-full shrink-0 items-center justify-between gap-3">
+          <p className="text-[9px] text-grey sm:text-[10px]">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent-secondary shadow-[0_0_10px_var(--accent-secondary)]" />
             {characters.length} characters ready to discover
           </p>
           <Link
             href="/feed"
-            className="rounded-full border border-line bg-paper/65 px-5 py-2.5 text-xs font-semibold text-ink backdrop-blur-md transition-colors hover:border-accent hover:text-accent"
+            className="rounded-full border border-line bg-paper/65 px-3 py-1.5 text-[9px] font-semibold text-ink backdrop-blur-md transition-colors hover:border-accent hover:text-accent sm:text-[10px]"
           >
             Open Feed →
           </Link>

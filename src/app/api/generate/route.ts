@@ -110,6 +110,8 @@ const VISUAL_LABEL_PRIORITY = [
   "LOCKS AND EXCLUSIONS",
   "LOCKS",
   "EXCLUSIONS",
+  "NEGATIVE",
+  "RECOGNITION LOCKS",
   "AUDIO",
 ];
 
@@ -121,6 +123,10 @@ function compactVisualDirection(prompt: string, kind: "image" | "video") {
     .map((line) => line.trim())
     .filter(Boolean);
   const labeled = new Map<string, string>();
+  const maximumCharacters = kind === "image" ? 1800 : 1450;
+  const direct = cleaned.join("\n");
+  if (direct.length <= maximumCharacters) return direct;
+
   const unlabeled: string[] = [];
   for (const line of cleaned) {
     const match = /^([A-Z][A-Z /&+_-]{2,32}):\s*(.+)$/.exec(line);
@@ -141,11 +147,11 @@ function compactVisualDirection(prompt: string, kind: "image" | "video") {
   const essentials = selected.length >= 3
     ? selected
     : [...selected, ...unlabeled.slice(0, kind === "image" ? 5 : 7).map((line) => line.slice(0, maximumLine).trim())];
-  const maximumCharacters = kind === "image" ? 1800 : 1450;
   return essentials.join("\n").slice(0, maximumCharacters).trim();
 }
 
 function visualGenerationPrompt(stage: PipelineStageConfig, prompt: string, kind: "image" | "video") {
+  if (kind === "video") return compactVisualDirection(prompt, kind);
   const stylized = requestsStylizedImage(prompt);
   const explicitStyle = stylized
     ? prompt.split(/[\n.!?;]/).map((clause) => clause.trim()).find((clause) => requestsStylizedImage(clause))
@@ -814,16 +820,14 @@ export async function POST(request: Request) {
       const videoConfig = pipeline.stages.video;
       requireStage(videoConfig, "Video");
       const requestedPrompt = text(input, "prompt", 10, 3000);
-      const silentPrompt = /silent visual plate|audio is produced separately/i.test(requestedPrompt)
-        ? requestedPrompt
-        : `${requestedPrompt}\nAUDIO: silent visual plate only; no generated speech, vocals, SFX, or music.`;
+      const silentPrompt = requestedPrompt;
       const requestedReference = typeof input.referenceImage === "string" ? input.referenceImage : "";
       const production = await getCharacterProductionState(characterId);
       const canonicalReference = production.visualReference;
       // A production-approved frame is more specific than the actor's general
       // profile image and must remain the binding source for image-to-video.
       const reference = requestedReference || canonicalReference?.url || "";
-      const prompt = lockVisualIdentity(visualGenerationPrompt(videoConfig, silentPrompt, "video"), Boolean(reference));
+      const prompt = visualGenerationPrompt(videoConfig, silentPrompt, "video");
       const referenceMetadata = {
         referenceImage: reference || null,
         referenceAssetId: requestedReference ? null : canonicalReference?.assetId ?? null,

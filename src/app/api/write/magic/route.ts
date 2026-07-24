@@ -1,4 +1,5 @@
 import { buildProductionBible } from "@/lib/production-prompting";
+import { planCameraForScene, type CameraMovementId } from "@/lib/camera-movements";
 import { anthropicImageBlock, type AnthropicImageBlock } from "@/lib/server/anthropic-image";
 import { getCharacterProductionState } from "@/lib/server/supabase-admin";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
@@ -33,6 +34,7 @@ type MagicDraft = {
     setting: string;
     objective: string;
     action: string;
+    cameraMovementId?: CameraMovementId;
     lines: Array<{ characterId: string; text: string }>;
   }>;
 };
@@ -67,6 +69,25 @@ function parseCharacters(value: unknown): PromptCharacter[] {
         : buildProductionBible(base),
     }];
   });
+}
+
+function attachCameraMovements(draft: MagicDraft, format: ProductionFormat): MagicDraft {
+  const sceneCount = draft.scenes.length;
+  return {
+    ...draft,
+    scenes: draft.scenes.map((scene, sceneIndex) => ({
+      ...scene,
+      cameraMovementId: planCameraForScene({
+        movementId: scene.cameraMovementId,
+        setting: scene.setting,
+        objective: scene.objective,
+        action: scene.action,
+        format,
+        sceneIndex,
+        sceneCount,
+      }).movementId,
+    })),
+  };
 }
 
 function fallbackDraft(input: {
@@ -244,7 +265,7 @@ export async function POST(request: Request) {
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return Response.json({ draft: fallbackDraft(input), provider: "chaplin-local", configured: false });
+      return Response.json({ draft: attachCameraMovements(fallbackDraft(input), format), provider: "chaplin-local", configured: false });
     }
 
     const writingConfig = (await getPipelineConfig()).stages.writing;
@@ -317,7 +338,7 @@ export async function POST(request: Request) {
         model,
         max_tokens: Math.max(4000, writingConfig.maxTokens ?? 8000),
         thinking: { type: "disabled" },
-        system: `${writingConfig.promptPrelude} You are Chaplin's senior screenwriter and advertising creative director. Write concise, production-ready scripts for fictional AI actors using each supplied production bible and canonical reference image as binding character canon. The images are the source of truth for face, apparent age, hair, body, wardrobe, materials, palette, and physical presence; stage action, blocking, framing, and motivated light around what is actually visible instead of redesigning or generically redescribing it. For a Spot, the supplied product image is equally binding canon: preserve its exact shape, packaging, proportions, colors, materials, label placement, and recognizable details; build the idea around what is actually visible instead of inventing or redesigning the product. Never restate biography as dialogue. Every returned scene is exactly one four-second visual unit and must have a screenplay slugline, one playable objective, one concise visible action that can complete in four seconds, and dialogue short enough to perform inside that same four-second window. Return exactly the requiredSceneCount supplied in the task. The first scene needs a visual hook, not an explanation. Each subsequent scene must escalate cost or reverse power. A cliffhanger must introduce new pressure, reveal consequential information, or force an irreversible choice; merely withholding information is not a cliffhanger. Payoffs must answer an earlier image, gesture, object, or moral boundary. Preserve performance tells, movement grammar, recurring motifs, and moral boundaries without mechanically repeating them. Spark is a private five-second audition with one performance choice. Punch is a public fifteen-second personality proof assembled from four authored four-second scenes and trimmed to runtime. Episode is a sixty-second microdrama ending on a situation-changing cliffhanger. Spot is a managed thirty- or sixty-second brand output that dramatizes one benefit through visible proof and a specific CTA. Keep scenes realistic for the requested duration and use only supplied character IDs.`,
+        system: `${writingConfig.promptPrelude} You are Chaplin's senior screenwriter and advertising creative director. Write concise, production-ready scripts for fictional AI actors using each supplied production bible and canonical reference image as binding character canon. The images are the source of truth for face, apparent age, hair, body, wardrobe, materials, palette, and physical presence; stage action, blocking, framing, and motivated light around what is actually visible instead of redesigning or generically redescribing it. For a Spot, the supplied product image is equally binding canon: preserve its exact shape, packaging, proportions, colors, materials, label placement, and recognizable details; build the idea around what is actually visible instead of inventing or redesigning the product. Never restate biography as dialogue. Every returned scene is exactly one four-second visual unit and must have a screenplay slugline, one playable objective, one concise visible action that can complete in four seconds, and dialogue short enough to perform inside that same four-second window. Do not hide camera directions inside visible action; Chaplin assigns a controlled camera plan after the dramatic beat is written. Return exactly the requiredSceneCount supplied in the task. The first scene needs a visual hook, not an explanation. Each subsequent scene must escalate cost or reverse power. A cliffhanger must introduce new pressure, reveal consequential information, or force an irreversible choice; merely withholding information is not a cliffhanger. Payoffs must answer an earlier image, gesture, object, or moral boundary. Preserve performance tells, movement grammar, recurring motifs, and moral boundaries without mechanically repeating them. Spark is a private five-second audition with one performance choice. Punch is a public fifteen-second personality proof assembled from four authored four-second scenes and trimmed to runtime. Episode is a sixty-second microdrama ending on a situation-changing cliffhanger. Spot is a managed thirty- or sixty-second brand output that dramatizes one benefit through visible proof and a specific CTA. Keep scenes realistic for the requested duration and use only supplied character IDs.`,
         messages: [{
           role: "user",
           content: messageContent,
@@ -378,8 +399,9 @@ export async function POST(request: Request) {
     const speakingCastIds = draft.scenes.flatMap((scene) => scene.lines.map((line) => line.characterId));
     draft.castIds = [...new Set([...draft.castIds, ...speakingCastIds])]
       .filter((id) => allowedIds.has(id));
+    const directedDraft = attachCameraMovements(draft, format);
     return Response.json({
-      draft,
+      draft: directedDraft,
       provider: repairedEmptyScenes ? "chaplin-local" : "anthropic",
       model,
       usage: data.usage,
@@ -392,7 +414,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Could not build the magic draft.";
     if (fallbackInput) {
       return Response.json({
-        draft: fallbackDraft(fallbackInput),
+        draft: attachCameraMovements(fallbackDraft(fallbackInput), fallbackInput.format),
         provider: "chaplin-local",
         configured: Boolean(process.env.ANTHROPIC_API_KEY),
         warning: `Claude could not run: ${message} A complete local draft was used instead.`,

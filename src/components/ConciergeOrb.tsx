@@ -285,6 +285,7 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
   const speechUrlRef = useRef("");
   const speechRequestRef = useRef<AbortController | null>(null);
   const transcriptRef = useRef("");
+  const finalTranscriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionFailedRef = useRef(false);
   const closedRef = useRef(false);
   const sessionIdRef = useRef("");
@@ -620,7 +621,9 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
 
     const recognition = new Recognition();
     recognition.lang = "en-IN";
-    recognition.continuous = true;
+    // A spoken thought is one conversational turn. End after a natural pause
+    // instead of leaving its transcript in the form waiting for another click.
+    recognition.continuous = false;
     recognition.interimResults = true;
     transcriptRef.current = "";
     recognitionFailedRef.current = false;
@@ -632,13 +635,23 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
       setOrbState("listening");
     };
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
+      const results = Array.from(event.results);
+      const transcript = results
         .map((result) => result[0]?.transcript ?? "")
         .join(" ")
         .trim();
       transcriptRef.current = transcript;
       setDraft(transcript);
       setUserLine(transcript);
+      if (results.some((result) => result.isFinal) && transcript.length >= 3) {
+        if (finalTranscriptTimerRef.current) clearTimeout(finalTranscriptTimerRef.current);
+        finalTranscriptTimerRef.current = setTimeout(() => {
+          finalTranscriptTimerRef.current = null;
+          try {
+            recognition.stop();
+          } catch {}
+        }, 450);
+      }
     };
     recognition.onerror = (event) => {
       recognitionFailedRef.current = true;
@@ -651,6 +664,10 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
       );
     };
     recognition.onend = () => {
+      if (finalTranscriptTimerRef.current) {
+        clearTimeout(finalTranscriptTimerRef.current);
+        finalTranscriptTimerRef.current = null;
+      }
       recognitionRef.current = null;
       setOrbState("idle");
       const transcript = transcriptRef.current.trim();
@@ -681,6 +698,8 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
   useImperativeHandle(ref, () => ({ startPushToTalk, stopPushToTalk }), [startPushToTalk, stopPushToTalk]);
 
   function handleClose() {
+    if (finalTranscriptTimerRef.current) clearTimeout(finalTranscriptTimerRef.current);
+    finalTranscriptTimerRef.current = null;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     stopConciergeSpeech();
@@ -693,6 +712,8 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
     stepClockRef.current = performance.now();
     return () => {
       closedRef.current = true;
+      if (finalTranscriptTimerRef.current) clearTimeout(finalTranscriptTimerRef.current);
+      finalTranscriptTimerRef.current = null;
       recognitionRef.current?.abort();
       stopConciergeSpeech();
     };
@@ -790,13 +811,24 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">
               {orbState === "listening"
-                ? "Listening…"
+                ? draft.trim()
+                  ? "Got it — pause when you are done"
+                  : "Listening — speak naturally"
                 : orbState === "thinking"
                   ? "Understanding your idea…"
                   : orbState === "speaking"
                     ? "Chaplin is replying…"
                     : "Tap mic to speak"}
             </span>
+            {orbState === "listening" && (
+              <span
+                className="mt-0.5 block truncate text-[10px] text-emerald-100/65"
+                data-voice-transcript
+                aria-live="polite"
+              >
+                {draft.trim() ? `“${draft.trim()}”` : "I’ll continue automatically when you pause."}
+              </span>
+            )}
           </span>
           <span className="text-accent" aria-hidden="true">
             {orbState === "listening" ? "■" : "→"}
@@ -972,10 +1004,11 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
             </label>
             <button
               type="submit"
+              aria-label="Send typed idea to Chaplin"
               disabled={orbState === "thinking" || draft.trim().length < 3}
-              className="shrink-0 rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-paper disabled:opacity-40"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-paper disabled:opacity-40"
             >
-              {orbState === "thinking" ? "…" : "Go"}
+              {orbState === "thinking" ? "…" : "→"}
             </button>
           </form>
         </div>

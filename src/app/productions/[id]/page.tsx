@@ -17,6 +17,7 @@ import type {
   PipelineScope,
   PipelineStepAction,
 } from "@/lib/media-pipeline-types";
+import { buildShotImagePrompt, buildShotVideoPrompt, cameraPlanForShot } from "@/lib/shot-director";
 
 function stepTone(status: string) {
   if (status === "ready") return "border-accent-secondary text-accent-secondary";
@@ -305,6 +306,7 @@ export default function ProductionDetailPage() {
               setting: scene.setting,
               objective: scene.objective ?? null,
               action: scene.action ?? null,
+              cameraMovementId: scene.cameraMovementId ?? null,
               durationSeconds: scene.durationSeconds ?? 4,
               previewImageUrl: scene.previewImageUrl ?? null,
               previewAssetId: scene.previewAssetId ?? null,
@@ -384,19 +386,19 @@ export default function ProductionDetailPage() {
       }
 
       const firstScene = story.scenes[0];
-      const prompt = [
-        `PURPOSE: First production frame for "${story.title}".`,
-        `ACTOR: ${cast[0].name}. ${cast[0].personality}`,
-        `DRAMATIC MOMENT: ${firstScene?.action ?? firstScene?.objective ?? story.logline}`,
-        `SET: ${firstScene?.setting ?? "A location grounded in the locked script."}`,
-        ...(story.productImageUrl
-          ? [`PRODUCT: The second supplied reference is ${story.productImageName || "the advertised product"}. Preserve its exact shape, packaging, colors, proportions, label placement, materials, and recognizable details.`]
-          : []),
-        "CAMERA: cinematic 16:9 medium-wide frame, eye-level camera, 40mm lens, clear face and hands, intentional negative space for movement.",
-        "LIGHTING: motivated directional key from the practical source in the scene, restrained fill, subtle edge separation, realistic contrast.",
-        "CONTINUITY: preserve the actor's canonical face, age, hair, proportions, wardrobe materials, and palette exactly.",
-        "EXCLUSIONS: no text, logo, watermark, montage, duplicate person, generic pose, or unexplained visual effects.",
-      ].join("\n");
+      const prompt = buildShotImagePrompt({
+        productionTitle: story.title,
+        productionLogline: story.logline,
+        scene: firstScene ?? {},
+        sceneIndex: 0,
+        sceneCount: story.scenes.length,
+        format: story.format,
+        actorName: cast[0].name,
+        actorIdentity: cast[0].personality,
+        productName: story.productImageName,
+        hasProductReference: Boolean(story.productImageUrl),
+        continuityNote: "Preserve the actor's canonical face, age, hair, proportions, wardrobe materials, palette, product, and location geography exactly.",
+      });
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -520,14 +522,13 @@ export default function ProductionDetailPage() {
               action: "video",
               characterId: cast[0].id,
               referenceImage: referenceImageUrl,
-              prompt: [
-                `Animate the approved first frame for ${story.title} as one continuous five-second silent performance plate.`,
-                `PERFORMANCE: ${firstScene?.action ?? firstScene?.objective ?? story.logline}`,
-                "IDENTITY: keep the exact face, age, hair, body proportions, wardrobe, materials, and lighting from the supplied frame.",
-                "MOVEMENT: one restrained readable actor action, natural breathing and eye movement, physically plausible fabric motion.",
-                "CAMERA: one subtle motivated push or locked camera; no cuts, reframing jumps, morphing, or new subjects.",
-                "AUDIO: silent visual plate only; audio is produced separately.",
-              ].join("\n"),
+              prompt: buildShotVideoPrompt({
+                productionTitle: story.title, productionLogline: story.logline, scene: firstScene ?? {},
+                sceneIndex: 0, sceneCount: story.scenes.length || 1, format: story.format,
+                actorName: cast[0].name, actorIdentity: cast[0].personality,
+                productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
+                continuityNote: "Preserve the approved frame's actor, wardrobe, location, product, light, object positions, and direction of travel.",
+              }),
             }),
           });
           const data = await response.json() as { url?: string; assetId?: string; error?: string };
@@ -610,23 +611,18 @@ export default function ProductionDetailPage() {
       for (let index = 0; index < contract.shotCount; index += 1) {
         setRenderProgress(`Designing scene frame ${index + 1} of ${contract.shotCount}`);
         const scene = story.scenes[index % Math.max(story.scenes.length, 1)];
-        const framePrompt = [
-          `PURPOSE: Scene frame ${index + 1} of ${contract.shotCount} for the ${contract.duration}-second Punch "${story.title}".`,
-          `STORY: ${story.logline}`,
-          `SHOT JOB: ${shotDesigns[index] ?? shotDesigns[shotDesigns.length - 1]}`,
-          `LOCATION: ${scene?.setting ?? "the specific business location established by the story"}. The location must be immediately recognizable on screen.`,
-          `VISIBLE ACTION: ${scene?.action ?? scene?.objective ?? story.logline}`,
-          `ACTOR: ${cast[0].name}, matching the supplied actor reference exactly. ${cast[0].personality}`,
-          ...(story.productImageUrl
-            ? [`PRODUCT LOCK: The supplied product reference is ${story.productImageName || "the advertised product"}. Show that exact product prominently and preserve its packaging, shape, color, materials, proportions, and label placement.`]
-            : ["OFFERING VISIBILITY: Show the actual goods or service being advertised in the environment and in the actor's action. Do not create an empty portrait-only frame."]),
-          "COMPOSITION: cinematic 16:9 advertising frame with clear foreground, subject, business environment, and product storytelling. The frame must not look like a portrait session.",
-          "CAMERA: one intentional camera angle appropriate to this shot job; realistic lens perspective; face, hands, environment, and product all readable.",
-          "LIGHT: motivated commercial-cinematic lighting grounded in visible practical sources, realistic skin and materials, controlled contrast.",
-          "CONTINUITY: same exact actor identity, wardrobe, business location, product design, palette, and time of day across every scene frame.",
-          "REALISM: photoreal live-action unless the story explicitly requests animation, manga, or illustration.",
-          "EXCLUSIONS: no replacement actor, extra principal character, identity blend, generic portrait background, empty room, missing product, text overlay, UI, border, or watermark.",
-        ].join("\n");
+        const directedScene = {
+          ...(scene ?? {}),
+          objective: `${shotDesigns[index] ?? shotDesigns[shotDesigns.length - 1]} ${scene?.objective ?? ""}`.trim(),
+          action: scene?.action ?? story.logline,
+        };
+        const framePrompt = buildShotImagePrompt({
+          productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
+          sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
+          actorName: cast[0].name, actorIdentity: cast[0].personality,
+          productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
+          continuityNote: "Keep the same actor identity, wardrobe, business geography, product design, palette, time of day, and direction of travel across the complete Punch.",
+        });
         let frameData: { url?: string; assetId?: string; error?: string } = {
           url: scene?.previewImageUrl,
           assetId: scene?.previewAssetId,
@@ -651,17 +647,13 @@ export default function ProductionDetailPage() {
         setRenderFrameUrl(frameData.url);
 
         setRenderProgress(`Animating four-second scene ${index + 1} of ${contract.shotCount}`);
-        const motionPrompt = [
-          `Animate four-second scene ${index + 1} of ${contract.shotCount} for the ${contract.duration}-second Punch "${story.title}" from the supplied scene frame.`,
-          `PERFORMANCE: ${scene?.action ?? scene?.objective ?? story.logline}`,
-          "FRAME LOCK: the supplied image is the finished art direction. Preserve its exact actor, face, wardrobe, product, merchandise, set dressing, layout, lighting, and color.",
-          "PRODUCT LOCK: keep every visible product present, recognizable, correctly shaped, and stable. Do not remove, replace, relabel, or morph it.",
-          "MOVEMENT: one concise, physically plausible actor action with natural eyes, hands, fabric, and object interaction.",
-          "CAMERA: one restrained motivated movement or locked camera; no cut, montage, jump, reframing reset, or new angle.",
-          "TIMING: one readable four-second scene with a beginning, action, and landing. The source generation may include extra tail frames; editing trims the clip to four seconds.",
-          "CAST EXCLUSION: do not introduce, replace, blend, age-shift, or redesign any person.",
-          "AUDIO: silent visual plate only; sound is produced separately.",
-        ].join("\n");
+        const motionPrompt = buildShotVideoPrompt({
+          productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
+          sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
+          actorName: cast[0].name, actorIdentity: cast[0].personality,
+          productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
+          continuityNote: "Preserve exact actor and product continuity, scene geography, object positions, and direction of travel from the adjacent Punch shot.",
+        });
         const videoResponse = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1482,14 +1474,26 @@ export default function ProductionDetailPage() {
           <span className="text-[9px] uppercase tracking-wide text-grey">{story.scenes.length} beats · expands to {contract.shotCount} shots</span>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {story.scenes.map((scene, index) => (
-            <article key={scene.id} className="border-t border-line pt-4">
-              <p className="font-mono text-[9px] text-accent">Beat {String(index + 1).padStart(2, "0")}</p>
-              <h3 className="mt-1 text-xs font-semibold uppercase tracking-wide">{scene.setting}</h3>
-              {scene.objective && <p className="mt-2 text-xs text-grey">{scene.objective}</p>}
-              {scene.action && <p className="mt-2 text-sm leading-5">{scene.action}</p>}
-            </article>
-          ))}
+          {story.scenes.map((scene, index) => {
+            const camera = cameraPlanForShot({
+              productionTitle: story.title, productionLogline: story.logline, scene,
+              sceneIndex: index, sceneCount: story.scenes.length, format: story.format,
+              actorName: cast[0].name, actorIdentity: cast[0].personality,
+              productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
+            });
+            return (
+              <article key={scene.id} className="border-t border-line pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-mono text-[9px] text-accent">Beat {String(index + 1).padStart(2, "0")}</p>
+                  <span className="rounded-full border border-accent-secondary/40 px-2 py-1 text-[8px] uppercase tracking-wide text-accent-secondary">{camera.movementName}</span>
+                </div>
+                <h3 className="mt-1 text-xs font-semibold uppercase tracking-wide">{scene.setting}</h3>
+                {scene.objective && <p className="mt-2 text-xs text-grey">{scene.objective}</p>}
+                {scene.action && <p className="mt-2 text-sm leading-5">{scene.action}</p>}
+                <p className="mt-3 text-[10px] leading-4 text-grey">{camera.angle} / {camera.lens}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>

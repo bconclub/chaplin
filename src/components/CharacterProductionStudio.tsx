@@ -25,6 +25,12 @@ type ProductionAsset = {
   created_at: string;
 };
 
+function latestSceneReference(assets: ProductionAsset[]) {
+  return assets.find((asset) =>
+    asset.kind === "image" && asset.metadata?.imagePurpose === "scene"
+  )?.url ?? "";
+}
+
 type ProductionState = {
   voiceId: string | null;
   latestDialogueUrl: string | null;
@@ -374,7 +380,9 @@ export default function CharacterProductionStudio({
   const [message, setMessage] = useState("");
   const workflowContentRef = useRef<HTMLDivElement | null>(null);
   const quickWriteRevisionRef = useRef(0);
-  const referenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
+  const identityReferenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
+  const referenceImage = identityReferenceImage;
+  const videoReferenceImage = generatedImage;
   const lockedVoiceId = character.voiceId || status?.production?.voiceId || "";
 
   function jumpToStep(stepId: number) {
@@ -404,7 +412,9 @@ export default function CharacterProductionStudio({
         setStatus(data);
         const production = data.production;
         if (!production) return;
-        setAssetHistory(production.assets ?? []);
+        const assets = production.assets ?? [];
+        setAssetHistory(assets);
+        setGeneratedImage(latestSceneReference(assets));
         setCanonicalReferenceImage(production.visualReference?.url ?? "");
         if (production.voiceId && production.voiceId !== character.voiceId) {
           setCharacterVoice(character.id, production.voiceId);
@@ -413,7 +423,7 @@ export default function CharacterProductionStudio({
         if (production.latestSfxUrl) setSfxUrl(production.latestSfxUrl);
         if (production.latestThemeUrl) setThemeUrl(production.latestThemeUrl);
         if (production.latestImageUrl) {
-          setGeneratedImage(production.latestImageUrl);
+
           if (!character.galleryUrls?.includes(production.latestImageUrl)) {
             addCharacterImage(character.id, production.latestImageUrl);
           }
@@ -446,7 +456,9 @@ export default function CharacterProductionStudio({
     const data = (await response.json()) as ProviderStatus;
     setStatus(data);
     if (data.production) {
-      setAssetHistory(data.production.assets ?? []);
+      const assets = data.production.assets ?? [];
+      setAssetHistory(assets);
+      setGeneratedImage(latestSceneReference(assets));
       setCanonicalReferenceImage(data.production.visualReference?.url ?? "");
       if (data.production.voiceId && data.production.voiceId !== character.voiceId) {
         setCharacterVoice(character.id, data.production.voiceId);
@@ -454,7 +466,7 @@ export default function CharacterProductionStudio({
       if (data.production.latestDialogueUrl) setSpeechUrl(data.production.latestDialogueUrl);
       if (data.production.latestSfxUrl) setSfxUrl(data.production.latestSfxUrl);
       if (data.production.latestThemeUrl) setThemeUrl(data.production.latestThemeUrl);
-      if (data.production.latestImageUrl) setGeneratedImage(data.production.latestImageUrl);
+
       if (data.production.latestVideoUrl) setGeneratedVideo(data.production.latestVideoUrl);
     }
     window.dispatchEvent(new CustomEvent("chaplin:media-updated", { detail: { characterId: character.id } }));
@@ -517,6 +529,7 @@ export default function CharacterProductionStudio({
           currentText,
           variation,
           character,
+          referenceImage: field === "video" ? videoReferenceImage : identityReferenceImage,
           context: {
             voiceDescription,
             voicePreview: previewText,
@@ -544,7 +557,7 @@ export default function CharacterProductionStudio({
     }
   }
 
-  async function writeField(field: QuickWriteField, currentText: string) {
+  async function writeField(field: QuickWriteField, currentText: string, referenceImage?: string) {
     const response = await fetch("/api/write/quick", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -553,6 +566,7 @@ export default function CharacterProductionStudio({
         currentText,
         character,
         context: {
+        referenceImage,
           voiceDescription,
           voicePreview: previewText,
           dialogue: speechText,
@@ -749,9 +763,9 @@ export default function CharacterProductionStudio({
       const data = (await jsonAction("image", {
         prompt: imagePrompt,
         imagePurpose,
-        referenceImage,
+        referenceImage: identityReferenceImage,
       })) as { url: string };
-      setGeneratedImage(data.url);
+      if (imagePurpose === "scene") setGeneratedImage(data.url);
       addCharacterImage(character.id, data.url);
       await refreshHistory();
       setMessage(imagePurpose === "identity"
@@ -777,7 +791,7 @@ export default function CharacterProductionStudio({
         body: JSON.stringify({ characterId: character.id, assetId: data.id, slot: "cover" }),
       });
       if (!selectResponse.ok) throw new Error(await errorFrom(selectResponse));
-      setGeneratedImage(data.url);
+
       setCanonicalReferenceImage(data.url);
       if (!character.galleryUrls?.includes(data.url)) addCharacterImage(character.id, data.url);
       await refreshHistory();
@@ -787,7 +801,13 @@ export default function CharacterProductionStudio({
 
   function generateVideo() {
     void run("video", async () => {
-      const data = (await jsonAction("video", { prompt: scenePrompt, referenceImage })) as { url: string };
+      if (!videoReferenceImage) {
+        throw new Error("Create the scene frame first. Chaplin will animate that exact image.");
+      }
+      const grounded = await writeField("video", scenePrompt, videoReferenceImage);
+      const groundedPrompt = grounded.text ?? scenePrompt;
+      setScenePrompt(groundedPrompt);
+      const data = (await jsonAction("video", { prompt: groundedPrompt, referenceImage: videoReferenceImage })) as { url: string };
       setGeneratedVideo(data.url);
       setCharacterVideo(character.id, data.url);
       await refreshHistory();
@@ -803,6 +823,8 @@ export default function CharacterProductionStudio({
     setImagePurpose("scene");
     setScenePrompt(scene.video);
     setSceneBlueprint(scene.blueprint);
+    setGeneratedImage("");
+    setGeneratedVideo("");
   }
 
   function chooseImagePurpose(purpose: ImagePurpose) {
@@ -859,7 +881,7 @@ export default function CharacterProductionStudio({
     ...(speechUrl ? [2] : []),
     ...(sfxUrl ? [3] : []),
     ...(themeUrl ? [4] : []),
-    ...(generatedImage || referenceImage ? [5] : []),
+    ...(generatedImage || identityReferenceImage ? [5] : []),
     ...(generatedVideo || character.videoUrl ? [6] : []),
   ]);
 
@@ -1356,13 +1378,13 @@ export default function CharacterProductionStudio({
             </div>
             <p className="text-[11px] leading-relaxed text-grey">
               {imagePurpose === "identity"
-                ? `Create the definitive casting image: a repeatable face, silhouette, wardrobe, expression, world, lens, and motivated light derived from the actor's personality.${referenceImage ? " The locked identity seed below remains the basis for the person." : " This first accepted image will become the actor's visual seed."}`
+                ? `Create the definitive casting image: a repeatable face, silhouette, wardrobe, expression, world, lens, and motivated light derived from the actor's personality.${identityReferenceImage ? " The locked identity seed below remains the basis for the person." : " This first accepted image will become the actor's visual seed."}`
                 : `Create a story frame from the selected identity reference${referenceImage ? " shown in the video panel" : "—choose or upload an identity image first"}. The face and wardrobe stay locked while only the dramatic moment changes.`}
             </p>
-            {referenceImage && (
+            {identityReferenceImage && (
               <div className="flex items-center gap-3 rounded-sm border border-accent/50 bg-accent/5 p-2" data-identity-reference>
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
-                <img src={referenceImage} alt={`${character.name} canonical identity seed`} className="h-14 w-20 shrink-0 rounded-sm object-cover" />
+                <img src={identityReferenceImage} alt={`${character.name} canonical identity seed`} className="h-14 w-20 shrink-0 rounded-sm object-cover" />
                 <span className="min-w-0">
                   <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Identity seed locked</span>
                   <span className="mt-1 block text-[10px] leading-snug text-grey">Every generated still and Seedance video preserves this face, age, hair, proportions, and signature wardrobe.</span>
@@ -1410,15 +1432,15 @@ export default function CharacterProductionStudio({
                 label={generatedVideo || character.videoUrl ? "Regenerate prompt" : "Quick Write"}
               />
             </div>
-            {referenceImage && (
+            {videoReferenceImage && (
               <div className="relative overflow-hidden rounded-sm border border-line" data-video-reference>
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
-                <img src={referenceImage} alt="Selected exact first frame" className="aspect-video w-full object-cover" />
+                <img src={videoReferenceImage} alt="Selected exact first frame" className="aspect-video w-full object-cover" />
                 <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[9px] uppercase tracking-wide text-white">Exact first frame</span>
               </div>
             )}
             <textarea data-scene-field="video" value={scenePrompt} onChange={(event) => setScenePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
-            <button onClick={generateVideo} disabled={!seedModelsReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
+            <button onClick={generateVideo} disabled={!seedModelsReady || !videoReferenceImage || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
             </button>
             <GenerationTimeline generationKey="video" run={generationRun} />
@@ -1445,7 +1467,7 @@ export default function CharacterProductionStudio({
                   <button type="button" onClick={() => void quickWrite("video", scenePrompt, setScenePrompt)} disabled={Boolean(busy) || Boolean(quickWriting)} className="rounded-full border border-accent/60 px-3 py-2 text-[10px] font-semibold text-accent hover:bg-accent/10 disabled:opacity-40">
                     {quickWriting === "video" ? "Writing a new direction…" : "Regenerate prompt"}
                   </button>
-                  <button type="button" onClick={generateVideo} disabled={!seedModelsReady || Boolean(busy)} className="rounded-full border border-accent/60 px-3 py-2 text-[10px] font-semibold text-accent hover:bg-accent/10 disabled:opacity-40">
+                  <button type="button" onClick={generateVideo} disabled={!seedModelsReady || !videoReferenceImage || Boolean(busy)} className="rounded-full border border-accent/60 px-3 py-2 text-[10px] font-semibold text-accent hover:bg-accent/10 disabled:opacity-40">
                     {busy === "video" ? "Rendering…" : "Regenerate video"}
                   </button>
                   <a href="#generated-scene-log" className="rounded-full border border-line px-3 py-2 text-[10px] font-semibold text-grey hover:border-accent hover:text-ink">Review outputs ↓</a>

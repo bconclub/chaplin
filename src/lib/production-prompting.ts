@@ -366,6 +366,89 @@ function compact(value: string, max = 420) {
   return cleaned.length <= max ? cleaned : `${cleaned.slice(0, max).replace(/\s+\S*$/, "")}...`;
 }
 
+const STYLIZED_MEDIUM = /\b(?:manga|anime|illustration|illustrated|comic(?:-book)?|animation|animated|digital painting|3d render|cgi|claymation|stop[- ]motion|watercolou?r|ink drawing|cel shading|screentone)\b/i;
+
+function visualMedium(...directions: Array<string | undefined>) {
+  const clauses = directions
+    .filter((value): value is string => Boolean(value?.trim()))
+    .flatMap((value) => value.split(/[.\n]/).map((clause) => clause.trim()).filter(Boolean));
+  const explicit = clauses.find((clause) => STYLIZED_MEDIUM.test(clause));
+  return explicit
+    ? compact(explicit, 180)
+    : "Live-action cinematic photograph, natural skin texture, tactile materials, optical depth, restrained film grain";
+}
+
+function concise(value: string | undefined, max = 150) {
+  if (!value) return "";
+  const cleaned = value.trim().replace(/\s+/g, " ").replace(/[.;]+$/, "");
+  if (cleaned.length <= max) return cleaned;
+  return cleaned.slice(0, max).replace(/\s+\S*$/, "");
+}
+
+const LOCK_CATEGORIES = [
+  /\b(?:hair|hairline|streak|braid|bun|fringe|curl|part)\b/i,
+  /\b(?:left eye|right eye|eyes?|brows?|scar|mole|freckle|nose|jaw|mouth)\b/i,
+  /\b(?:coat|jacket|saree|sari|robe|uniform|shirt|dress|kurta|blouse|trousers|collar)\b/i,
+  /\b(?:badge|pin|bangle|ring|glasses|eyepatch|necklace|pendant|watch|cane|prop)\b/i,
+] as const;
+
+function appearanceRecognitionLocks(appearance?: string) {
+  if (!appearance) return [];
+  const clauses = appearance
+    .split(/[.;,\n]/)
+    .map((value) => concise(value, 90))
+    .filter((value) => value.length >= 8 && !STYLIZED_MEDIUM.test(value));
+  const locks: string[] = [];
+  for (const category of LOCK_CATEGORIES) {
+    const candidate = clauses.find((value) => category.test(value) && !locks.includes(value));
+    if (candidate) locks.push(candidate);
+  }
+  return locks;
+}
+
+function visibleIdentity(character: CharacterIdentityInput, bible: CharacterProductionBible) {
+  if (character.appearanceBrief?.trim()) {
+    const clauses = character.appearanceBrief
+      .split(/[.\n]/)
+      .map((value) => value.trim())
+      .filter((value) => value && !STYLIZED_MEDIUM.test(value));
+    return concise(clauses.join(". "), 520);
+  }
+  return concise([
+    bible.visual.perceivedAge,
+    bible.visual.faceAnchors.join("; "),
+    bible.visual.hair,
+    bible.visual.wardrobe,
+  ].filter(Boolean).join(". "), 520);
+}
+function recognitionLocks(bible: CharacterProductionBible, appearance?: string) {
+  const supplied = bible.visual.recognitionLocks?.map((value) => concise(value, 90)).filter(Boolean) ?? [];
+  const fallback = [
+    ...appearanceRecognitionLocks(appearance || bible.visual.faceAnchors.join(". ")),
+    ...bible.visual.faceAnchors,
+    bible.visual.hair,
+    bible.visual.wardrobe,
+    ...bible.visual.continuityRules,
+  ].map((value) => concise(value, 90)).filter(Boolean);
+  const unique = [...new Set([...supplied, ...fallback])].slice(0, 4);
+  const generic = [
+    "same face geometry and distinctive asymmetry",
+    "same hairline, part, length, texture, and colour detail",
+    "same hero garment, opening, material, and fastening",
+    "same signature accessory or prop in its exact position",
+  ];
+  for (const value of generic) {
+    if (unique.length === 4) break;
+    unique.push(value);
+  }
+  return unique;
+}
+function identityNegative(medium: string) {
+  return STYLIZED_MEDIUM.test(medium)
+    ? "photoreal, live-action, 3D, CGI, unrelated art style, generic face, costume drift, extra person, text, logo, watermark"
+    : "cartoon, anime, manga, illustration, 3D, CGI, beauty-filter skin, generic face, costume drift, extra person, text, logo, watermark";
+}
+
 export function buildProductionBible(input: CharacterIdentityInput): CharacterProductionBible {
   if (input.productionBible) return input.productionBible;
   const d = DIRECTIONS[input.archetype] ?? DIRECTIONS.hero;
@@ -391,6 +474,7 @@ export function buildProductionBible(input: CharacterIdentityInput): CharacterPr
       tempo: input.archetype === "comic-relief" ? "quick setup, precise pause, clean landing" : "measured start, compressed decision, decisive finish",
     },
     visual: {
+      medium: visualMedium(appearance, world),
       perceivedAge: appearance || localFace.age,
       faceAnchors: appearance
         ? [`follow this exact visible appearance brief: ${appearance}`, ...localFace.anchors.slice(0, 2)]
@@ -403,6 +487,13 @@ export function buildProductionBible(input: CharacterIdentityInput): CharacterPr
         : `functional ${input.archetype.replace("-", " ")} wardrobe with one repeatable hero garment and no logos`,
       silhouette: d.movement,
       palette: d.palette,
+      recognitionLocks: [
+        ...appearanceRecognitionLocks(appearance),
+        concise(localFace.anchors[0], 90),
+        concise(localFace.anchors[1], 90),
+        concise(localFace.hair, 90),
+        "the same repeatable hero garment, material, and fastening",
+      ].slice(0, 4),
       continuityRules: [
         "same face geometry, perceived age, skin tone, hairline, and body proportions",
         "same hero garment, materials, accessories, and wear pattern unless the story explicitly changes them",
@@ -457,6 +548,20 @@ export function composeThemePrompt(character: CharacterIdentityInput, dramaticBe
 
 export function composeImagePrompt(character: CharacterIdentityInput, shot: ShotBlueprint) {
   const bible = buildProductionBible(character);
+  const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
+  const locks = recognitionLocks(bible, character.appearanceBrief);
+  return [
+    `${medium}. 16:9. ${shot.framing} of ${character.name}. ${visibleIdentity(character, bible)}.`,
+    `Scene: ${concise(shot.dramaticBeat, 120)}. ${concise(shot.subjectStart, 100)}. ${concise(shot.facialBeat, 80)}. ${concise(shot.setting, 110)}.`,
+    `Camera: ${concise(shot.cameraAngle, 70)}, ${concise(shot.lens, 60)}. Light: ${concise(shot.keyLight, 85)}. ${concise(shot.fillAndEdge, 70)}. Palette: ${bible.visual.palette.slice(0, 4).join(", ")}.`,
+
+    `NEGATIVE: ${identityNegative(medium)}, generic pose, floating object, distorted hands, extra fingers.`,
+    `RECOGNITION LOCKS: ${locks.join("; ")}. These four carry recognition; everything else may adapt to this scene.`,
+  ].join("\n");
+}
+
+export function composeLegacyImagePrompt(character: CharacterIdentityInput, shot: ShotBlueprint) {
+  const bible = buildProductionBible(character);
   return [
     "CINEMATIC PRODUCTION STILL — 16:9.",
     `SUBJECT AND IDENTITY: ${character.name}, one original fictional actor. ${bible.visual.perceivedAge}. Preserve these recognition anchors exactly: ${bible.visual.faceAnchors.join("; ")}. Hair: ${bible.visual.hair}. Wardrobe: ${bible.visual.wardrobe}. Silhouette: ${bible.visual.silhouette}.`,
@@ -470,7 +575,28 @@ export function composeImagePrompt(character: CharacterIdentityInput, shot: Shot
 }
 
 /** The definitive casting image: personality first, before any plot-specific scene. */
+/** Definitive casting reference: concise visual evidence, not biography. */
 export function composeIdentityImagePrompt(character: CharacterIdentityInput) {
+  const bible = buildProductionBible(character);
+  const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
+  const locks = recognitionLocks(bible, character.appearanceBrief);
+  const identityWorld = character.brollScene?.trim() || bible.cinematography.worldTexture;
+  const explicitAppearance = Boolean(character.appearanceBrief?.trim());
+  const explicitWorld = character.worldBrief?.trim();
+  const framing = explicitAppearance ? "" : `${concise(bible.cinematography.heroFraming, 80)} of ${character.name}. `;
+  const worldAndLight = explicitWorld || `${concise(identityWorld, 100)}. ${concise(bible.cinematography.cameraHeight, 65)}, ${concise(bible.cinematography.lens, 55)}. ${concise(bible.cinematography.keyLight, 80)}. Palette: ${bible.visual.palette.slice(0, 4).join(", ")}`;
+  const performance = explicitAppearance ? "" : `${concise(bible.performance.restingExpression, 70)}; ${concise(bible.performance.signatureGesture, 65)}. `;
+  return [
+    `${medium}. 16:9. ${framing}${visibleIdentity(character, bible)}.`,
+
+    `${performance}${concise(worldAndLight, 280)}.`,
+
+    `NEGATIVE: ${identityNegative(medium)}, generic hero pose, glamour pose, distorted hands, extra fingers, poster layout.`,
+    `RECOGNITION LOCKS: ${locks.join("; ")}. These four carry recognition; everything else may move.`,
+  ].join("\n");
+}
+
+export function composeLegacyIdentityImagePrompt(character: CharacterIdentityInput) {
   const bible = buildProductionBible(character);
   const motif = bible.story.recurringMotifs[0] ?? "one tactile object tied to the actor's world";
   const identityWorld = character.brollScene?.trim() || bible.cinematography.worldTexture;
@@ -486,7 +612,32 @@ export function composeIdentityImagePrompt(character: CharacterIdentityInput) {
   ].join("\n");
 }
 
+function simpleCameraMove(value: string) {
+  if (/locked|static|still/i.test(value)) return "Locked camera";
+  if (/pull|dolly[- ]?out|zoom[- ]?out/i.test(value)) return "Slow pull back";
+  if (/lateral|slider|truck|track/i.test(value)) return "Slow lateral track";
+  if (/handheld/i.test(value)) return "Gentle handheld drift";
+  if (/pan/i.test(value)) return "Slow pan";
+  return "Slow push in";
+}
+
 export function composeVideoPrompt(_character: CharacterIdentityInput, shot: ShotBlueprint) {
+  const closeFrame = /extreme close|close[- ]?up|headshot|tight portrait/i.test(shot.framing);
+  const camera = simpleCameraMove(shot.cameraMovement);
+  const subjectMotion = closeFrame
+    ? "Hold for a beat. The eyes shift first, then the head follows a few degrees late. One natural blink and a faint breath"
+    : concise(shot.actionTimeline[1], 170);
+  const secondaryMotion = concise(shot.environmentalMotion, 90);
+  const ending = closeFrame
+    ? "Ends on stillness, gaze fixed, camera fully stopped"
+    : `Ends on ${concise(shot.finalFrame, 120)}`;
+  return [
+    `${camera}. ${subjectMotion}. ${secondaryMotion}. ${ending}.`,
+    "Negative: warped face, lip movement, camera cut, invented objects.",
+    "--duration 5",
+  ].join("\n");
+}
+export function composeLegacyVideoPrompt(_character: CharacterIdentityInput, shot: ShotBlueprint) {
   return [
     "IMAGE-TO-VIDEO — 5 SECONDS. The supplied image is the exact first frame and the only source of truth for face, body, wardrobe, set, composition, color, and lighting. Do not redescribe or redesign them.",
     `INTENT: ${shot.dramaticBeat}.`,

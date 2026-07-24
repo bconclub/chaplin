@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import { useRef, useState } from "react";
 import type { Character } from "@/lib/types";
 import { ARCHETYPE_LABEL, ARCHETYPE_HUE, hsl } from "@/lib/format";
@@ -19,12 +20,14 @@ export default function HeroGridCard({
   onActivate,
   broll,
   onPlaybackComplete,
+  fillCell = false,
 }: {
   character: Character;
   active?: boolean;
   onActivate?: () => void;
   broll?: HomepageBroll;
   onPlaybackComplete?: (characterId: string) => void;
+  fillCell?: boolean;
 }) {
   const hue = ARCHETYPE_HUE[character.archetype];
   const [progress, setProgress] = useState(0);
@@ -45,9 +48,11 @@ export default function HeroGridCard({
   }
 
   return (
-    <div
-      className={`relative aspect-[4/5] min-w-0 rounded-xl transition-[transform,box-shadow] duration-500 ease-out ${
-        active ? "z-10 scale-[1.015]" : "z-0 scale-100"
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.62, ease: [0.22, 1, 0.36, 1] } }}
+      className={`relative min-w-0 rounded-xl transition-[box-shadow] duration-500 ease-out ${fillCell ? "h-full min-h-0" : "aspect-[4/5]"} ${
+        active ? "z-10 col-span-4 row-span-2" : "z-0 col-span-1 row-span-1"
       }`}
       data-hero-character-id={character.id}
       data-home-video-ready={videoSource ? "true" : undefined}
@@ -128,6 +133,6 @@ export default function HeroGridCard({
           <span className="block h-full rounded-full bg-accent transition-[width] duration-100" style={{ width: `${progress * 100}%` }} />
         </span>
       )}
-    </div>
+    </motion.div>
   );
 }

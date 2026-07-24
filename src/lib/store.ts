@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { SEED_WORLD } from "@/data/seed";
 import { buildProductionBible } from "@/lib/production-prompting";
+import type { CameraMovementId } from "@/lib/camera-movements";
 import type {
   Character,
   Story,
@@ -39,6 +40,7 @@ export interface NewSceneInput {
   durationSeconds?: number;
   previewImageUrl?: string;
   previewAssetId?: string;
+  cameraMovementId?: CameraMovementId;
   lines: Array<{ characterId: string; text: string }>;
 }
 
@@ -197,6 +199,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
       durationSeconds: sc.durationSeconds,
       previewImageUrl: sc.previewImageUrl,
       previewAssetId: sc.previewAssetId,
+      cameraMovementId: sc.cameraMovementId,
       lines: sc.lines.map((ln, li) => ({
         id: `${storyId}-sc${si}-l${li}`,
         characterId: ln.characterId,

@@ -149,7 +149,6 @@ async function main() {
       !create.choices.includes("video") ||
       !create.pushToTalk ||
       create.pushToTalkCount !== 1 ||
-      !create.draftFirst ||
       !create.bottomOrbOwnsVoice ||
       !create.withinViewport ||
       create.voiceSessionRequests !== 0 ||
@@ -184,6 +183,12 @@ async function main() {
             headers: { "Content-Type": "application/json" }
           }));
         }
+        if (String(input).includes("/api/agent/speak")) {
+          return Promise.resolve(new Response(JSON.stringify({ error: "mocked" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" }
+          }));
+        }
         return realFetch(input, init);
       };
       window.SpeechSynthesisUtterance = class {
@@ -203,6 +208,7 @@ async function main() {
           this.onend = null;
         }
         start() {
+          window.__recognitionContinuous = this.continuous;
           this.onstart?.();
           setTimeout(() => this.onresult?.({
             results: [Object.assign([{ transcript: "I want to make a funny delivery hero" }], { isFinal: true })]
@@ -215,7 +221,6 @@ async function main() {
       window.webkitSpeechRecognition = MockRecognition;
       const button = document.querySelector("[data-push-to-talk]");
       button?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
-      setTimeout(() => button?.dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true })), 80);
       return true;
     })()`);
     await sleep(1500);
@@ -224,6 +229,7 @@ async function main() {
       conversation: document.querySelector("[data-agent-line]")?.parentElement?.textContent,
       agentLine: document.querySelector("[data-agent-line]")?.textContent,
       state: document.querySelector("[data-push-to-talk]")?.getAttribute("data-orb-state"),
+      recognitionContinuous: window.__recognitionContinuous,
       voiceSessionRequests: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("/api/agent/voice-session")).length,
     }))()`);
     if (
@@ -231,6 +237,7 @@ async function main() {
       !pushToTalk.conversation?.includes("funny delivery hero") ||
       !pushToTalk.agentLine?.includes("Tell me one character or video idea") ||
       pushToTalk.state !== "idle" ||
+      pushToTalk.recognitionContinuous !== false ||
       pushToTalk.voiceSessionRequests !== 0
     ) {
       throw new Error(`Push-to-talk lifecycle failed: ${JSON.stringify(pushToTalk)}`);

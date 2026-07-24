@@ -37,6 +37,49 @@ function enforceVoiceCoherence(suggestion: CharacterSuggestion, characterBrief: 
     voiceDescription: alignVoiceDescription(suggestion.voiceDescription, voiceGender),
   };
 }
+const STYLE_MEDIUM = /\b(manga|anime|illustration|illustrated|cel[- ]?shad(?:ed|ing)|screentone|ink(?:ed|work)?|graphic novel|comic(?: book)?|watercolou?r|gouache|oil painting|stop[- ]motion|claymation|pixel art|2d animation|3d animation)\b/i;
+
+function enforceVisualIdentity(suggestion: CharacterSuggestion, appearanceBrief: string, worldBrief: string) {
+  const visual = suggestion.productionBible.visual;
+  const requestedDirection = `${appearanceBrief} ${worldBrief}`.trim();
+  const requestedMedium = requestedDirection
+    .split(/[.\n]/)
+    .map((value) => value.trim())
+    .find((value) => STYLE_MEDIUM.test(value));
+  const medium = clean(requestedMedium, 180) || clean(visual.medium, 180) ||
+    "live-action cinematic photograph with natural human texture and physically motivated light";
+  const candidates = [
+    ...(visual.recognitionLocks ?? []),
+    ...visual.faceAnchors,
+    visual.hair,
+    visual.wardrobe,
+    ...visual.continuityRules,
+  ].map((value) => clean(value, 90)).filter(Boolean);
+  const seen = new Set<string>();
+  const recognitionLocks = candidates.filter((value) => {
+    const key = value.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+  const fallbacks = [
+    "the same face geometry and most distinctive facial asymmetry",
+    "the same hairline, part, length, texture, and signature colour detail",
+    "the same hero garment, opening, material, and fastening",
+    "the same single signature accessory or prop in its exact position",
+  ];
+  for (const fallback of fallbacks) {
+    if (recognitionLocks.length === 4) break;
+    recognitionLocks.push(fallback);
+  }
+  return {
+    ...suggestion,
+    productionBible: {
+      ...suggestion.productionBible,
+      visual: { ...visual, medium, recognitionLocks },
+    },
+  };
+}
 
 function localSuggestion(input: {
   name: string;
@@ -122,8 +165,8 @@ const PRODUCTION_BIBLE_SCHEMA = {
     },
     visual: {
       type: "object", additionalProperties: false,
-      required: ["perceivedAge", "faceAnchors", "hair", "wardrobe", "silhouette", "palette", "continuityRules"],
-      properties: { perceivedAge: STRING, faceAnchors: STRING_ARRAY, hair: STRING, wardrobe: STRING, silhouette: STRING, palette: STRING_ARRAY, continuityRules: STRING_ARRAY },
+      required: ["medium", "perceivedAge", "faceAnchors", "hair", "wardrobe", "silhouette", "palette", "recognitionLocks", "continuityRules"],
+      properties: { medium: STRING, perceivedAge: STRING, faceAnchors: STRING_ARRAY, hair: STRING, wardrobe: STRING, silhouette: STRING, palette: STRING_ARRAY, recognitionLocks: STRING_ARRAY, continuityRules: STRING_ARRAY },
     },
     cinematography: {
       type: "object", additionalProperties: false,
@@ -220,6 +263,7 @@ export async function POST(request: Request) {
               ? "characterBrief is the maker's creative direction. Treat it as binding canon: every field must be consistent with it."
               : undefined,
             currentCharacter: input,
+            visualIdentityGuidance: "Set productionBible.visual.medium to the exact requested medium; default to live-action cinematic photography only when no style is requested. Return exactly four short recognitionLocks spanning the most distinctive face, hair, wardrobe, or signature prop invariants. These four locks must carry recognition while every non-locked scene detail remains adaptable.",
           }),
         }],
         output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
@@ -242,7 +286,11 @@ export async function POST(request: Request) {
       throw new Error("Claude's output was cut off mid-write. Try again.");
     }
     return Response.json({
-      suggestion: enforceVoiceCoherence(parsed, input.characterBrief),
+      suggestion: enforceVisualIdentity(
+        enforceVoiceCoherence(parsed, input.characterBrief),
+        input.appearanceBrief,
+        input.worldBrief,
+      ),
       provider: "anthropic",
       model,
       usage: data.usage,

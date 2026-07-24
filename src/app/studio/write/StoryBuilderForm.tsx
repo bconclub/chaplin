@@ -24,6 +24,12 @@ import {
   productionShotCount,
   type ProductionFormat,
 } from "@/lib/production-formats";
+import {
+  CAMERA_MOVEMENTS,
+  planCameraForScene,
+  type CameraMovementId,
+} from "@/lib/camera-movements";
+import { auditShotScene, buildShotImagePrompt } from "@/lib/shot-director";
 
 interface DraftLine {
   characterId: string;
@@ -36,6 +42,7 @@ interface DraftScene {
   durationSeconds?: number;
   previewImageUrl?: string;
   previewAssetId?: string;
+  cameraMovementId?: CameraMovementId;
   lines: DraftLine[];
 }
 
@@ -504,7 +511,10 @@ export default function StoryBuilderForm() {
     )));
   }
   function updateScene(i: number, patch: Partial<DraftScene>) {
-    const invalidatesPreview = patch.setting !== undefined || patch.objective !== undefined || patch.action !== undefined;
+    const invalidatesPreview = patch.setting !== undefined
+      || patch.objective !== undefined
+      || patch.action !== undefined
+      || patch.cameraMovementId !== undefined;
     setScenes((prev) => prev.map((scene, index) => (
       index === i
         ? {
@@ -711,6 +721,7 @@ export default function StoryBuilderForm() {
         setting: playableScene.setting || currentScene.setting,
         objective: playableScene.objective || currentScene.objective,
         action: playableScene.action || currentScene.action,
+        cameraMovementId: playableScene.cameraMovementId,
         durationSeconds: 4,
         lines: playableScene.lines
           .filter((line) => validCastIds.has(line.characterId) && line.text.trim())
@@ -738,27 +749,31 @@ export default function StoryBuilderForm() {
     setScenePreviewBusy(sceneIndex);
     setError("");
     try {
+      const cameraPlan = planCameraForScene({
+        movementId: scene.cameraMovementId,
+        setting: scene.setting,
+        objective: scene.objective,
+        action: scene.action,
+        format,
+        sceneIndex,
+        sceneCount: scenes.length,
+      });
       const referenceImages = [
         lead.imageUrl ?? lead.galleryUrls?.[0] ?? lead.bannerUrl ?? "",
         productImageUrl,
       ].filter(Boolean);
-      const prompt = [
-        `PURPOSE: Production thumbnail and binding first frame for scene ${sceneIndex + 1} of "${title || "Untitled production"}".`,
-        `FOUR-SECOND BEAT: This image is the exact visual start of one four-second clip in a multi-scene edit.`,
-        `SETTING: ${scene.setting || "A specific location grounded in the production concept."}`,
-        `SCENE OBJECTIVE: ${scene.objective || "Create one visible situation change."}`,
-        `VISIBLE ACTION: ${scene.action || `${lead.name} begins one concise, camera-readable action.`}`,
-        `ACTOR: ${lead.name}. Match the supplied identity reference exactly. ${lead.personality}`,
-        ...(productImageUrl
-          ? [`PRODUCT: The supplied product reference is ${productImageName || "the advertised product"}. Preserve its exact design and make it clearly visible in this scene.`]
-          : []),
-        "COMPOSITION: cinematic 16:9 frame with a clear foreground, actor, environment, and room for the planned movement. This must look like a scene, not a portrait.",
-        "CAMERA: choose one intentional angle and realistic lens that best expresses this beat; face, hands, important props, and environment must be readable.",
-        "LIGHT: motivated cinematic light from believable sources in the setting, realistic skin and materials, controlled contrast.",
-        "CONTINUITY: preserve the exact actor face, age, hair, body, wardrobe, accessories, palette, and product design across every scene thumbnail.",
-        "REALISM: photoreal live-action unless the concept explicitly requests animation, manga, or illustration.",
-        "EXCLUSIONS: no replacement actor, identity blend, empty generic background, text overlay, subtitle, UI, border, watermark, or unexplained extra subject.",
-      ].join("\n");
+      const prompt = buildShotImagePrompt({
+        productionTitle: title || "Untitled production",
+        productionLogline: logline,
+        scene: { ...scene, cameraMovementId: cameraPlan.movementId },
+        sceneIndex,
+        sceneCount: scenes.length,
+        format,
+        actorName: lead.name,
+        actorIdentity: lead.personality,
+        productName: productImageName,
+        hasProductReference: Boolean(productImageUrl),
+      });
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -776,6 +791,7 @@ export default function StoryBuilderForm() {
       }
       updateScene(sceneIndex, {
         durationSeconds: 4,
+        cameraMovementId: cameraPlan.movementId,
         previewImageUrl: data.url,
         previewAssetId: data.assetId,
       });
@@ -826,7 +842,19 @@ export default function StoryBuilderForm() {
       return;
     }
     const validScenes = scenes
-      .map((sc) => ({
+      .map((sc, sceneIndex) => ({
+        ...(() => {
+          const cameraPlan = planCameraForScene({
+            movementId: sc.cameraMovementId,
+            setting: sc.setting,
+            objective: sc.objective,
+            action: sc.action,
+            format,
+            sceneIndex,
+            sceneCount: scenes.length,
+          });
+          return { cameraMovementId: cameraPlan.movementId };
+        })(),
         setting: sc.setting.trim() || "An unnamed scene",
         objective: sc.objective.trim() || undefined,
         action: sc.action.trim() || undefined,
@@ -1659,6 +1687,53 @@ export default function StoryBuilderForm() {
                   />
                 </label>
               </div>
+
+              {(() => {
+                const cameraPlan = planCameraForScene({
+                  movementId: scene.cameraMovementId,
+                  setting: scene.setting,
+                  objective: scene.objective,
+                  action: scene.action,
+                  format,
+                  sceneIndex: si,
+                  sceneCount: scenes.length,
+                });
+                const shotRisks = auditShotScene(scene);
+                return (
+                  <div className="mb-4 rounded-xl border border-accent-secondary/20 bg-accent-secondary/[0.045] p-3" data-camera-plan={si}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <label className="min-w-0 flex-1">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-accent-secondary">Camera movement</span>
+                        <select
+                          value={cameraPlan.movementId}
+                          onChange={(event) => updateScene(si, { cameraMovementId: event.target.value as CameraMovementId })}
+                          className="mt-1.5 w-full rounded-lg border border-white/10 bg-paper px-3 py-2 text-xs focus:border-accent-secondary focus:outline-none"
+                          data-camera-movement={si}
+                        >
+                          {CAMERA_MOVEMENTS.map((movement) => (
+                            <option key={movement.id} value={movement.id}>
+                              {movement.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="min-w-0 flex-[1.4] text-[10px] leading-4 text-grey">
+                        <p><span className="text-ink">Angle:</span> {cameraPlan.angle}</p>
+                        <p><span className="text-ink">Lens:</span> {cameraPlan.lens}</p>
+                        <p className="mt-1 text-accent-secondary">{cameraPlan.rationale}</p>
+                      </div>
+                    </div>
+                    {shotRisks.length > 0 && (
+                      <div className="mt-3 border-t border-amber-300/15 pt-2.5">
+                        <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-amber-200">Director checks before render</p>
+                        <ul className="mt-1.5 grid gap-1 text-[9px] leading-4 text-amber-100/70">
+                          {shotRisks.map((risk) => <li key={risk.code}>- {risk.message}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex flex-col gap-3">
                 {scene.lines.map((line, li) => (
