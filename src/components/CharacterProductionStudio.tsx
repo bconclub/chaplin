@@ -207,6 +207,10 @@ const SFX_VARIATIONS = [
 ] as const;
 
 const SEEDANCE_SETUP_URL = "https://docs.byteplus.com/en/docs/ModelArk/2291680";
+
+function modelArkHasPausedModel(message: string) {
+  return /inference limit|service has been paused|safe experience mode/i.test(message);
+}
 async function errorFrom(response: Response) {
   const data = (await response.json().catch(() => null)) as { error?: string } | null;
   return data?.error ?? `Generation failed with status ${response.status}.`;
@@ -241,18 +245,32 @@ function QuickWriteButton({
 function GenerationTimeline({
   generationKey,
   run,
+  providerLabel,
+  previewUrl,
 }: {
   generationKey: GenerationKey;
   run: GenerationRun | null;
+  providerLabel?: string;
+  previewUrl?: string;
 }) {
   if (!run || run.key !== generationKey) return null;
 
   const timeline = GENERATION_TIMELINES[generationKey];
   const statusLabel = run.status === "complete" ? "Ready to review" : run.status === "failed" ? "Needs attention" : "Working";
+  const expectedSeconds = timeline.expectedSeconds;
+  const estimatedProgress = run.status === "complete"
+    ? 100
+    : run.status === "failed"
+      ? Math.min(99, Math.max(8, Math.round((run.elapsedSeconds / expectedSeconds) * 88)))
+      : Math.min(94, Math.max(6, Math.round(6 + (run.elapsedSeconds / expectedSeconds) * 86)));
+  const activeStage = run.status === "complete"
+    ? timeline.stages.length - 1
+    : Math.min(timeline.stages.length - 1, Math.floor((estimatedProgress / 100) * timeline.stages.length));
+  const remainingSeconds = Math.max(0, expectedSeconds - run.elapsedSeconds);
 
   return (
     <div
-      className={`generation-timeline flex items-center gap-2 rounded-sm border px-3 py-2 ${
+      className={`generation-timeline rounded-sm border p-3 ${
         run.status === "failed"
           ? "border-red-500/55 bg-red-500/[0.07]"
           : run.status === "complete"
@@ -262,11 +280,45 @@ function GenerationTimeline({
       aria-live="polite"
       data-generation-timeline={generationKey}
     >
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-        run.status === "failed" ? "bg-red-500/15 text-red-500" : run.status === "complete" ? "bg-accent-secondary/15 text-accent-secondary" : "bg-accent/15 text-accent"
-      }`} aria-hidden="true">{run.status === "failed" ? "!" : run.status === "complete" ? "✓" : "…"}</span>
-      <p className="min-w-0 truncate text-[11px] text-grey"><span className="font-semibold text-ink">{timeline.title}</span> · {statusLabel}</p>
-      {run.error && <span className="ml-auto shrink-0 text-[10px] text-red-400">See message</span>}
+      <div className="flex items-start gap-3">
+        {generationKey === "image" && (
+          <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-sm border border-line bg-gradient-to-br from-[#24302b] via-[#10170f] to-[#451d2c]" data-generation-preview>
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic
+              <img src={previewUrl} alt="Locked identity reference while the new image renders" className="h-full w-full object-cover opacity-70" />
+            ) : (
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(242,78,112,0.55),transparent_30%),linear-gradient(135deg,transparent_42%,rgba(255,255,255,0.12)_43%,transparent_45%)]" />
+            )}
+            <div className="absolute inset-x-2 bottom-2 h-px bg-white/40" />
+            <span className="absolute left-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-white">Preview</span>
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-ink">{timeline.title}</p>
+              <p className="mt-0.5 text-[10px] text-grey">
+                {providerLabel ? `${providerLabel} · ` : ""}{statusLabel}
+                {run.status === "running" ? ` · ${run.elapsedSeconds}s elapsed` : ""}
+              </p>
+            </div>
+            <span className={`shrink-0 text-lg font-semibold tabular-nums ${run.status === "failed" ? "text-red-400" : run.status === "complete" ? "text-emerald-400" : "text-accent"}`}>{estimatedProgress}%</span>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10" aria-label={`${estimatedProgress}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={estimatedProgress}>
+            <div className={`h-full rounded-full transition-[width] duration-700 ease-out ${run.status === "failed" ? "bg-red-400" : run.status === "complete" ? "bg-emerald-400" : "bg-accent"}`} style={{ width: `${estimatedProgress}%` }} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px]">
+            <span className="font-medium text-ink">{timeline.stages[activeStage]}</span>
+            {run.status === "running" && <span className="text-grey">{remainingSeconds > 0 ? `About ${remainingSeconds}s remaining` : "Still rendering—this can take a little longer"}</span>}
+            {run.error && <span className="text-red-400">See message above</span>}
+          </div>
+          <div className="mt-3 grid grid-cols-4 gap-1" aria-hidden="true">
+            {timeline.stages.map((stage, index) => (
+              <span key={stage} className={`h-1 rounded-full ${index <= activeStage ? (run.status === "failed" ? "bg-red-400/80" : "bg-accent") : "bg-white/10"}`} />
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -328,6 +380,17 @@ export default function CharacterProductionStudio({
   const workflowContentRef = useRef<HTMLDivElement | null>(null);
   const quickWriteRevisionRef = useRef(0);
   const identityReferenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
+
+  useEffect(() => {
+    if (!generationRun || generationRun.status !== "running") return;
+    const startedAt = Date.now() - generationRun.elapsedSeconds * 1000;
+    const timer = window.setInterval(() => {
+      setGenerationRun((current) => current?.status === "running"
+        ? { ...current, elapsedSeconds: Math.max(1, Math.floor((Date.now() - startedAt) / 1000)) }
+        : current);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [generationRun]);
   const referenceImage = identityReferenceImage;
   // A newly composed scene frame takes priority, but an actor with an approved
   // canonical image is already ready for image-to-video. Requiring another
@@ -581,6 +644,8 @@ export default function CharacterProductionStudio({
         ? "The voice audition was shorter than ElevenLabs allows. Chaplin has expanded it safely; tap Build the complete voice to retry."
         : /text_too_long|maximum number of 450 characters|invalid_text_length/i.test(rawError)
           ? "The SFX direction exceeded ElevenLabs’ limit. Chaplin has shortened it safely; tap Generate short SFX takes to retry."
+          : label === "video" && modelArkHasPausedModel(rawError)
+            ? "Seedance is paused by BytePlus after this account reached its inference limit. Open ModelArk setup to adjust or turn off Safe Experience Mode, then retry this exact still."
           : rawError;
       if (label === "voice-build") setVoiceBuildStage(null);
       setMessage(errorMessage);
@@ -841,11 +906,14 @@ export default function CharacterProductionStudio({
     seedModelsFailed && /not activated|activate the model/i.test(seedModelsError);
   const seedreamLimitPaused =
     seedModelsFailed && /dola-seedream|seedream/i.test(seedModelsError) &&
-      /inference limit|service has been paused|safe experience mode/i.test(seedModelsError);
-  // Seedream and Seedance use the same ModelArk key, but this specific 429 is
-  // a Dola Seedream model pause—not evidence that the Seedance video model is
-  // unavailable. Keep video available and remove only Dola from image choices.
-  const seedModelsReady = seedModelsConfigured;
+      modelArkHasPausedModel(seedModelsError);
+  const seedanceLimitPaused =
+    seedModelsFailed && /seedance|dreamina-seedance/i.test(seedModelsError) &&
+      modelArkHasPausedModel(seedModelsError);
+  // Seedream and Seedance share the same credential but are independently
+  // paused by ModelArk. Keep the still provider available if only Seedance is
+  // paused, and vice versa.
+  const seedModelsReady = seedModelsConfigured && !seedanceLimitPaused;
   const configuredImageProvider = status?.pipeline?.stages?.image?.provider?.toLowerCase() ?? "byteplus";
   const imageProviderReady = configuredImageProvider === "openrouter"
     ? status?.openRouter ?? false
@@ -871,6 +939,8 @@ export default function CharacterProductionStudio({
           : null;
   const videoUnavailableReason = !status
     ? "Checking the Seedance connection…"
+    : seedanceLimitPaused
+      ? "Seedance is paused by BytePlus after this account reached its inference limit. Adjust the ModelArk account before retrying."
     : !seedModelsReady
       ? "Seedance is not ready. Check the Video stage in Super Admin, then refresh this page."
       : !videoReferenceImage
@@ -913,8 +983,8 @@ export default function CharacterProductionStudio({
             <span className={`rounded-full border px-2 py-1 ${elevenOperational ? "border-emerald-500 text-emerald-600" : elevenReady ? "border-amber-400 text-amber-400" : "border-line text-grey"}`}>
               ElevenLabs {elevenOperational ? "operational" : elevenReady ? "configured" : "needs key"}
             </span>
-            <span className={`rounded-full border px-2 py-1 ${seedModelsNeedActivation || seedreamLimitPaused || seedModelsFailed ? "border-red-500 text-red-500" : seedModelsReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
-              {seedModelsNeedActivation ? "Seedance activation required" : seedreamLimitPaused ? "Dola Seedream 5 paused" : seedModelsFailed ? "Seed models last run failed" : seedModelsReady ? "Seedream + Seedance active" : "Seed models need API key"}
+            <span className={`rounded-full border px-2 py-1 ${seedModelsNeedActivation || seedanceLimitPaused || seedreamLimitPaused || seedModelsFailed ? "border-red-500 text-red-500" : seedModelsReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
+              {seedModelsNeedActivation ? "Seedance activation required" : seedanceLimitPaused ? "Seedance paused" : seedreamLimitPaused ? "Dola Seedream 5 paused" : seedModelsFailed ? "Seed models last run failed" : seedModelsReady ? "Seedream + Seedance active" : "Seed models need API key"}
             </span>
             <span className={`rounded-full border px-2 py-1 ${imageProviderReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
               Still engine {imageProviderReady ? `${imageProviderLabel} ready` : `${imageProviderLabel} needs key`}
@@ -1045,6 +1115,17 @@ export default function CharacterProductionStudio({
               rel="noreferrer"
               className="shrink-0 rounded-full border border-red-400 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
             >
+              Open ModelArk setup ↗
+            </a>
+          </div>
+        )}
+        {seedanceLimitPaused && (
+          <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-red-400">Seedance is paused by BytePlus</p>
+              <p className="text-xs text-grey mt-1">This account reached the model&apos;s inference limit or has Safe Experience Mode enabled. Your selected still is safe and ready—adjust the ModelArk account, then retry the same frame.</p>
+            </div>
+            <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="shrink-0 rounded-full border border-red-400 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10">
               Open ModelArk setup ↗
             </a>
           </div>
@@ -1463,7 +1544,12 @@ export default function CharacterProductionStudio({
             </button>
             <p className="text-[11px] leading-relaxed text-grey">Each available image provider creates a candidate. Every result stays in the actor library until you explicitly choose the identity or first frame to use.</p>
             {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
-            <GenerationTimeline generationKey="image" run={generationRun} />
+            <GenerationTimeline
+              generationKey="image"
+              run={generationRun}
+              providerLabel={gptImageReady && dolaImageReady ? "GPT Image 2 + Dola Seedream 5" : gptImageReady ? "GPT Image 2" : "Dola Seedream 5"}
+              previewUrl={identityReferenceImage || undefined}
+            />
             {imageCandidates.length > 0 && (
               <div className="grid gap-3 sm:grid-cols-2" data-image-candidates>
                 {imageCandidates.map((candidate) => {
@@ -1532,7 +1618,7 @@ export default function CharacterProductionStudio({
             )}
             <textarea data-scene-field="video" value={scenePrompt} onChange={(event) => setScenePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
             <button onClick={generateVideo} disabled={!seedModelsReady || !videoReferenceImage || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
-              {busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
+              {seedanceLimitPaused ? "Seedance paused by BytePlus" : busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
             </button>
             {videoUnavailableReason && (
               <div role="status" className="rounded-sm border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
@@ -1541,6 +1627,11 @@ export default function CharacterProductionStudio({
                   <button type="button" onClick={() => jumpToStep(5)} className="mt-2 rounded-full border border-amber-300/50 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10">
                     Go to still generation →
                   </button>
+                )}
+                {seedanceLimitPaused && (
+                  <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full border border-amber-300/50 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10">
+                    Open ModelArk setup ↗
+                  </a>
                 )}
               </div>
             )}
