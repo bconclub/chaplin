@@ -339,6 +339,14 @@ function imageStageForPreset(stage: PipelineStageConfig, input: Input): Pipeline
       settings: { ...stage.settings, size: "1536x1024", quality: "medium", outputFormat: "png" },
     };
   }
+  if (preset === "nano-banana-2") {
+    return {
+      ...stage,
+      provider: "openrouter",
+      model: "google/gemini-3.1-flash-image",
+      settings: { ...stage.settings, resolution: "2K", aspectRatio: "16:9" },
+    };
+  }
   if (preset === "dola-seedream-5") {
     return {
       ...stage,
@@ -347,7 +355,7 @@ function imageStageForPreset(stage: PipelineStageConfig, input: Input): Pipeline
       settings: { ...stage.settings, size: "2560x1440", outputFormat: "png", watermark: false, sequentialImageGeneration: "disabled" },
     };
   }
-  throw new RequestValidationError("imagePreset must be gpt-image-2 or dola-seedream-5.");
+  throw new RequestValidationError("imagePreset must be gpt-image-2, nano-banana-2, or dola-seedream-5.");
 }
 
 async function providerError(response: Response, provider: string) {
@@ -410,9 +418,13 @@ async function generateWithOpenRouter(
     n: 1,
     resolution: settingString(stage, "resolution", "2K"),
     aspect_ratio: settingString(stage, "aspectRatio", "16:9"),
-    quality: settingString(stage, "quality", "medium"),
-    output_format: settingString(stage, "outputFormat", "png"),
   };
+  // Nano Banana's current OpenRouter endpoints expose resolution, aspect ratio,
+  // one output, and references. Do not send unsupported quality/format knobs.
+  if (!/^google\/gemini-.+-image$/i.test(stage.model)) {
+    body.quality = settingString(stage, "quality", "medium");
+    body.output_format = settingString(stage, "outputFormat", "png");
+  }
   if (references.length) {
     body.input_references = await Promise.all(references.map(async (reference) => ({
       type: "image_url",
@@ -901,6 +913,8 @@ export async function POST(request: Request) {
         deliveredDurationSeconds: delivered.deliveredDurationSeconds,
         durationTrimmed: delivered.trimmed,
         fadeOutMilliseconds: delivered.fadeOutMilliseconds,
+        postprocessStatus: delivered.postprocessStatus,
+        postprocessMessage: delivered.postprocessMessage,
       };
       const asset = await saveMediaAsset({
         characterId,

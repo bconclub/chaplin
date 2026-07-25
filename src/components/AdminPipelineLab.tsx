@@ -268,7 +268,7 @@ export default function AdminPipelineLab({
                     onChange={(event) => {
                       const provider = event.target.value;
                       const model = provider === "openrouter"
-                        ? "google/gemini-2.5-flash-image"
+                        ? "google/gemini-3.1-flash-image"
                         : provider === "openai"
                           ? "gpt-image-2"
                           : "dola-seedream-5-0-pro-260628";

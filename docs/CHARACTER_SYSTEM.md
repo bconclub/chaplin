@@ -146,3 +146,10 @@ Recommended modes:
 
 The key alone does not route traffic. BytePlus remains active until Super Admin
 explicitly changes the Image provider.
+
+The character studio uses configured image credentials independently of the
+active Pipeline Lab provider when creating comparison candidates. A seed or
+scene request can generate GPT Image 2, Nano Banana 2, and Dola Seedream 5 from
+the same prompt and canonical reference. Each result is saved separately; the
+creator explicitly chooses which asset becomes the canonical feed seed or
+Seedance first frame.

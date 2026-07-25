@@ -35,6 +35,7 @@ function latestSceneReference(assets: ProductionAsset[]) {
 
 type ProductionState = {
   voiceId: string | null;
+  voicePreviewUrl: string | null;
   latestDialogueUrl: string | null;
   latestSfxUrl: string | null;
   latestThemeUrl: string | null;
@@ -108,10 +109,19 @@ type SfxCandidate = {
 type ImageCandidate = {
   assetId: string;
   url: string;
-  provider: "openai" | "byteplus";
+  provider: "openai" | "openrouter" | "byteplus";
   model: string;
 };
 type ImageProviderKey = ImageCandidate["provider"];
+const IMAGE_PROVIDER_LABELS: Record<ImageProviderKey, string> = {
+  openai: "GPT Image 2",
+  openrouter: "Nano Banana 2",
+  byteplus: "Dola Seedream 5",
+};
+
+function imageProviderLabel(provider: ImageProviderKey) {
+  return IMAGE_PROVIDER_LABELS[provider];
+}
 type QuickWriteField =
   | "voice-description"
   | "voice-preview"
@@ -395,6 +405,76 @@ function GenerationTimeline({
   );
 }
 
+const ASSET_WAVEFORM = [34, 62, 44, 82, 54, 72, 38, 88, 58, 76, 42, 66, 32, 74, 48, 84];
+
+function assetKindLabel(kind: string) {
+  if (kind === "dialogue") return "Dialogue take";
+  if (kind === "sfx") return "Signature SFX";
+  if (kind === "theme") return "Theme score";
+  if (kind === "video") return "Generated scene";
+  if (kind === "avatar") return "Identity portrait";
+  if (kind === "banner") return "Identity banner";
+  return "Scene still";
+}
+
+function AssetCanvasSkeleton({
+  stepId,
+  running,
+  progress,
+}: {
+  stepId: number;
+  running: boolean;
+  progress: number;
+}) {
+  const isVisual = stepId >= 5;
+  const count = stepId === 1 ? 3 : 1;
+
+  return (
+    <div className={`asset-canvas-skeleton rounded-md border p-3 ${running ? "border-accent/50 bg-accent/[0.055]" : "border-line bg-white/[0.018]"}`} data-asset-skeleton={WORKFLOW_STEPS[stepId - 1]?.stage}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">
+          {running ? "Generating now" : "Preview reserved"}
+        </span>
+        <span className={`text-[10px] font-semibold tabular-nums ${running ? "text-accent" : "text-grey"}`}>
+          {running ? `${progress}%` : "Waiting"}
+        </span>
+      </div>
+      {isVisual ? (
+        <div className="asset-canvas-shimmer relative mt-3 aspect-video overflow-hidden rounded-sm border border-white/[0.06] bg-gradient-to-br from-[#17211d] via-[#0d1210] to-[#25151c]">
+          <div className="absolute inset-x-[18%] bottom-0 h-[72%] rounded-t-[46%] border border-white/[0.06] bg-white/[0.025]" />
+          <div className="absolute left-[35%] top-[18%] h-[22%] w-[30%] rounded-full border border-white/[0.07] bg-white/[0.025]" />
+          {stepId === 6 && <span className="absolute inset-0 flex items-center justify-center text-2xl text-white/20">▶</span>}
+          <span className="absolute bottom-2 left-2 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-white/45">
+            {stepId === 5 ? "Image preview" : "Video preview"}
+          </span>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: count }, (_, index) => (
+            <div key={index} className="asset-canvas-shimmer rounded-sm border border-white/[0.06] bg-black/15 p-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className="h-7 w-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.035]" />
+                <span className="flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                  {ASSET_WAVEFORM.map((height, barIndex) => (
+                    <span key={barIndex} className="min-w-0 flex-1 rounded-full bg-white/[0.11]" style={{ height: `${Math.max(18, height - index * 7)}%` }} />
+                  ))}
+                </span>
+                <span className="h-2 w-8 rounded-full bg-white/[0.06]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.07]">
+        <span
+          className={`block h-full rounded-full transition-[width] duration-700 ${running ? "bg-gradient-to-r from-accent to-accent-secondary" : "bg-white/10"}`}
+          style={{ width: `${running ? progress : 18}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function CharacterProductionStudio({
   character,
   onExit,
@@ -418,6 +498,7 @@ export default function CharacterProductionStudio({
   );
   const [previewText, setPreviewText] = useState(brollLine);
   const [previews, setPreviews] = useState<VoicePreview[]>([]);
+  const [lockedVoiceId, setLockedVoiceId] = useState(character.voiceId ?? "");
   const [speechText, setSpeechText] = useState(dialogueForEditor(initialScene.dialogue));
   const [speechUrl, setSpeechUrl] = useState("");
   const [sfxPrompt, setSfxPrompt] = useState(
@@ -470,8 +551,6 @@ export default function CharacterProductionStudio({
   // canonical image is already ready for image-to-video. Requiring another
   // still here left the video action disabled for otherwise complete actors.
   const videoReferenceImage = generatedImage || identityReferenceImage;
-  const lockedVoiceId = character.voiceId || status?.production?.voiceId || "";
-
   function jumpToStep(stepId: number) {
     setActiveStep(stepId);
     window.requestAnimationFrame(() => {
@@ -527,6 +606,7 @@ export default function CharacterProductionStudio({
         setAssetHistory(assets);
         setGeneratedImage(latestSceneReference(assets));
         setCanonicalReferenceImage(production.visualReference?.url ?? "");
+        if (production.voiceId) setLockedVoiceId(production.voiceId);
         if (production.voiceId && production.voiceId !== character.voiceId) {
           setCharacterVoice(character.id, production.voiceId);
         }
@@ -571,6 +651,7 @@ export default function CharacterProductionStudio({
       setAssetHistory(assets);
       setGeneratedImage(latestSceneReference(assets));
       setCanonicalReferenceImage(data.production.visualReference?.url ?? "");
+      if (data.production.voiceId) setLockedVoiceId(data.production.voiceId);
       if (data.production.voiceId && data.production.voiceId !== character.voiceId) {
         setCharacterVoice(character.id, data.production.voiceId);
       }
@@ -862,6 +943,7 @@ export default function CharacterProductionStudio({
         generatedVoiceId: preview.generated_voice_id,
         characterId: character.id,
       })) as { voice_id: string; already_locked?: boolean };
+      setLockedVoiceId(data.voice_id);
       setCharacterVoice(character.id, data.voice_id);
       setPreviews([]);
       setMessage(
@@ -965,6 +1047,17 @@ export default function CharacterProductionStudio({
           }) as Promise<ImageCandidate>,
         });
       }
+      if (nanoBananaReady) {
+        requests.push({
+          provider: "openrouter",
+          result: jsonAction("image", {
+            prompt: imagePrompt,
+            imagePurpose,
+            referenceImage: identityReferenceImage,
+            imagePreset: "nano-banana-2",
+          }) as Promise<ImageCandidate>,
+        });
+      }
       if (dolaImageReady) {
         requests.push({
           provider: "byteplus",
@@ -997,10 +1090,10 @@ export default function CharacterProductionStudio({
       setImageCandidates(results);
       results.forEach((candidate) => addCharacterImage(character.id, candidate.url));
       await refreshHistory();
-      const providers = results.map((candidate) => candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5").join(" and ");
+      const providers = results.map((candidate) => imageProviderLabel(candidate.provider)).join(", ");
       const comparisonStatus = Object.keys(failures).length
         ? " One provider needs attention; its error is shown in the comparison."
-        : " Compare both interpretations before choosing.";
+        : " Compare the interpretations before choosing.";
       setMessage((imagePurpose === "identity"
         ? `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one to make it this actor’s canonical identity cover.`
         : `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one as Seedance’s exact first frame.`) + comparisonStatus);
@@ -1025,8 +1118,8 @@ export default function CharacterProductionStudio({
       }
       await refreshHistory();
       setMessage(imagePurpose === "identity"
-        ? `${candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5"} is now the actor’s canonical identity cover. You can move on to video when ready.`
-        : `${candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5"} is now Seedance’s exact first frame.`);
+        ? `${imageProviderLabel(candidate.provider)} is now the actor’s canonical identity cover. You can move on to video when ready.`
+        : `${imageProviderLabel(candidate.provider)} is now Seedance’s exact first frame.`);
       advanceAfterCompletion(6);
     });
   }
@@ -1141,17 +1234,22 @@ export default function CharacterProductionStudio({
   // paused, and vice versa.
   const seedModelsReady = seedModelsConfigured && !seedanceAccountPaused;
   const gptImageReady = status?.openAI ?? false;
+  const nanoBananaReady = status?.openRouter ?? false;
   const dolaImageReady = seedModelsConfigured && !seedreamLimitPaused;
-  const imageGenerationReady = gptImageReady || dolaImageReady;
+  const readyImageProviderLabels = [
+    gptImageReady ? IMAGE_PROVIDER_LABELS.openai : null,
+    nanoBananaReady ? IMAGE_PROVIDER_LABELS.openrouter : null,
+    dolaImageReady ? IMAGE_PROVIDER_LABELS.byteplus : null,
+  ].filter((label): label is string => Boolean(label));
+  const imageGenerationReady = readyImageProviderLabels.length > 0;
+  const imageProviderRunLabel = readyImageProviderLabels.join(" + ");
   const imageUnavailableReason = !status
       ? "Checking image providers…"
-    : !gptImageReady && !dolaImageReady
-      ? "Connect GPT Image or Dola Seedream 5 to create a still."
-      : !gptImageReady
-        ? "GPT Image is unavailable, so this run will use Dola Seedream 5."
-        : !dolaImageReady
-          ? "Dola Seedream 5 is unavailable, so this run will use GPT Image 2."
-          : null;
+    : !imageGenerationReady
+      ? "Connect GPT Image, OpenRouter Nano Banana, or Dola Seedream 5 to create a still."
+      : readyImageProviderLabels.length === 1
+        ? `${readyImageProviderLabels[0]} is the only image provider ready for this run.`
+        : null;
   const videoUnavailableReason = !status
     ? "Checking the Seedance connection…"
     : seedanceAccountPaused
@@ -1162,6 +1260,13 @@ export default function CharacterProductionStudio({
         ? "Choose or generate a still first. Seedance needs an exact first frame before it can animate the actor."
         : null;
   const elevenReady = status?.elevenLabs ?? false;
+  const dialogueUnavailableReason = !status
+    ? "Checking the dialogue provider…"
+    : !elevenReady
+      ? "ElevenLabs is not ready. Check the Voice stage in Super Admin, then refresh this page."
+      : !lockedVoiceId
+        ? "Choose and lock one voice take before generating dialogue."
+        : null;
   const configuredVideoModel = status?.pipeline?.stages?.video?.model ?? "dreamina-seedance-2-0-260128";
   const configuredSfxCount = Math.min(
     SFX_VARIATIONS.length,
@@ -1178,6 +1283,7 @@ export default function CharacterProductionStudio({
     ...(generatedImage || identityReferenceImage ? [5] : []),
     ...(generatedVideo || character.videoUrl ? [6] : []),
   ]);
+  const activeStepComplete = completedSteps.has(activeStep);
   const reviewSteps = new Set<number>([
     ...(previews.length > 0 && !lockedVoiceId ? [1] : []),
     ...(sfxCandidates.length > 0 && !sfxUrl ? [3] : []),
@@ -1204,6 +1310,131 @@ export default function CharacterProductionStudio({
     }
     if (reviewSteps.has(stepId)) return 100;
     return completedSteps.has(stepId) ? 100 : 0;
+  }
+
+  const activeStepRunning = processingStep === activeStep;
+  const activeStepProgress = progressForStep(activeStep);
+  const activeStepHasOutput = activeStep === 1
+    ? previews.length > 0 || Boolean(lockedVoiceId)
+    : activeStep === 2
+      ? Boolean(speechUrl)
+      : activeStep === 3
+        ? sfxCandidates.length > 0 || Boolean(sfxUrl)
+        : activeStep === 4
+          ? Boolean(themeUrl)
+          : activeStep === 5
+            ? imageCandidates.length > 0 || Boolean(generatedImage || identityReferenceImage)
+            : Boolean(generatedVideo || character.videoUrl);
+
+  function renderActiveAssetPreview() {
+    if (activeStep === 1) {
+      return (
+        <div className="space-y-2">
+          {previews.map((preview, index) => (
+            <article key={preview.generated_voice_id} className="rounded-md border border-line bg-black/15 p-2.5" data-asset-canvas-candidate="voice">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-semibold">Voice take {index + 1}</span>
+                <button type="button" onClick={() => lockVoice(preview)} disabled={Boolean(busy)} className="rounded-full border border-accent/60 px-2.5 py-1 text-[9px] font-semibold text-accent disabled:opacity-40">
+                  {busy === "voice-save" ? "Locking…" : "Choose"}
+                </button>
+              </div>
+              <MediaPlayer
+                src={`data:${preview.media_type ?? "audio/mpeg"};base64,${preview.audio_base_64}`}
+                label={`Voice candidate ${index + 1}`}
+                compact
+                playbackLimitSeconds={7}
+              />
+            </article>
+          ))}
+          {lockedVoiceId && previews.length === 0 && (
+            <article className="rounded-md border border-emerald-400/35 bg-emerald-400/[0.055] p-3" data-asset-canvas-ready="voice">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/60 bg-emerald-400/10 text-[11px] text-emerald-200">✓</span>
+                <span>
+                  <span className="block text-[11px] font-semibold text-emerald-200">Voice identity locked</span>
+                  <span className="mt-0.5 block text-[9px] uppercase tracking-[0.12em] text-emerald-400">Continuity ready · {lockedVoiceId.slice(-6)}</span>
+                </span>
+              </div>
+              {status?.production?.voicePreviewUrl && (
+                <div className="mt-3">
+                  <MediaPlayer src={status.production.voicePreviewUrl} label={`${character.name} locked voice`} compact playbackLimitSeconds={7} />
+                </div>
+              )}
+            </article>
+          )}
+        </div>
+      );
+    }
+
+    if (activeStep === 2) {
+      return speechUrl ? <MediaPlayer src={speechUrl} label={`${character.name} dialogue`} compact /> : null;
+    }
+
+    if (activeStep === 3) {
+      if (sfxCandidates.length > 0) {
+        return (
+          <div className="space-y-2">
+            {sfxCandidates.map((candidate, index) => {
+              const selected = sfxUrl === candidate.url;
+              return (
+                <article key={candidate.assetId} className={`rounded-md border p-2.5 ${selected ? "border-emerald-400/40 bg-emerald-400/[0.05]" : "border-line bg-black/15"}`} data-asset-canvas-candidate="sfx">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="truncate text-[10px] font-semibold">Take {index + 1} · {candidate.label}</span>
+                    <button type="button" onClick={() => selectSfxCandidate(candidate)} disabled={Boolean(busy)} className={`shrink-0 text-[9px] font-semibold ${selected ? "text-emerald-300" : "text-accent"}`}>
+                      {selected ? "Selected ✓" : "Use take"}
+                    </button>
+                  </div>
+                  <MediaPlayer src={candidate.url} label={`${character.name} SFX take ${index + 1}`} compact />
+                </article>
+              );
+            })}
+          </div>
+        );
+      }
+      return sfxUrl ? <MediaPlayer src={sfxUrl} label={`${character.name} signature SFX`} compact /> : null;
+    }
+
+    if (activeStep === 4) {
+      return themeUrl ? <MediaPlayer src={themeUrl} label={`${character.name} theme`} compact /> : null;
+    }
+
+    if (activeStep === 5) {
+      if (imageCandidates.length > 0) {
+        return (
+          <div className="space-y-3">
+            {imageCandidates.map((candidate) => {
+              const selected = selectedImageAssetId === candidate.assetId;
+              return (
+                <article key={candidate.assetId} className={`overflow-hidden rounded-md border ${selected ? "border-emerald-400/45 bg-emerald-400/[0.045]" : "border-line bg-black/15"}`} data-asset-canvas-candidate="image">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- generated provider URLs are dynamic */}
+                  <img src={candidate.url} alt={`${character.name} ${imageProviderLabel(candidate.provider)} preview`} className="aspect-video w-full object-cover" />
+                  <div className="flex items-center justify-between gap-2 p-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[10px] font-semibold">{imageProviderLabel(candidate.provider)}</span>
+                      <span className="block truncate text-[9px] text-grey">{candidate.model}</span>
+                    </span>
+                    <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent"}`}>
+                      {selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use seed" : "Use frame"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        );
+      }
+      const still = generatedImage || identityReferenceImage;
+      return still ? (
+        <article className="overflow-hidden rounded-md border border-line bg-black/15" data-asset-canvas-ready="image">
+          {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
+          <img src={still} alt={`${character.name} selected visual`} className="aspect-video w-full object-cover" />
+          <p className="px-3 py-2 text-[9px] uppercase tracking-[0.12em] text-emerald-300">Selected visual reference</p>
+        </article>
+      ) : null;
+    }
+
+    const video = generatedVideo || character.videoUrl;
+    return video ? <MediaPlayer src={video} label={`${character.name} scene`} kind="video" compact /> : null;
   }
 
   return (
@@ -1346,10 +1577,21 @@ export default function CharacterProductionStudio({
             {activeStep < WORKFLOW_STEPS.length ? (
               <button
                 type="button"
-                onClick={() => jumpToStep(activeStep + 1)}
-                className="flex w-full items-center justify-between rounded-md bg-accent px-2 py-2 text-left text-[9px] font-semibold text-paper transition-colors hover:bg-accent-light"
+                onClick={() => {
+                  if (!activeStepComplete) {
+                    setMessage(`Complete ${activeStepMeta.label.toLowerCase()} before moving to the next production stage.`);
+                    return;
+                  }
+                  jumpToStep(activeStep + 1);
+                }}
+                aria-disabled={!activeStepComplete}
+                className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-[9px] font-semibold transition-colors ${
+                  activeStepComplete
+                    ? "bg-accent text-paper hover:bg-accent-light"
+                    : "border border-line bg-white/[0.025] text-grey hover:border-accent/60 hover:text-ink"
+                }`}
               >
-                <span>Next</span>
+                <span>{activeStepComplete ? "Next" : `Complete ${activeStepMeta.label}`}</span>
                 <span aria-hidden="true">→</span>
               </button>
             ) : onExit ? (
@@ -1686,9 +1928,19 @@ export default function CharacterProductionStudio({
               />
             </div>
             <textarea aria-label={`${character.name} spoken dialogue`} data-scene-field="dialogue" value={speechText} onChange={(event) => setSpeechText(event.target.value)} rows={5} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
-            <button onClick={generateSpeech} disabled={!elevenReady || Boolean(busy) || !lockedVoiceId} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
+            <button onClick={generateSpeech} disabled={Boolean(dialogueUnavailableReason) || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "speech" ? "Performing line..." : "Generate dialogue"}
             </button>
+            {dialogueUnavailableReason && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-amber-500/35 bg-amber-500/[0.08] px-3 py-2">
+                <p className="text-[10px] leading-relaxed text-amber-200">{dialogueUnavailableReason}</p>
+                {!lockedVoiceId && status && elevenReady && (
+                  <button type="button" onClick={() => jumpToStep(1)} className="text-[10px] font-semibold text-accent hover:underline">
+                    Open Voice
+                  </button>
+                )}
+              </div>
+            )}
             <GenerationTimeline generationKey="speech" run={generationRun} />
             {lockedVoiceId && (
               <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-600">
@@ -1842,28 +2094,28 @@ export default function CharacterProductionStudio({
             <textarea data-scene-field="image" value={imagePrompt} onChange={(event) => setImagePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
             <button onClick={generateImage} disabled={!imageGenerationReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "image"
-                ? gptImageReady && dolaImageReady ? "Generating both images..." : "Generating image..."
+                ? `Generating ${readyImageProviderLabels.length === 1 ? "image" : `${readyImageProviderLabels.length} images`}...`
                 : imagePurpose === "identity"
-                  ? gptImageReady && dolaImageReady ? "Generate GPT + Seedream feed seeds" : "Generate feed seed"
-                  : gptImageReady && dolaImageReady ? "Generate GPT + Seedream scene stills" : "Generate scene still"}
+                  ? readyImageProviderLabels.length > 1 ? `Generate ${imageProviderRunLabel} feed seeds` : "Generate feed seed"
+                  : readyImageProviderLabels.length > 1 ? `Generate ${imageProviderRunLabel} scene stills` : "Generate scene still"}
             </button>
             {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
             <GenerationTimeline
               generationKey="image"
               run={generationRun}
-              providerLabel={gptImageReady && dolaImageReady ? "GPT Image 2 + Dola Seedream 5" : gptImageReady ? "GPT Image 2" : "Dola Seedream 5"}
+              providerLabel={imageProviderRunLabel || "Image provider"}
               previewUrl={identityReferenceImage || undefined}
             />
             {(imageCandidates.length > 0 || Object.keys(imageProviderErrors).length > 0) && (
               <section data-image-comparison>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold">Same prompt, two image models</p>
+                  <p className="text-xs font-semibold">Same prompt, {readyImageProviderLabels.length} image {readyImageProviderLabels.length === 1 ? "model" : "models"}</p>
                   <p className="text-[10px] uppercase tracking-[0.12em] text-grey">Compare, then choose one</p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2" data-image-candidates>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-image-candidates>
                 {imageCandidates.map((candidate) => {
                   const selected = selectedImageAssetId === candidate.assetId;
-                  const providerLabel = candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5";
+                  const providerLabel = imageProviderLabel(candidate.provider);
                   return (
                     <article key={candidate.assetId} className={`overflow-hidden rounded-sm border ${selected ? "border-accent bg-accent/5" : "border-line"}`} data-image-candidate={candidate.provider}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- generated provider URLs are dynamic */}
@@ -1881,10 +2133,10 @@ export default function CharacterProductionStudio({
                     </article>
                   );
                 })}
-                {(["openai", "byteplus"] as const).map((provider) => {
+                {(["openai", "openrouter", "byteplus"] as const).map((provider) => {
                   const error = imageProviderErrors[provider];
                   if (!error) return null;
-                  const providerLabel = provider === "openai" ? "GPT Image 2" : "Dola Seedream 5";
+                  const providerLabel = imageProviderLabel(provider);
                   return (
                     <article key={`${provider}-error`} className="rounded-sm border border-red-400/40 bg-red-500/5 p-4">
                       <p className="text-xs font-semibold text-red-300">{providerLabel} needs attention</p>

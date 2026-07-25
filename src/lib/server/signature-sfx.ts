@@ -15,6 +15,7 @@ import {
   saveMediaAsset,
   selectCharacterSfxAsset,
 } from "@/lib/server/supabase-admin";
+import { ffmpegExecutable } from "@/lib/server/ffmpeg-runtime";
 
 const execute = promisify(execFile);
 
@@ -38,7 +39,7 @@ export async function assembleSignatureSfx(input: {
   timeline: SignatureSfxTimelineItem[];
 }) {
   const timeline = SignatureSfxTimelineSchema.parse(input.timeline);
-  const ffmpeg = process.env.CHAPLIN_FFMPEG_PATH || "ffmpeg";
+  const ffmpeg = ffmpegExecutable();
   const assets = await getCharacterSfxAssetsById({
     characterId: input.characterId,
     assetIds: timeline.map((item) => item.assetId),
