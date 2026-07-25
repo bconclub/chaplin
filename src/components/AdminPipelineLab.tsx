@@ -113,7 +113,13 @@ export default function AdminPipelineLab({
   const stage = config.stages[activeStage];
   const meta = PIPELINE_STAGE_META[activeStage];
   const imageModels = stage.provider === "openrouter"
-    ? ["google/gemini-2.5-flash-image", "openai/gpt-image-2", "bytedance-seed/seedream-4.5"]
+    ? [
+        "google/gemini-3.1-flash-image",
+        "google/gemini-3-pro-image",
+        "google/gemini-2.5-flash-image",
+        "openai/gpt-image-2",
+        "bytedance-seed/seedream-4.5",
+      ]
     : stage.provider === "openai"
       ? ["gpt-image-2", "gpt-image-1.5"]
       : ["seedream-4-5-251128"];

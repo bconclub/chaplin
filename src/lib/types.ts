@@ -37,6 +37,76 @@ export interface CharacterStats {
   earnings: number; // lifetime, in mock currency units
 }
 
+export type CharacterSheetViewId =
+  | "front"
+  | "left-three-quarter"
+  | "right-three-quarter"
+  | "left-profile"
+  | "right-profile"
+  | "back"
+  | "full-body"
+  | "pressure-expression";
+
+export type CharacterAgeStateId = "younger" | "canonical" | "older";
+
+export interface CharacterSheetView {
+  id: CharacterSheetViewId;
+  label: string;
+  framing: string;
+  promptDelta: string;
+  referenceAssetId?: string;
+  referenceUrl?: string;
+}
+
+export interface CharacterAgeState {
+  id: CharacterAgeStateId;
+  label: string;
+  promptDelta: string;
+  invariantLocks: string[];
+  referenceAssetId?: string;
+  referenceUrl?: string;
+}
+
+export interface CharacterInteractionProfile {
+  firstPersonSelfConcept: string;
+  conversationGoal: string;
+  responseRules: string[];
+  emotionalBoundaries: string[];
+  voiceContinuity: string;
+}
+
+export interface CharacterMemoryPolicy {
+  immutableCanon: string[];
+  writableMemoryTypes: Array<"event" | "relationship" | "promise" | "injury" | "possession">;
+  forbiddenMemoryWrites: string[];
+  retrieveRecent: number;
+  retrieveSalient: number;
+}
+
+export interface CharacterSystemProfile {
+  version: 1;
+  sheet: {
+    canonicalViewId: CharacterSheetViewId;
+    canonicalAgeStateId: CharacterAgeStateId;
+    views: CharacterSheetView[];
+    ageStates: CharacterAgeState[];
+  };
+  interaction: CharacterInteractionProfile;
+  memory: CharacterMemoryPolicy;
+}
+
+export interface CharacterMemoryRecord {
+  id: string;
+  characterId: string;
+  scope: "episodic" | "relationship";
+  summary: string;
+  participants: string[];
+  salience: number;
+  occurredAt: string;
+  sourceStoryId?: string;
+  sourceSceneId?: string;
+}
+
 export interface CharacterProductionBible {
   version: 1;
   dramatic: {
@@ -83,6 +153,7 @@ export interface CharacterProductionBible {
     recurringMotifs: string[];
     avoid: string[];
   };
+  system?: CharacterSystemProfile;
 }
 
 export interface Character {

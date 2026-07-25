@@ -94,7 +94,7 @@ async function main() {
   const feedMedia = feedItems.filter((post) => post.mediaUrl || post.sharedPost?.mediaUrl);
   const providerGuardChecks = [];
   for (const [provider, configured, keyName, model] of [
-    ["openrouter", state.payload.openRouter, "OPENROUTER_API_KEY", "google/gemini-2.5-flash-image"],
+    ["openrouter", state.payload.openRouter, "OPENROUTER_API_KEY", "google/gemini-3.1-flash-image"],
     ["openai", state.payload.openAI, "OPENAI_API_KEY", "gpt-image-2"],
   ]) {
     if (configured) {

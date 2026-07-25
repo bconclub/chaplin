@@ -1,4 +1,5 @@
 import type { Archetype, Character, CharacterProductionBible } from "@/lib/types";
+import { buildCharacterSystem } from "@/lib/character-system";
 
 export type CharacterIdentityInput = Pick<Character, "name" | "archetype" | "tagline" | "personality" | "voiceGender"> &
   Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "brollLine" | "brollScene">> & {
@@ -450,12 +451,16 @@ function identityNegative(medium: string) {
 }
 
 export function buildProductionBible(input: CharacterIdentityInput): CharacterProductionBible {
-  if (input.productionBible) return input.productionBible;
+  if (input.productionBible) {
+    return input.productionBible.system
+      ? input.productionBible
+      : { ...input.productionBible, system: buildCharacterSystem(input, input.productionBible) };
+  }
   const d = DIRECTIONS[input.archetype] ?? DIRECTIONS.hero;
   const appearance = input.appearanceBrief?.trim();
   const world = input.worldBrief?.trim();
   const localFace = localFaceBlueprint(input.name);
-  return {
+  const bible: CharacterProductionBible = {
     version: 1,
     dramatic: {
       externalWant: d.want,
@@ -523,6 +528,7 @@ export function buildProductionBible(input: CharacterIdentityInput): CharacterPr
       ],
     },
   };
+  return { ...bible, system: buildCharacterSystem(input, bible) };
 }
 
 export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {

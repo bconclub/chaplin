@@ -822,3 +822,68 @@ button:hover .frost-chip,
     opacity: 0.25;
   }
 }
+
+/* Character System: a persistent, draggable identity graph on desktop and
+   a readable connected stack on small screens. */
+.character-system-canvas {
+  background-color: #0a1007;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.09) 1px, transparent 0),
+    radial-gradient(circle at 35% 20%, rgba(242, 78, 112, 0.08), transparent 30%),
+    radial-gradient(circle at 75% 65%, rgba(7, 210, 190, 0.07), transparent 34%);
+  background-size: 24px 24px, 100% 100%, 100% 100%;
+}
+
+.character-system-scroll {
+  height: calc(100vh - 143px);
+  scrollbar-width: thin;
+  scrollbar-color: #f24e70 #11190d;
+}
+
+.character-system-scroll::-webkit-scrollbar,
+.character-system-prompt::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.character-system-scroll::-webkit-scrollbar-track,
+.character-system-prompt::-webkit-scrollbar-track {
+  background: #11190d;
+}
+
+.character-system-scroll::-webkit-scrollbar-thumb,
+.character-system-prompt::-webkit-scrollbar-thumb {
+  border: 2px solid #11190d;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f24e70, #07d2be);
+}
+
+@media (max-width: 767px) {
+  .character-system-scroll {
+    height: auto;
+    overflow: visible;
+  }
+
+  .character-system-canvas {
+    display: grid;
+    width: 100% !important;
+    min-height: 0 !important;
+    gap: 12px;
+    padding: 14px 14px 120px;
+  }
+
+  .character-system-node {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .character-system-node-handle {
+    cursor: default;
+  }
+
+  .character-system-connections {
+    display: none;
+  }
+}

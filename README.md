@@ -130,6 +130,11 @@ grammar, camera and motivated-light defaults, plus hook, escalation,
 cliffhanger, payoff, and recurring motifs. It is stored in Supabase as
 `characters.production_bible` and passed into Magic Writer as story canon.
 
+The same JSONB canon now contains a `system` profile for canonical character
+sheet angles, controlled younger/canonical/older states, interaction behavior,
+and memory boundaries. See [`docs/CHARACTER_SYSTEM.md`](docs/CHARACTER_SYSTEM.md)
+for the complete identity → prompt → media → interaction wiring.
+
 Prompts are deliberately different by medium:
 
 - ElevenLabs Voice Design receives language/dialect, presentation and age,
