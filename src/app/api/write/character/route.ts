@@ -242,6 +242,7 @@ export async function POST(request: Request) {
           .slice(0, 5)
       : [];
     const characterBrief = clean(body.characterBrief, 1500);
+    const visualFormat = clean(body.visualFormat, 500);
     const requestedVoiceGender = clean(body.voiceGender, 30) as VoiceGender;
     const input = {
       name,
@@ -252,7 +253,11 @@ export async function POST(request: Request) {
         (["feminine", "masculine", "androgynous"].includes(requestedVoiceGender) ? requestedVoiceGender : "androgynous"),
       tagline: clean(body.tagline, 500),
       personality: clean(body.personality, 2000),
-      appearanceBrief: clean(body.appearanceBrief, 1200),
+      // The format card is a binding visual instruction even if the creator
+      // has not yet written a separate appearance note.
+      appearanceBrief: [visualFormat, clean(body.appearanceBrief, 1200)]
+        .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index)
+        .join("\n"),
       worldBrief: clean(body.worldBrief, 1200),
     };
     fallbackInput = input;

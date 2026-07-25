@@ -27,6 +27,7 @@ import {
 } from "@/lib/pipeline-config";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
 import { requireRequestIdentity } from "@/lib/server/auth";
+import { assertPromptConsistency, readCharacterCardV2 } from "@/lib/character-card";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -82,6 +83,11 @@ function stageForGenerationAction(action: string): PipelineStageId | null {
 
 function directedPrompt(stage: PipelineStageConfig, prompt: string) {
   return [stage.promptPrelude.trim(), prompt.trim()].filter(Boolean).join("\n\n");
+}
+
+function mediaPromptWarnings(character: Character | undefined, prompt: string, target: "image" | "video") {
+  const card = readCharacterCardV2(character?.cardV2);
+  return card ? assertPromptConsistency(prompt, card, target) : [];
 }
 
 const REALISM_DIRECTION = "OUTPUT MEDIUM: A visually striking live-action cinematic photograph of a real human being, captured through a physical camera and lens. Preserve natural facial asymmetry, pores, fine hair, believable hands, tactile fabric, grounded body weight, physically plausible light, optical depth, and restrained film grain. Do not render an illustration, cartoon, anime frame, digital painting, 3D render, CGI character, doll, or wax figure.";
@@ -522,10 +528,12 @@ export async function POST(request: Request) {
     const input = (await request.json()) as Input;
     const action = text(input, "action", 1, 30);
     const characterId = text(input, "characterId", 1, 100);
+    let requestCharacter: Character | undefined;
     if (input.character && typeof input.character === "object") {
       const character = input.character as Character;
       if (character.id !== characterId) throw new RequestValidationError("AI actor identity does not match this generation request.");
       await ensureCharacter(character);
+      requestCharacter = character;
     }
 
     if (action === "sfx-select") {
@@ -564,6 +572,7 @@ export async function POST(request: Request) {
       provider: string;
       model: string;
       prompt?: string;
+      metadata?: Record<string, unknown>;
     }) => beginGeneration({
       ...details,
       experimentId,
@@ -793,6 +802,7 @@ export async function POST(request: Request) {
         "negativePrompt",
         "multiple people, duplicate face, celebrity likeness, generic pose, plastic skin, distorted anatomy, extra fingers, text, logo, UI, border, watermark"
       );
+      const cardNegativePrompt = readCharacterCardV2(requestCharacter?.cardV2)?.identity_locks.negative_prompt;
       const referenceMetadata = {
         imagePurpose,
         referenceImage: reference || null,
@@ -802,15 +812,23 @@ export async function POST(request: Request) {
       };
       const provider = imageProvider(imageConfig.provider);
       const exclusions = stylizedOutput
-        ? configuredNegativePrompt
-        : `${configuredNegativePrompt}, ${REALISM_NEGATIVE}`;
+        ? [configuredNegativePrompt, cardNegativePrompt].filter(Boolean).join(", ")
+        : [configuredNegativePrompt, cardNegativePrompt, REALISM_NEGATIVE].filter(Boolean).join(", ");
       const seedreamFive = provider === "byteplus" && /seedream-5-0/i.test(imageConfig.model);
       const effectivePrompt = provider === "byteplus"
         ? seedreamFive
           ? `${prompt}\n\nEXCLUDE: ${exclusions}`
           : prompt
         : `${prompt}\n\nEXCLUDE: ${exclusions}`;
-      jobId = await startGeneration({ characterId, kind: "gallery", provider, model: imageConfig.model, prompt: effectivePrompt });
+      const consistencyWarnings = mediaPromptWarnings(requestCharacter, effectivePrompt, "image");
+      jobId = await startGeneration({
+        characterId,
+        kind: "gallery",
+        provider,
+        model: imageConfig.model,
+        prompt: effectivePrompt,
+        metadata: consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : undefined,
+      });
       let generated: GeneratedImage;
       if (provider === "openrouter") {
         generated = await generateWithOpenRouter(imageConfig, effectivePrompt, references);
@@ -855,6 +873,7 @@ export async function POST(request: Request) {
         model: imageConfig.model,
         quality: settingString(imageConfig, "quality", "medium"),
         size: settingString(imageConfig, "size", "2560x1440"),
+        ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
       };
       const asset = generated.remoteUrl
         ? await saveRemoteMediaAsset({
@@ -919,7 +938,15 @@ export async function POST(request: Request) {
         referenceSource: requestedReference ? "production-approved-frame" : canonicalReference?.source ?? null,
       };
       const durationSeconds = settingNumber(videoConfig, "durationSeconds", 5);
-      jobId = await startGeneration({ characterId, kind: "video", provider: videoConfig.provider, model: videoConfig.model, prompt });
+      const consistencyWarnings = mediaPromptWarnings(requestCharacter, prompt, "video");
+      jobId = await startGeneration({
+        characterId,
+        kind: "video",
+        provider: videoConfig.provider,
+        model: videoConfig.model,
+        prompt,
+        metadata: consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : undefined,
+      });
       const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
       if (reference) {
         content.push({ type: "image_url", image_url: { url: await imageInput(reference) } });
@@ -960,13 +987,13 @@ export async function POST(request: Request) {
         remoteUrl: videoUrl,
         prompt,
         durationSeconds,
-        metadata: { taskId, ...referenceMetadata },
+        metadata: { taskId, ...referenceMetadata, ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}) },
       });
       const providerUsage = task.usage as Record<string, unknown> | undefined;
       await completeGeneration(
         jobId,
         asset.id,
-        { taskId, ...referenceMetadata },
+        { taskId, ...referenceMetadata, ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}) },
         await calculateGenerationBilling({
           kind: "video",
           usage: { durationSeconds, providerUsage, providerTokens: recordNumber(providerUsage, "total_tokens", "output_tokens") },

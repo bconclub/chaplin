@@ -189,6 +189,125 @@ body {
   box-shadow: 0 16px 40px rgba(28, 37, 28, 0.1);
 }
 
+/* Desktop production studio: a self-contained 100dvh editing room. The
+   regular site chrome is intentionally removed here so the scene workspace
+   can keep its actor rail, director notes, and primary canvas visible. */
+@media (min-width: 1024px) {
+  [data-bottom-nav] {
+    inset: 0 auto 0 0;
+    width: 5.5rem;
+    padding: 0.6rem 0.5rem;
+  }
+
+  [data-bottom-nav-frame] {
+    height: 100%;
+    max-width: none;
+  }
+
+  [data-bottom-nav-links] {
+    height: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    border-radius: 0.85rem;
+    padding: 5.1rem 0.35rem 0.5rem;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  [data-bottom-nav-links] > a {
+    flex: 0 0 3.9rem;
+    padding: 0.35rem 0;
+  }
+
+  [data-bottom-nav-links] > button[aria-hidden="true"] {
+    display: none;
+  }
+
+  [data-create-toggle] {
+    left: 1rem;
+    top: 1rem;
+    height: 3.45rem;
+    width: 3.45rem;
+    transform: none;
+    translate: 0;
+  }
+
+  body > main {
+    padding-left: 5.5rem;
+  }
+
+  body:has([data-home-gallery]) > main {
+    min-height: 100dvh;
+    padding-bottom: 0;
+  }
+
+  [data-bottom-nav] {
+    overflow: visible;
+  }
+
+  [data-bottom-nav-frame] {
+    overflow: visible;
+  }
+
+  body:has([data-character-studio-shell]) > header[data-header-compact],
+  body:has([data-character-creation-shell]) > header[data-header-compact],
+  body:has([data-character-creation-shell]) > footer,
+  body:has([data-character-studio-shell]) > footer {
+    display: none;
+  }
+
+  body:has([data-character-creation-shell]) > main,
+  body:has([data-character-studio-shell]) > main {
+    min-height: 100dvh;
+    padding-bottom: 0;
+  }
+
+  .studio-shell {
+    background:
+      radial-gradient(900px circle at 52% 35%, rgba(27, 53, 47, 0.14), transparent 55%),
+      #070a08;
+  }
+
+  .studio-shell__bar {
+    background: rgba(6, 9, 8, 0.94);
+    backdrop-filter: blur(18px);
+  }
+
+  .character-production-room {
+    display: flex;
+    height: calc(100dvh - 4rem);
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .studio-production-status {
+    flex: 0 0 auto;
+  }
+
+  .studio-production-grid {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .studio-production-rail,
+  .studio-production-content,
+  .studio-director-panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .studio-production-content {
+    background: linear-gradient(180deg, rgba(255,255,255,0.018), transparent 18rem);
+  }
+
+  .studio-stage-strip::-webkit-scrollbar {
+    height: 0;
+  }
+}
+
 /* Homepage actor universe: a lighter, data-aware adaptation of the Infinite Menu sphere. */
 .actor-universe {
   isolation: isolate;

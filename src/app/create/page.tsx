@@ -6,12 +6,14 @@ import { useChaplinStore } from "@/lib/store";
 const rolePaths = {
   creator: [
     { href: "/characters/new", runtime: "CANON", title: "Create an actor", copy: "Build the identity, voice, movement, sound, and production bible." },
+    { href: "/videos/new", runtime: "VIDEO", title: "Create a typed video", copy: "Choose actor, product, UGC, hero, or brand-spot grammar before shots are planned." },
     { href: "/studio/write?format=spark", runtime: "5 SEC", title: "Create a Spark", copy: "One private audition shot. It proves a casting choice and never enters the feed." },
     { href: "/studio/write?format=punch", runtime: "15 SEC", title: "Create a Punch", copy: "Three approved shots: hook, pressure, and a memorable personality choice." },
     { href: "/studio/write?format=episode", runtime: "60 SEC", title: "Create an Episode", copy: "Twelve approved shots ending on a situation-changing cliffhanger." },
   ],
   brand: [
     { href: "/characters", runtime: "CAST", title: "Choose an actor", copy: "Start with an audience-ready face or commission an exclusive identity." },
+    { href: "/videos/new", runtime: "VIDEO", title: "Create a product video", copy: "Choose UGC, Product Hero, or Brand Spot and lock the product identity before shots." },
     { href: "/studio/write?format=spot&duration=30", runtime: "30 SEC", title: "Create a Brand Spot", copy: "Six managed shots with rights, claims, review, and delivery gates." },
     { href: "/studio/write?format=spot&duration=60", runtime: "60 SEC", title: "Create a Brand Spot", copy: "Twelve managed shots for a complete commercial performance." },
   ],

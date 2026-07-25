@@ -4,7 +4,7 @@ import { createMediaPipelineRun, listMediaPipelineRuns } from "@/lib/server/medi
 
 export const runtime = "nodejs";
 
-const scopes: PipelineScope[] = ["actor", "shot", "episode", "spot"];
+const scopes: PipelineScope[] = ["actor", "shot", "episode", "spot", "brief"];
 const outputTypes = new Set(MEDIA_OUTPUT_CATALOG.map((item) => item.type));
 
 function cleanString(value: unknown, field: string, max = 300) {

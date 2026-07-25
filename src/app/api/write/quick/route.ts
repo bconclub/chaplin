@@ -19,6 +19,12 @@ import type { Character } from "@/lib/types";
 import { compactVoicePreview } from "@/lib/voice-preview";
 import { dialogueForEditor } from "@/lib/dialogue-performance";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
+import {
+  buildDialogueSystemPrompt,
+  buildVoiceDesignPrompt,
+  buildWritingContext,
+  readCharacterCardV2,
+} from "@/lib/character-card";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -114,6 +120,16 @@ export async function POST(request: Request) {
     const visualReferenceUrl = requestedReference || canonicalReference?.url || "";
     const visualReferenceSource = requestedReference ? "exact-first-frame" : canonicalReference?.source ?? null;
     const visualReferenceAssetId = requestedReference ? null : canonicalReference?.assetId ?? null;
+    const card = readCharacterCardV2(character.cardV2);
+    const v2ConsumerContext = card
+      ? field === "dialogue"
+        ? { dialogue: buildDialogueSystemPrompt(card) }
+        : field === "voice-description" || field === "voice-preview"
+          ? { voice: buildVoiceDesignPrompt(card) }
+          : field === "identity-image" || field === "image" || field === "video"
+            ? { visual: { identity_locks: card.identity_locks, wardrobe_states: card.wardrobe_states, age_states: card.age_states } }
+            : { writing: buildWritingContext(card) }
+      : null;
     const promptPayload = JSON.stringify({
       field,
       currentText: currentText || null,
@@ -123,16 +139,20 @@ export async function POST(request: Request) {
         : "Make a genuinely different creative choice, not a synonym-level paraphrase. Preserve canon and user intent while changing the central playable beat, visual action, composition, or rhythm as appropriate for this field.",
       actor: {
         name: character.name,
-        archetype: character.archetype,
-        tagline: character.tagline,
-        personality: character.personality,
-        voiceGender: character.voiceGender,
-        voiceDescription: character.voiceDesc,
-        signatureSfx: character.sfxDesc,
-        theme: character.themeDesc,
-        brollLine: character.brollLine ?? null,
-        brollScene: character.brollScene ?? null,
-        productionBible: character.productionBible ?? buildProductionBible(character),
+        ...(v2ConsumerContext
+          ? { characterCardV2: v2ConsumerContext }
+          : {
+              archetype: character.archetype,
+              tagline: character.tagline,
+              personality: character.personality,
+              voiceGender: character.voiceGender,
+              voiceDescription: character.voiceDesc,
+              signatureSfx: character.sfxDesc,
+              theme: character.themeDesc,
+              brollLine: character.brollLine ?? null,
+              brollScene: character.brollScene ?? null,
+              productionBible: character.productionBible ?? buildProductionBible(character),
+            }),
         visualReference: visualReferenceUrl ? { source: visualReferenceSource, assetId: visualReferenceAssetId } : null,
       },
       relatedCurrentFields: context,

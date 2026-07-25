@@ -155,6 +155,7 @@ export default function BottomNav() {
   return (
     <nav
       aria-label="Primary navigation"
+      data-bottom-nav
       className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] sm:px-5"
     >
       {createOpen && (
@@ -173,7 +174,7 @@ export default function BottomNav() {
         </div>
       )}
 
-      <div className="pointer-events-auto relative mx-auto w-full max-w-[34rem]">
+      <div data-bottom-nav-frame className="pointer-events-auto relative mx-auto w-full max-w-[34rem]">
         <button
           type="button"
           aria-label={
@@ -233,7 +234,7 @@ export default function BottomNav() {
           </span>
         </button>
 
-        <div className="flex h-[5rem] w-full items-stretch rounded-[2rem] border border-white/15 bg-black/75 px-2 shadow-[0_16px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl [-webkit-mask-image:radial-gradient(circle_at_50%_0px,transparent_40px,black_41px)] [mask-image:radial-gradient(circle_at_50%_0px,transparent_40px,black_41px)] sm:h-[5.25rem] sm:px-4 sm:[-webkit-mask-image:radial-gradient(circle_at_50%_0px,transparent_44px,black_45px)] sm:[mask-image:radial-gradient(circle_at_50%_0px,transparent_44px,black_45px)]">
+        <div data-bottom-nav-links className="flex h-[5rem] w-full items-stretch rounded-[2rem] border border-white/15 bg-black/75 px-2 shadow-[0_16px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl [-webkit-mask-image:radial-gradient(circle_at_50%_0px,transparent_40px,black_41px)] [mask-image:radial-gradient(circle_at_50%_0px,transparent_40px,black_41px)] sm:h-[5.25rem] sm:px-4 sm:[-webkit-mask-image:radial-gradient(circle_at_50%_0px,transparent_44px,black_45px)] sm:[mask-image:radial-gradient(circle_at_50%_0px,transparent_44px,black_45px)]">
           <Link
             href="/feed"
             aria-current={isActive(pathname, "/feed") ? "page" : undefined}

@@ -7,10 +7,15 @@ export type MediaOutputType =
   | "shot"
   | "episode"
   | "spot"
+  | "character_punch"
+  | "character_reel"
+  | "ugc_ad"
+  | "product_hero"
+  | "brand_spot"
   | "trailer"
   | "delivery_package";
 
-export type PipelineScope = "actor" | "shot" | "episode" | "spot";
+export type PipelineScope = "actor" | "shot" | "episode" | "spot" | "brief";
 export type PipelineRunStatus =
   | "draft"
   | "queued"
@@ -46,7 +51,7 @@ export interface PipelineStepDefinition {
 export interface MediaOutputDefinition {
   type: MediaOutputType;
   label: string;
-  scope: PipelineScope;
+  scope: PipelineScope | PipelineScope[];
   description: string;
   durationSeconds: number | null;
   publishable: boolean;

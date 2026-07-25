@@ -20,6 +20,7 @@ import { anthropicImageBlock } from "@/lib/server/anthropic-image";
 import type { Character } from "@/lib/types";
 import { dialogueForEditor } from "@/lib/dialogue-performance";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
+import { buildWritingContext, readCharacterCardV2 } from "@/lib/character-card";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -100,15 +101,20 @@ export async function POST(request: Request) {
     const model = writingConfig.model || process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
     const production = await getCharacterProductionState(character.id);
     const visualReference = production.visualReference;
+    const card = readCharacterCardV2(character.cardV2);
     const promptPayload = JSON.stringify({
       brief: brief || null,
       variation,
       actor: {
         name: character.name,
-        archetype: character.archetype,
-        tagline: character.tagline,
-        personality: character.personality,
-        productionBible: character.productionBible ?? buildProductionBible(character),
+        ...(card
+          ? { characterCardV2: buildWritingContext(card) }
+          : {
+              archetype: character.archetype,
+              tagline: character.tagline,
+              personality: character.personality,
+              productionBible: character.productionBible ?? buildProductionBible(character),
+            }),
         visualReference: visualReference ? { source: visualReference.source, assetId: visualReference.assetId } : null,
       },
     });

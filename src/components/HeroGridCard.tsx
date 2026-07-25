@@ -55,7 +55,7 @@ export default function HeroGridCard({
       layout
       transition={{ layout: { duration: 0.62, ease: [0.22, 1, 0.36, 1] } }}
       className={`relative min-w-0 rounded-xl transition-[box-shadow] duration-500 ease-out ${fillCell ? "h-full min-h-0" : "aspect-[4/5]"} ${
-        active ? "z-10 col-span-4 row-span-2" : "z-0 col-span-1 row-span-1"
+        active ? "z-10 col-span-2 row-span-3 sm:row-span-4 lg:row-span-5" : "z-0 col-span-1 row-span-1 sm:row-span-2"
       }`}
       data-hero-character-id={character.id}
       data-home-video-ready={videoSource ? "true" : undefined}

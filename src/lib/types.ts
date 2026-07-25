@@ -1,4 +1,5 @@
 import type { CameraMovementId } from "@/lib/camera-movements";
+import type { CharacterCardV2 } from "@/lib/character-card";
 
 // Project Chaplin: core data model.
 // This is the traceability spine: every entity below carries the IDs that
@@ -112,6 +113,8 @@ export interface CharacterProductionBible {
   /** Creator-entered material retained verbatim for reuse, audit, and prompt export. */
   creationInputs?: {
     characterBrief: string;
+    /** The creator-selected visual format, such as live action, anime, or manga. */
+    visualFormat?: string;
     appearanceBrief: string;
     worldBrief: string;
     archetypes: Archetype[];
@@ -182,6 +185,9 @@ export interface Character {
   sfxDesc: string; // signature sound effect, same mock pattern as voiceDesc
   themeDesc: string; // signature background score, same mock pattern as voiceDesc
   productionBible?: CharacterProductionBible; // persistent performance, visual, camera, and story continuity
+  /** Structured, consumer-routed identity source. V1 prose remains a fallback during migration. */
+  cardV2?: CharacterCardV2;
+  cardVersion?: number;
   brollLine?: string; // short signature punchline performed in the character's locked voice
   brollScene?: string; // character-specific visual setup for the five-second profile reel
   avatarHue: number; // fallback color when imageUrl is unset (e.g. freshly built characters)

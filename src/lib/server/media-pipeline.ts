@@ -131,11 +131,14 @@ export async function createMediaPipelineRun(input: {
   spec?: JsonRecord;
   createdBy?: string | null;
   idempotencyKey?: string;
+  /** Reporting tags carried with the run and inherited by generation jobs. */
+  tags?: { video_type?: string; product_id?: string | null; video_brief_id?: string | null };
 }) {
   const definition = getMediaOutputDefinition(input.outputType);
   if (!definition) throw new Error("Unknown media output type.");
-  if (definition.scope !== input.scopeType) {
-    throw new Error(`${definition.label} requires ${definition.scope} scope.`);
+  const supportedScopes = Array.isArray(definition.scope) ? definition.scope : [definition.scope];
+  if (!supportedScopes.includes(input.scopeType)) {
+    throw new Error(`${definition.label} requires ${supportedScopes.join(" or ")} scope.`);
   }
 
   const supabase = getSupabaseAdminClient();
@@ -169,6 +172,7 @@ export async function createMediaPipelineRun(input: {
           audio: "elevenlabs",
           assembly: "ffmpeg",
         },
+        tags: input.tags ?? {},
       },
       idempotency_key: idempotencyKey,
       created_by: input.createdBy ?? null,
@@ -192,7 +196,7 @@ export async function createMediaPipelineRun(input: {
         requires_review: Boolean(item.requiresReview),
         attempt: 1,
         max_attempts: item.maxAttempts ?? 3,
-        input: {},
+        input: input.tags ?? {},
         output: {},
         created_at: now,
         updated_at: now,

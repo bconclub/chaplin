@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useChaplinStore } from "@/lib/store";
 import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
@@ -50,6 +51,74 @@ const LICENSE_OPTIONS: Record<LicenseType, { label: string; icon: string; detail
 
 const HUE_SWATCHES = [340, 30, 205, 45, 150, 265, 18, 300, 220, 95];
 
+const CHARACTER_FORMATS = [
+  {
+    id: "live-action",
+    icon: "◉",
+    label: "Realistic",
+    detail: "A believable screen performer",
+    direction: "Live-action cinematic photography of an original fictional performer: natural skin texture, tactile materials, physical camera optics, and motivated light.",
+    starter: "Create an original live-action fictional performer with a repeatable face, wardrobe, voice, and a dramatic contradiction.",
+  },
+  {
+    id: "cartoon",
+    icon: "✦",
+    label: "Cartoon",
+    detail: "A stylized animated original",
+    direction: "Original 2D cartoon character design with expressive but repeatable proportions, clean shape language, and a consistent animated world.",
+    starter: "Create an original cartoon character with a distinctive silhouette, expressive personality, and a world built for animation.",
+  },
+  {
+    id: "anime",
+    icon: "◈",
+    label: "Anime",
+    detail: "A cinematic anime actor",
+    direction: "Original cinematic anime character design: deliberate linework, expressive eyes, coherent proportions, detailed wardrobe, and dramatic anime lighting.",
+    starter: "Create an original anime character with a memorable visual motif, grounded emotional contradiction, and repeatable character design.",
+  },
+  {
+    id: "manga",
+    icon: "▤",
+    label: "Manga",
+    detail: "An ink-and-screentone identity",
+    direction: "Original manga character design with confident ink linework, controlled screentone, readable black-and-white value design, and a signature silhouette.",
+    starter: "Create an original manga character whose face, silhouette, and emotional pressure read clearly in ink and screentone.",
+  },
+  {
+    id: "custom",
+    icon: "＋",
+    label: "Your own style",
+    detail: "Describe any visual medium",
+    direction: "Use the creator's explicitly described original visual medium and keep it consistent across every image and video.",
+    starter: "Create an original fictional actor in a distinctive visual medium that I will describe. Preserve one repeatable identity across every scene.",
+  },
+] as const;
+
+type CharacterFormat = typeof CHARACTER_FORMATS[number]["id"];
+
+const CHARACTER_FORMAT_PREVIEWS: Record<CharacterFormat, string> = {
+  "live-action": "/characters/gallery/c-selene-gallery-1.webp",
+  cartoon: "/characters/c-dot-banner.webp",
+  anime: "/characters/c-quill-banner.webp",
+  manga: "/characters/c-quill-avatar.webp",
+  custom: "/characters/c-astra-banner.webp",
+};
+
+const CHARACTER_PREVIEW_VARIANTS = [
+  "/characters/gallery/c-selene-gallery-1.webp",
+  "/characters/gallery/c-selene-gallery-2.webp",
+  "/characters/gallery/c-selene-gallery-3.webp",
+  "/characters/gallery/c-selene-gallery-4.webp",
+  "/characters/gallery/c-selene-gallery-5.webp",
+] as const;
+
+const QUICK_ACTOR_PRESETS = [
+  { name: "Agni Maya", image: "/characters/c-selene-avatar.webp", brief: "A fearless Mumbai protector who hides tenderness behind discipline.", archetype: "hero" as Archetype },
+  { name: "Rustam", image: "/characters/c-rustam-avatar.webp", brief: "An ageing mentor whose warmth conceals one impossible promise.", archetype: "mentor" as Archetype },
+  { name: "Quill", image: "/characters/c-quill-avatar.webp", brief: "A precise anime anti-hero who remembers every betrayal.", archetype: "antihero" as Archetype },
+  { name: "Astra", image: "/characters/c-astra-avatar.webp", brief: "A brilliant cosmic lead carrying the weight of a vanished city.", archetype: "hero" as Archetype },
+] as const;
+
 type SuggestionTarget = "all" | "tagline" | "personality" | "voice" | "sfx" | "theme";
 type CharacterSuggestion = {
   name: string;
@@ -82,6 +151,7 @@ type CharacterBuilderDraft = {
   licenseType: LicenseType;
   royaltyRate: number;
   hue: number;
+  visualFormat?: CharacterFormat;
   productionBible?: CharacterProductionBible;
 };
 
@@ -197,6 +267,8 @@ export default function NewCharacterPage() {
   const [licenseType, setLicenseType] = useState<LicenseType>("paid");
   const [royaltyRate, setRoyaltyRate] = useState(30);
   const [hue, setHue] = useState(205);
+  const [visualFormat, setVisualFormat] = useState<CharacterFormat | null>("live-action");
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [suggestingTarget, setSuggestingTarget] = useState<SuggestionTarget | null>(null);
@@ -261,6 +333,7 @@ export default function NewCharacterPage() {
         setLicenseType(draft.licenseType ?? "paid");
         setRoyaltyRate(typeof draft.royaltyRate === "number" ? draft.royaltyRate : 30);
         setHue(typeof draft.hue === "number" ? draft.hue : 205);
+        setVisualFormat(draft.visualFormat ?? "live-action");
         setProductionBible(draft.productionBible);
         if (draft.name || draft.characterBrief || draft.tagline) {
           setSuggestionMessage("Draft recovered. Your character work is safe after refresh.");
@@ -295,6 +368,7 @@ export default function NewCharacterPage() {
         licenseType,
         royaltyRate,
         hue,
+        visualFormat: visualFormat ?? undefined,
         productionBible,
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
@@ -319,6 +393,7 @@ export default function NewCharacterPage() {
     tagline,
     voiceGender,
     voicePreset,
+    visualFormat,
     worldBrief,
   ]);
 
@@ -391,6 +466,28 @@ export default function NewCharacterPage() {
   const sfxDesc = isCustomSfx ? customSfx : sfxPreset;
   const isCustomScore = scorePreset === SCORE_PRESETS[SCORE_PRESETS.length - 1];
   const themeDesc = isCustomScore ? customScore : scorePreset;
+  const selectedVisualFormat = CHARACTER_FORMATS.find((format) => format.id === visualFormat);
+  const previewImages = [
+    CHARACTER_FORMAT_PREVIEWS[visualFormat ?? "live-action"],
+    ...CHARACTER_PREVIEW_VARIANTS.slice(1),
+  ];
+  const activePreviewImage = previewImages[previewIndex] ?? previewImages[0];
+
+  function selectVisualFormat(format: typeof CHARACTER_FORMATS[number]) {
+    setVisualFormat(format.id);
+    setPreviewIndex(0);
+    setCharacterBrief((current) => current.trim() ? current : format.starter);
+    setSuggestionMessage(`${format.label} selected. Add a name or a few details, then let Magic build the complete actor.`);
+  }
+
+  function applyQuickPreset(preset: typeof QUICK_ACTOR_PRESETS[number]) {
+    setName(preset.name);
+    setCharacterBrief(preset.brief);
+    setArchetypes([preset.archetype]);
+    setVisualFormat("live-action");
+    setPreviewIndex(0);
+    setSuggestionMessage(`${preset.name} loaded as a starting point. Change anything or run Magic Build.`);
+  }
 
   async function suggestCharacter(
     target: SuggestionTarget,
@@ -429,6 +526,7 @@ export default function NewCharacterPage() {
           voiceDescription: voiceDesc,
           signatureSfx: sfxDesc,
           themeScore: themeDesc,
+          visualFormat: selectedVisualFormat?.direction,
         }),
       });
       const data = await response.json() as {
@@ -476,6 +574,7 @@ export default function NewCharacterPage() {
           licenseType,
           royaltyRate,
           hue,
+          visualFormat: visualFormat ?? undefined,
           productionBible: suggestion.productionBible,
         };
         window.localStorage.setItem(draftStorageKey, JSON.stringify(recoveredDraft));
@@ -579,11 +678,12 @@ export default function NewCharacterPage() {
         voiceDesc: voiceDesc.trim(),
         sfxDesc: sfxDesc.trim(),
         themeDesc: themeDesc.trim(),
-        appearanceBrief: appearanceBrief.trim(),
+        appearanceBrief: [selectedVisualFormat?.direction, appearanceBrief.trim()].filter(Boolean).join("\n"),
         worldBrief: worldBrief.trim(),
       })),
       creationInputs: {
         characterBrief: characterBrief.trim(),
+        visualFormat: visualFormat ?? "live-action",
         appearanceBrief: appearanceBrief.trim(),
         worldBrief: worldBrief.trim(),
         archetypes,
@@ -631,7 +731,339 @@ export default function NewCharacterPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-36 pt-5 sm:px-6 sm:py-10">
+    <>
+      <div
+        data-character-creation-shell
+        className="hidden h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#070a09] lg:flex"
+      >
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <header className="flex h-[4.35rem] shrink-0 items-center justify-between gap-5 border-b border-white/10 bg-[#080b0a]/95 px-5">
+            <div className="flex min-w-0 items-center gap-5">
+              <Link href="/characters" className="flex shrink-0 items-center gap-2 text-sm font-extrabold tracking-[0.08em] text-ink">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-accent text-sm">C</span>
+                <span>CHAPLIN <span className="text-[8px] text-accent">STUDIO</span></span>
+              </Link>
+              <span className="h-8 w-px bg-white/10" />
+              <label className="flex items-center gap-3 text-xs text-grey">
+                Project
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Untitled actor"
+                  className="w-40 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
+                />
+              </label>
+            </div>
+
+            <div className="flex min-w-[34rem] max-w-[43rem] flex-1 items-center px-5">
+              {["Identity", "Look", "Voice", "Spark", "Publish"].map((step, index) => (
+                <div key={step} className="flex min-w-0 flex-1 items-center">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${
+                    index === 0 ? "border-accent bg-accent text-white" : "border-white/30 text-grey"
+                  }`}>
+                    {index + 1}
+                  </span>
+                  <span className={`ml-2 text-[9px] font-medium ${index === 0 ? "text-accent" : "text-grey"}`}>{step}</span>
+                  {index < 4 && <span className="mx-3 h-px min-w-4 flex-1 bg-white/20" />}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSuggestionMessage("Draft saved. Chaplin will keep restoring it on this device.")}
+                className="rounded-lg border border-white/10 px-4 py-2.5 text-xs font-semibold text-grey hover:border-white/25 hover:text-ink"
+              >
+                Save draft
+              </button>
+              <button
+                type={productionBible ? "submit" : "button"}
+                onClick={productionBible ? undefined : () => void suggestCharacter("all")}
+                disabled={saving || Boolean(suggestingTarget)}
+                className="rounded-lg bg-accent px-5 py-2.5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(242,78,112,0.22)] hover:bg-accent-light disabled:opacity-45"
+              >
+                {saving ? "Saving…" : productionBible ? "Create actor →" : "Next: Build look →"}
+              </button>
+            </div>
+          </header>
+
+          <div className="grid min-h-0 flex-1 grid-cols-[20.5rem_minmax(25rem,1fr)_25rem]">
+            <aside className="min-h-0 overflow-y-auto border-r border-white/10 bg-[#0a0e0c] p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-lg font-semibold">Create AI Actor</p>
+                  <p className="mt-0.5 text-[10px] text-grey">Step 1 of 5 · Identity</p>
+                </div>
+                <span className="rounded-full border border-accent/35 px-2.5 py-1 text-[9px] font-semibold text-accent">LIVE PREVIEW</span>
+              </div>
+
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <p className="text-xs font-semibold">Choose a base identity</p>
+                <p className="mt-1 text-[10px] leading-4 text-grey">Pick a visual language. The whole actor bible follows this choice.</p>
+                <div className="mt-3 grid grid-cols-2 gap-2" data-character-format-options>
+                  {CHARACTER_FORMATS.map((format) => {
+                    const selected = visualFormat === format.id;
+                    return (
+                      <button
+                        key={format.id}
+                        type="button"
+                        onClick={() => selectVisualFormat(format)}
+                        aria-pressed={selected}
+                        className={`group overflow-hidden rounded-lg border text-left transition ${
+                          selected ? "border-accent bg-accent/10" : "border-white/10 bg-white/[0.025] hover:border-white/25"
+                        }`}
+                      >
+                        <span className="relative block h-[4.6rem] overflow-hidden bg-[#111713]">
+                          <Image
+                            src={CHARACTER_FORMAT_PREVIEWS[format.id]}
+                            alt=""
+                            fill
+                            sizes="145px"
+                            className={`object-cover transition duration-300 group-hover:scale-105 ${format.id === "manga" ? "grayscale" : ""}`}
+                          />
+                          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                          {selected && <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] text-white">✓</span>}
+                        </span>
+                        <span className="block px-2.5 py-2 text-[10px] font-semibold">{format.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold">Quick presets</p>
+                  <span className="text-[9px] text-accent">Starting points</span>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  {QUICK_ACTOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => applyQuickPreset(preset)}
+                      title={`Start with ${preset.name}`}
+                      className="relative h-11 w-11 overflow-hidden rounded-full border border-white/15 hover:border-accent"
+                    >
+                      <Image src={preset.image} alt={preset.name} fill sizes="44px" className="object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <label htmlFor="desktop-character-brief" className="text-xs font-semibold">Or describe your actor</label>
+                <p className="mt-1 text-[10px] text-grey">A sentence is enough. Magic Build fills the production bible.</p>
+                <textarea
+                  id="desktop-character-brief"
+                  data-character-field="brief"
+                  value={characterBrief}
+                  onChange={(event) => setCharacterBrief(event.target.value)}
+                  rows={4}
+                  placeholder="e.g. A fearless woman in her 30s, street smart, intense eyes, Mumbai setting."
+                  className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-xs leading-5 outline-none placeholder:text-grey/60 focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => void suggestCharacter("all")}
+                  disabled={Boolean(suggestingTarget)}
+                  className="mt-2.5 w-full rounded-lg bg-accent px-4 py-3 text-xs font-semibold text-white hover:bg-accent-light disabled:opacity-45"
+                >
+                  {suggestingTarget === "all" ? `Building actor · ${progress}%` : "✦ Generate identity"}
+                </button>
+
+                {suggestingTarget && (
+                  <div className="mt-3 rounded-lg border border-accent/30 bg-accent/[0.06] p-3" role="progressbar" aria-valuenow={progress}>
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="font-semibold text-ink">{IDENTITY_BUILD_STAGES[buildStage].label}</span>
+                      <span className="font-mono text-accent">{progress}%</span>
+                    </div>
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-gradient-to-r from-accent to-[#26d7c5] transition-all duration-1000" style={{ width: `${progress}%` }} />
+                    </div>
+                    <p className="mt-2 text-[9px] leading-4 text-grey">{IDENTITY_BUILD_STAGES[buildStage].detail}</p>
+                  </div>
+                )}
+                {suggestionMessage && <p className="mt-2 text-[9px] leading-4 text-grey">{suggestionMessage}</p>}
+              </div>
+            </aside>
+
+            <main className="relative flex min-h-0 flex-col overflow-hidden bg-[#060908] p-4">
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-[#0c110f]">
+                <Image
+                  src={activePreviewImage}
+                  alt={name ? `${name} identity preview` : "AI actor identity preview"}
+                  fill
+                  priority
+                  sizes="(min-width: 1024px) 55vw, 100vw"
+                  className={`object-cover transition duration-500 ${visualFormat === "manga" ? "grayscale contrast-125" : ""}`}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/20" />
+                <div className="absolute left-4 top-4 flex items-center gap-2">
+                  <span className="rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[9px] font-semibold backdrop-blur">IDENTITY PREVIEW</span>
+                  <span className="rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[9px] text-grey backdrop-blur">4K</span>
+                </div>
+                <div className="absolute bottom-5 left-5 max-w-lg">
+                  <p className="reel-title text-3xl text-white">{name.trim() || "Your new actor"}</p>
+                  <p className="mt-1 text-xs text-white/65">
+                    {tagline.trim() || selectedVisualFormat?.detail || "Choose a visual identity, then describe who they are."}
+                  </p>
+                </div>
+                {!visualFormat && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+                    <div className="max-w-xs rounded-xl border border-white/15 bg-black/55 p-5 text-center backdrop-blur-xl">
+                      <p className="text-sm font-semibold">Start with a visual identity</p>
+                      <p className="mt-1 text-[10px] leading-4 text-grey">Choose Realistic, Cartoon, Anime, Manga, or your own style on the left.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 flex h-[5.4rem] shrink-0 items-stretch gap-2">
+                {previewImages.map((image, index) => (
+                  <button
+                    key={`${image}-${index}`}
+                    type="button"
+                    onClick={() => setPreviewIndex(index)}
+                    className={`relative aspect-[4/3] overflow-hidden rounded-lg border ${
+                      previewIndex === index ? "border-accent shadow-[0_0_0_1px_var(--accent)]" : "border-white/10 opacity-65 hover:opacity-100"
+                    }`}
+                  >
+                    <Image src={image} alt={`Preview variation ${index + 1}`} fill sizes="110px" className="object-cover" />
+                  </button>
+                ))}
+                <div className="flex min-w-0 flex-1 items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-4">
+                  <div>
+                    <p className="text-[10px] font-semibold">Visual direction</p>
+                    <p className="mt-1 truncate text-[9px] text-grey">{selectedVisualFormat?.label ?? "Not selected"} · {archetypes.map((item) => ARCHETYPE_LABEL[item]).join(" + ")}</p>
+                  </div>
+                  <span className="text-[9px] text-grey">Choose a frame</span>
+                </div>
+              </div>
+            </main>
+
+            <aside className="min-h-0 overflow-y-auto border-l border-white/10 bg-[#0a0e0c] p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Actor identity</p>
+              <h1 className="reel-title mt-1 text-2xl">Define the core</h1>
+              <p className="mt-1 text-[10px] leading-4 text-grey">Make the decisions that should survive every scene. Chaplin builds the rest.</p>
+
+              <label className="mt-5 block text-[10px] font-semibold">
+                Name
+                <div className="relative mt-2">
+                  <input
+                    data-character-field="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Magic can name the actor"
+                    maxLength={50}
+                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 pr-12 text-xs outline-none focus:border-accent"
+                  />
+                  <span className="absolute right-3 top-2.5 text-[9px] text-grey">{name.length}/50</span>
+                </div>
+              </label>
+
+              <div className="mt-5">
+                <p className="text-[10px] font-semibold">Role / archetype</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ARCHETYPES.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => toggleArchetype(item)}
+                      className={`rounded-md border px-3 py-2 text-[9px] font-semibold ${
+                        archetypes.includes(item) ? "border-accent bg-accent text-white" : "border-white/10 bg-white/[0.02] text-grey hover:text-ink"
+                      }`}
+                    >
+                      {ARCHETYPE_LABEL[item]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="mt-5 block text-[10px] font-semibold">
+                Character promise
+                <input
+                  value={tagline}
+                  onChange={(event) => setTagline(event.target.value)}
+                  placeholder="The one line that sells the actor"
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-xs outline-none focus:border-accent"
+                />
+              </label>
+
+              <label className="mt-5 block text-[10px] font-semibold">
+                Backstory & personality
+                <textarea
+                  value={personality}
+                  onChange={(event) => setPersonality(event.target.value)}
+                  rows={4}
+                  placeholder="What do they want? What do they hide? How do they behave under pressure?"
+                  className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-xs leading-5 outline-none focus:border-accent"
+                />
+              </label>
+
+              <div className="mt-5 rounded-xl border border-white/10 bg-[linear-gradient(135deg,rgba(242,78,112,0.08),rgba(21,92,83,0.13))] p-3.5">
+                <div className="flex items-center gap-3">
+                  <Image src="/characters/c-rustam-avatar.webp" alt="" width={46} height={46} className="h-11 w-11 rounded-full object-cover" />
+                  <div>
+                    <p className="text-[9px] font-semibold text-[#e7bd78]">Director&apos;s note</p>
+                    <p className="mt-1 text-[10px] leading-4 text-grey">
+                      {productionBible
+                        ? "The identity is coherent. Review the details, then create the actor."
+                        : "Give the actor one contradiction. The strongest characters want two things that cannot coexist."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <details className="mt-4 rounded-lg border border-white/10 bg-white/[0.02]">
+                <summary className="cursor-pointer list-none px-3.5 py-3 text-[10px] font-semibold">Advanced identity controls <span className="float-right text-grey">＋</span></summary>
+                <div className="space-y-3 border-t border-white/10 p-3.5">
+                  <label className="block text-[9px] text-grey">
+                    Face, age & wardrobe
+                    <textarea value={appearanceBrief} onChange={(event) => setAppearanceBrief(event.target.value)} rows={3} className="mt-1 w-full resize-none rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10px] text-ink outline-none focus:border-accent" />
+                  </label>
+                  <label className="block text-[9px] text-grey">
+                    World, lighting & palette
+                    <textarea value={worldBrief} onChange={(event) => setWorldBrief(event.target.value)} rows={3} className="mt-1 w-full resize-none rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10px] text-ink outline-none focus:border-accent" />
+                  </label>
+                  <label className="block text-[9px] text-grey">
+                    Voice
+                    <select value={voicePreset} onChange={(event) => setVoicePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
+                      {VOICE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-[9px] text-grey">
+                    Signature SFX
+                    <select value={sfxPreset} onChange={(event) => setSfxPreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
+                      {SFX_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-[9px] text-grey">
+                    Theme
+                    <select value={scorePreset} onChange={(event) => setScorePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
+                      {SCORE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-4 text-red-300">{error}</p>}
+
+              <button
+                type={productionBible ? "submit" : "button"}
+                onClick={productionBible ? undefined : () => void suggestCharacter("all")}
+                disabled={saving || Boolean(suggestingTarget)}
+                className="mt-4 w-full rounded-lg bg-accent px-4 py-3 text-xs font-semibold text-white hover:bg-accent-light disabled:opacity-45"
+              >
+                {saving ? "Saving actor…" : productionBible ? `Create ${name || "actor"}` : "Build complete identity"}
+              </button>
+            </aside>
+          </div>
+        </form>
+      </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 pb-36 pt-5 sm:px-6 sm:py-10 lg:hidden">
       <Link href="/characters" className="inline-flex items-center gap-1.5 text-xs text-grey hover:text-accent">
         <span aria-hidden="true">←</span> Actors
       </Link>
@@ -639,7 +1071,7 @@ export default function NewCharacterPage() {
       <div className="mb-5 mt-4">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">New actor</p>
         <h1 className="reel-title text-3xl sm:text-4xl">Create an AI actor</h1>
-        <p className="mt-1 text-sm text-grey">Start with a brief. Chaplin can suggest the name and build the rest.</p>
+        <p className="mt-1 text-sm text-grey">Choose the visual format, add a name or a one-line idea, and let Chaplin build the complete actor.</p>
       </div>
 
       <section
@@ -665,6 +1097,35 @@ export default function NewCharacterPage() {
       </section>
 
       <form onSubmit={handleSubmit} className="poster-card flex flex-col gap-5 rounded-2xl p-4 sm:rounded-md sm:p-6">
+        <section aria-labelledby="character-format-heading">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Start here</p>
+              <h2 id="character-format-heading" className="mt-1 text-base font-semibold">What kind of character are you creating?</h2>
+            </div>
+            {selectedVisualFormat && <span className="text-[10px] font-semibold text-accent">{selectedVisualFormat.label} selected</span>}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3" data-character-format-options>
+            {CHARACTER_FORMATS.map((format) => {
+              const selected = visualFormat === format.id;
+              return (
+                <button
+                  key={format.id}
+                  type="button"
+                  onClick={() => selectVisualFormat(format)}
+                  aria-pressed={selected}
+                  className={`rounded-md border p-3 text-left transition-colors ${selected ? "border-accent bg-accent/10 shadow-[inset_0_0_0_1px_rgba(242,78,112,0.2)]" : "border-line bg-paper/40 hover:border-accent/60 hover:bg-accent/[0.04]"}`}
+                >
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${selected ? "bg-accent text-paper" : "bg-white/[0.06] text-grey"}`}>{format.icon}</span>
+                  <span className="mt-3 block text-xs font-semibold">{format.label}</span>
+                  <span className="mt-1 block text-[10px] leading-4 text-grey">{format.detail}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-grey">Your choice becomes a visual rule for the actor bible and every generated still. You can refine it below.</p>
+        </section>
+
         <div className="flex items-center gap-4">
           <Avatar hue={hue} label={name || "?"} size={56} />
           <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
@@ -710,7 +1171,7 @@ export default function NewCharacterPage() {
           </div>
         </label>
 
-        <details className="overflow-hidden rounded-md border border-accent/50 bg-accent/5" data-magic-character-assist>
+        <details open className="overflow-hidden rounded-md border border-accent/50 bg-accent/5" data-magic-character-assist>
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 hover:bg-accent/[0.05]">
             <span>
               <span className="block text-sm font-semibold">✦ Magic build</span>
@@ -1074,6 +1535,7 @@ export default function NewCharacterPage() {
           {saving ? "Saving AI actor…" : `Put ${name.trim() || "this AI actor"} on the shelf`}
         </button>
       </form>
-    </div>
+      </div>
+    </>
   );
 }

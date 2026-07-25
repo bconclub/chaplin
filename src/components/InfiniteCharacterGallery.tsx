@@ -79,9 +79,9 @@ export default function InfiniteCharacterGallery() {
 
 
   return (
-    <main className="relative flex h-[calc(100dvh-10rem)] min-h-0 flex-col overflow-hidden" data-home-gallery>
+    <main className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden pt-16" data-home-gallery>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(242,78,112,0.12),transparent_28%),radial-gradient(circle_at_78%_16%,rgba(7,210,190,0.14),transparent_27%)]" />
-      <section className="relative mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col px-3 py-2 sm:px-4 sm:py-3 lg:px-6" aria-label="AI actor gallery">
+      <section className="relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col px-3 py-2 sm:px-4 sm:py-3 lg:px-6" aria-label="AI actor gallery">
         <div className="mx-auto mb-2 max-w-3xl shrink-0 text-center sm:mb-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-accent">The Chaplin cast</p>
           <h1 className="marquee-title mt-1 text-[clamp(1.55rem,4.6vh,3.5rem)] uppercase leading-[0.92] text-ink">

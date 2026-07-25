@@ -1,8 +1,18 @@
 import type { Archetype, Character, CharacterProductionBible } from "@/lib/types";
 import { buildCharacterSystem } from "@/lib/character-system";
+import {
+  buildImagePrompt as buildCardImagePrompt,
+  buildIdentitySeedPrompt as buildCardIdentitySeedPrompt,
+  buildVideoPrompt as buildCardVideoPrompt,
+  buildVoiceDesignPrompt as buildCardVoiceDesignPrompt,
+  readCharacterCardV2,
+  selectedWardrobeState,
+} from "@/lib/character-card";
+import { productIdentityLock, type ProductCard } from "@/lib/product-card";
+import { VideoType, isProductVideoType } from "@/lib/video-brief";
 
 export type CharacterIdentityInput = Pick<Character, "name" | "archetype" | "tagline" | "personality" | "voiceGender"> &
-  Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "brollLine" | "brollScene">> & {
+  Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "cardV2" | "brollLine" | "brollScene">> & {
     appearanceBrief?: string;
     worldBrief?: string;
   };
@@ -26,6 +36,8 @@ export type ShotBlueprint = {
   musicalArc: string;
   finalFrame: string;
   dialogue: string;
+  /** Optional shot-level exclusions; product grammars merge these with the product lock. */
+  negative?: string;
 };
 
 export type ScenePackage = {
@@ -532,6 +544,8 @@ export function buildProductionBible(input: CharacterIdentityInput): CharacterPr
 }
 
 export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
+  const card = readCharacterCardV2(character.cardV2);
+  if (card) return buildCardVoiceDesignPrompt(card);
   const bible = buildProductionBible(character);
   const persona = `${character.archetype.replace("-", " ")}, ${bible.dramatic.contradiction}`;
   return [
@@ -552,6 +566,7 @@ export function composeCharacterMasterPrompt(character: Character) {
   const originalInputs = source
     ? [
         `Creator brief: ${source.characterBrief || "Not supplied."}`,
+        `Selected visual format: ${source.visualFormat || "Live action."}`,
         `Appearance brief: ${source.appearanceBrief || "Not supplied."}`,
         `World brief: ${source.worldBrief || "Not supplied."}`,
         `Selected archetypes: ${source.archetypes.join(", ") || character.archetype}.`,
@@ -640,6 +655,19 @@ export function composeThemePrompt(character: CharacterIdentityInput, dramaticBe
 }
 
 export function composeImagePrompt(character: CharacterIdentityInput, shot: ShotBlueprint) {
+  const card = readCharacterCardV2(character.cardV2);
+  if (card) {
+    const wardrobeState = /kitchen|home|house|laundry|domestic/i.test(shot.setting)
+      ? "domestic"
+      : "operational";
+    return buildCardImagePrompt(card, {
+      wardrobe_state: selectedWardrobeState(card, wardrobeState).name,
+      scene_beat: `${shot.dramaticBeat}. ${shot.subjectStart}. ${shot.facialBeat}`,
+      setting: shot.setting,
+      camera: `${shot.framing}; ${shot.cameraAngle}; ${shot.lens}`,
+      light: `${shot.keyLight}; ${shot.fillAndEdge}`,
+    });
+  }
   const bible = buildProductionBible(character);
   const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
   const locks = recognitionLocks(bible, character.appearanceBrief);
@@ -670,21 +698,16 @@ export function composeLegacyImagePrompt(character: CharacterIdentityInput, shot
 /** The definitive casting image: personality first, before any plot-specific scene. */
 /** Definitive casting reference: concise visual evidence, not biography. */
 export function composeIdentityImagePrompt(character: CharacterIdentityInput) {
+  const card = readCharacterCardV2(character.cardV2);
+  if (card) return buildCardIdentitySeedPrompt(card);
   const bible = buildProductionBible(character);
   const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
   const locks = recognitionLocks(bible, character.appearanceBrief);
-  const identityWorld = character.brollScene?.trim() || bible.cinematography.worldTexture;
-  const explicitAppearance = Boolean(character.appearanceBrief?.trim());
-  const explicitWorld = character.worldBrief?.trim();
-  const framing = explicitAppearance ? "" : `${concise(bible.cinematography.heroFraming, 80)} of ${character.name}. `;
-  const worldAndLight = explicitWorld || `${concise(identityWorld, 100)}. ${concise(bible.cinematography.cameraHeight, 65)}, ${concise(bible.cinematography.lens, 55)}. ${concise(bible.cinematography.keyLight, 80)}. Palette: ${bible.visual.palette.slice(0, 4).join(", ")}`;
-  const performance = explicitAppearance ? "" : `${concise(bible.performance.restingExpression, 70)}; ${concise(bible.performance.signatureGesture, 65)}. `;
   return [
-    `${medium}. 16:9. ${framing}${visibleIdentity(character, bible)}.`,
-
-    `${performance}${concise(worldAndLight, 280)}.`,
-
-    `NEGATIVE: ${identityNegative(medium)}, generic hero pose, glamour pose, distorted hands, extra fingers, poster layout.`,
+    `IDENTITY FEED SEED. ${medium}. One original fictional actor only: ${character.name}. ${visibleIdentity(character, bible)}.`,
+    "CASTING COMPOSITION: calm chest-to-knee editorial casting portrait with face, hairline, shoulders, hands, and silhouette clearly readable. Direct but relaxed eyeline; neutral expression; no performance beat.",
+    `BACKGROUND AND LIGHT: clean neutral seamless backdrop, soft even daylight, natural skin texture and fabric response. Palette: ${bible.visual.palette.slice(0, 4).join(", ")}. No location, room, street, set dressing, props, or narrative action.`,
+    `NEGATIVE: ${identityNegative(medium)}, generic hero pose, glamour pose, distorted hands, extra fingers, poster layout, scene location, environmental story clues, crowd.`,
     `RECOGNITION LOCKS: ${locks.join("; ")}. These four carry recognition; everything else may move.`,
   ].join("\n");
 }
@@ -708,6 +731,8 @@ export function composeLegacyIdentityImagePrompt(character: CharacterIdentityInp
 function simpleCameraMove(value: string) {
   if (/locked|static|still/i.test(value)) return "Locked camera";
   if (/pull|dolly[- ]?out|zoom[- ]?out/i.test(value)) return "Slow pull back";
+  if (/circle|orbit|arc/i.test(value)) return "Slow circular orbit";
+  if (/rise|crane|pedestal/i.test(value)) return "Slow rise";
   if (/lateral|slider|truck|track/i.test(value)) return "Slow lateral track";
   if (/handheld/i.test(value)) return "Gentle handheld drift";
   if (/pan/i.test(value)) return "Slow pan";
@@ -715,6 +740,15 @@ function simpleCameraMove(value: string) {
 }
 
 export function composeVideoPrompt(_character: CharacterIdentityInput, shot: ShotBlueprint) {
+  const card = readCharacterCardV2(_character.cardV2);
+  if (card) {
+    return buildCardVideoPrompt(card, {
+      scene_beat: shot.dramaticBeat,
+      motion: `${shot.actionTimeline[0]}; ${shot.actionTimeline[1]}; ${shot.actionTimeline[2]}; ${shot.environmentalMotion}`,
+      camera: simpleCameraMove(shot.cameraMovement),
+      timing: `Five seconds. End on: ${shot.finalFrame}`,
+    });
+  }
   const closeFrame = /extreme close|close[- ]?up|headshot|tight portrait/i.test(shot.framing);
   const camera = simpleCameraMove(shot.cameraMovement);
   const subjectMotion = closeFrame
@@ -742,6 +776,86 @@ export function composeLegacyVideoPrompt(_character: CharacterIdentityInput, sho
     `SECONDARY MOTION: ${shot.environmentalMotion}. Natural blink, breath, cloth inertia, hair response, and grounded body weight; subtle motion beats over constant movement.`,
     "LOCKS: exact identity and facial geometry; stable hands, limbs, wardrobe, background architecture, and object count. No morphing, new props, new people, camera teleport, lip-sync, speech, subtitles, text, logo, or watermark. Silent visual plate; audio is produced separately. --duration 5 --camerafixed false"
   ].join("\n");
+}
+
+export type ProductShotPromptInput = {
+  videoType: VideoType;
+  product: ProductCard;
+  shot: Pick<ShotBlueprint, "dramaticBeat" | "subjectStart" | "framing" | "cameraAngle" | "lens" | "cameraMovement" | "keyLight" | "fillAndEdge" | "actionTimeline" | "environmentalMotion" | "finalFrame" | "negative">;
+  actor?: CharacterIdentityInput;
+  hookText?: string;
+  ctaText?: string;
+  personaStyle?: "casual" | "expert" | "excited";
+  narrativeBeat?: "problem" | "ritual" | "reveal";
+};
+
+function assertProductPromptInput(input: ProductShotPromptInput) {
+  if (!isProductVideoType(input.videoType)) throw new Error("Product prompt grammar requires a product video type.");
+  if (!Array.isArray(input.product.reference_images) || input.product.reference_images.length === 0) {
+    throw new Error("Product video prompts require at least one product reference image.");
+  }
+  if (input.videoType === VideoType.ProductHero && input.actor) {
+    throw new Error("Product Hero prompts must never receive actor identity or biography.");
+  }
+  if (input.videoType !== VideoType.ProductHero && !input.actor) throw new Error("Actor-and-product prompt grammar requires an actor.");
+}
+
+function mergedProductNegative(input: ProductShotPromptInput) {
+  const shotNegative = input.shot.negative?.trim();
+  const productNegative = input.product.negative_prompt.trim();
+  return [productNegative, shotNegative, "no warped text, invented labels, extra variants, changed proportions, mirrored logo, or product substitution"]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function actorReferenceLock(actor: CharacterIdentityInput | undefined) {
+  if (!actor) return "NO ACTOR: product-only film. No people, faces, hands, or human silhouettes.";
+  const card = readCharacterCardV2(actor.cardV2);
+  return card
+    ? "ACTOR CANONICAL REFERENCE: use the approved canonical actor identity seed. Preserve the card's face, age, geometry, and wardrobe locks; do not rewrite the actor biography."
+    : `ACTOR CANONICAL REFERENCE: use the approved canonical reference for ${actor.name}. Preserve the supplied face, silhouette, and wardrobe; do not redesign the actor.`;
+}
+
+/** Product grammar is deliberately separate from character-only prompt builders. */
+export function composeProductImagePrompt(input: ProductShotPromptInput) {
+  assertProductPromptInput(input);
+  const base = [
+    `VIDEO TYPE: ${input.videoType}.`,
+    productIdentityLock(input.product),
+    actorReferenceLock(input.actor),
+    `SHOT: ${input.shot.dramaticBeat}. ${input.shot.subjectStart}.`,
+    `CAMERA: ${input.shot.framing}; ${input.shot.cameraAngle}; ${input.shot.lens}.`,
+    `LIGHT: ${input.shot.keyLight}; ${input.shot.fillAndEdge}.`,
+  ];
+  if (input.videoType === VideoType.UgcAd) {
+    base.push(`UGC GRAMMAR: ${input.personaStyle ?? "casual"} persona; handheld feel, eye-level, natural light, imperfect framing. Product must be visible in the first second and handled only as instructed. Hook: ${input.hookText ?? ""}. CTA: ${input.ctaText ?? ""}. APPROVED CLAIMS ONLY: ${input.product.claims_allowed.join(" | ") || "none supplied; do not make a product claim"}.`);
+  } else if (input.videoType === VideoType.ProductHero) {
+    base.push("PRODUCT HERO GRAMMAR: no humans. Macro material detail, slow push/circle/rise only, readable label and a final pack shot with logo lockup frame.");
+  } else {
+    base.push(`BRAND SPOT GRAMMAR: cinematic narrative around ${input.narrativeBeat ?? "ritual"}; product enters no later than shot two and the final shot is a pack shot with actor.`);
+  }
+  base.push(`NEGATIVE: ${mergedProductNegative(input)}.`);
+  return base.join("\n");
+}
+
+export function composeProductVideoPrompt(input: ProductShotPromptInput) {
+  assertProductPromptInput(input);
+  const base = [
+    `IMAGE-TO-VIDEO PRODUCT GRAMMAR — ${input.videoType}. The supplied product reference assets are binding.`,
+    productIdentityLock(input.product),
+    actorReferenceLock(input.actor),
+    `0.0-1.5s: ${input.shot.actionTimeline[0]}. 1.5-3.8s: ${input.shot.actionTimeline[1]}. 3.8-5.0s: ${input.shot.actionTimeline[2]}. End on ${input.shot.finalFrame}.`,
+    `CAMERA: preserve the source frame; ${simpleCameraMove(input.shot.cameraMovement)}. SECONDARY MOTION: ${input.shot.environmentalMotion}.`,
+  ];
+  if (input.videoType === VideoType.UgcAd) base.push(`UGC: eye-level handheld and natural light; direct-to-camera speech may not exceed two seconds. Dialogue/VO may use only these approved product claims plus the provided hook and CTA: ${input.product.claims_allowed.join(" | ") || "none supplied; do not make a product claim"}.`);
+  if (input.videoType === VideoType.ProductHero) base.push("PRODUCT HERO: no humans, no hands, no actor audio. Slow macro push, circle, or rise only; finish on a readable pack shot and logo lockup.");
+  if (input.videoType === VideoType.BrandSpot) base.push("BRAND SPOT: product enters by shot two; final shot is product pack shot with actor. Do not invent claims.");
+  base.push(`NEGATIVE: ${mergedProductNegative(input)}, no morphing, relabeling. --duration 5`);
+  return base.join("\n");
+}
+
+export function productDialogueAllowlist(product: ProductCard, hookText?: string, ctaText?: string) {
+  return [...product.claims_allowed, hookText, ctaText].filter((line): line is string => Boolean(line?.trim())).map((line) => line.trim());
 }
 
 const SCENE_BLUEPRINTS: Array<Omit<ShotBlueprint, "dialogue"> & { dialogue: (name: string) => string }> = [

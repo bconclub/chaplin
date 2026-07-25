@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
       });
     if (upload.error) throw new Error(`Upload product image: ${upload.error.message}`);
     const url = admin.storage.from("character-media").getPublicUrl(storagePath).data.publicUrl;
+    const asset = await admin.from("media_assets").insert({
+      character_id: null,
+      kind: "reference",
+      provider: "upload",
+      url,
+      storage_path: storagePath,
+      metadata: { ownerId: identity.id, filename: file.name.slice(0, 180), purpose: "product_reference" },
+    }).select("id").single();
+    if (asset.error || !asset.data) throw new Error(`Save product reference: ${asset.error?.message ?? "no asset returned"}`);
     return NextResponse.json({
+      assetId: asset.data.id,
       url,
       storagePath,
       name: file.name.slice(0, 180),

@@ -979,8 +979,8 @@ export default function CharacterProductionStudio({
   ]);
 
   return (
-    <section data-production-workflow>
-      <div className="p-5 sm:p-6 border-b border-line bg-accent/5">
+    <section data-production-workflow className="character-production-room">
+      <div className="studio-production-status p-4 sm:px-5 sm:py-3 border-b border-line bg-black/20">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold mb-1">
@@ -1006,11 +1006,22 @@ export default function CharacterProductionStudio({
             </span>
           </div>
         </div>
+        <div className="studio-stage-strip mt-3 flex gap-1 overflow-x-auto pb-0.5" aria-label="Scene production progress">
+          {WORKFLOW_STEPS.map((step) => {
+            const complete = completedSteps.has(step.id);
+            const active = activeStep === step.id;
+            return (
+              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`min-w-24 flex-1 border-b-2 px-2 pb-2 text-left text-[9px] font-semibold uppercase tracking-[0.1em] ${active ? "border-accent text-ink" : complete ? "border-emerald-400 text-emerald-300" : "border-white/10 text-grey hover:text-ink"}`}>
+                <span className="mr-1 text-grey">{step.id}.</span>{step.label}{complete && <span className="ml-1 text-emerald-400">✓</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="studio-production-grid lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem]">
       <aside
-        className="border-b border-line bg-[#0c1208] px-3 py-4 lg:sticky lg:top-14 lg:z-40 lg:h-[calc(100dvh-3.5rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-4"
+        className="studio-production-rail border-b border-line bg-[#0c1208] px-3 py-4 lg:border-b-0 lg:border-r lg:px-4"
         data-production-task-rail
       >
         <div className="flex items-end justify-between gap-3">
@@ -1094,7 +1105,7 @@ export default function CharacterProductionStudio({
         )}
       </aside>
 
-      <div ref={workflowContentRef} className="scroll-mt-24 p-4 sm:p-6 flex flex-col gap-5 lg:min-h-[calc(100dvh-3.5rem)]">
+      <div ref={workflowContentRef} className="studio-production-content scroll-mt-24 p-4 sm:p-5 flex flex-col gap-5">
         {seedModelsNeedActivation && (
           <div className="rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1523,13 +1534,14 @@ export default function CharacterProductionStudio({
                 className={`rounded-sm px-3 py-2 text-left ${imagePurpose === "identity" ? "bg-accent text-paper" : "text-grey hover:text-ink"}`}
                 data-image-purpose-option="identity"
               >
-                <span className="block text-xs font-semibold">Identity Hero</span>
-                <span className="block text-[10px] opacity-75">Who this actor is</span>
+                <span className="block text-xs font-semibold">Identity Seed</span>
+                <span className="block text-[10px] opacity-75">Reusable feed reference</span>
               </button>
               <button
                 type="button"
                 onClick={() => chooseImagePurpose("scene")}
-                className={`rounded-sm px-3 py-2 text-left ${imagePurpose === "scene" ? "bg-accent text-paper" : "text-grey hover:text-ink"}`}
+                disabled={!identityReferenceImage}
+                className={`rounded-sm px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-40 ${imagePurpose === "scene" ? "bg-accent text-paper" : "text-grey hover:text-ink"}`}
                 data-image-purpose-option="scene"
               >
                 <span className="block text-xs font-semibold">Scene Frame</span>
@@ -1538,7 +1550,7 @@ export default function CharacterProductionStudio({
             </div>
             <p className="text-[11px] leading-relaxed text-grey">
               {imagePurpose === "identity"
-                ? `Create the definitive casting image: a repeatable face, silhouette, wardrobe, expression, world, lens, and motivated light derived from the actor's personality.${identityReferenceImage ? " The locked identity seed below remains the basis for the person." : " This first accepted image will become the actor's visual seed."}`
+                ? `Create a neutral feed-ready identity seed: a specific repeatable face, hair, silhouette, and wardrobe on a clean casting backdrop. No story location, dramatic scene, or action is created at this stage.${identityReferenceImage ? " The locked seed below remains the basis for the person." : " This first accepted image becomes the actor's visual seed."}`
                 : `Create a story frame from the selected identity reference${referenceImage ? " shown in the video panel" : "—choose or upload an identity image first"}. The face and wardrobe stay locked while only the dramatic moment changes.`}
             </p>
             {identityReferenceImage && (
@@ -1546,8 +1558,8 @@ export default function CharacterProductionStudio({
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
                 <img src={identityReferenceImage} alt={`${character.name} canonical identity seed`} className="h-14 w-20 shrink-0 rounded-sm object-cover" />
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Identity seed locked</span>
-                  <span className="mt-1 block text-[10px] leading-snug text-grey">Every generated still and Seedance video preserves this face, age, hair, proportions, and signature wardrobe.</span>
+                  <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Feed seed locked</span>
+                  <span className="mt-1 block text-[10px] leading-snug text-grey">This neutral reference establishes the face, age, hair, proportions, and signature wardrobe before any scene is made.</span>
                 </span>
               </div>
             )}
@@ -1556,7 +1568,7 @@ export default function CharacterProductionStudio({
               {busy === "image"
                 ? "Creating stills..."
                 : imagePurpose === "identity"
-                  ? gptImageReady && dolaImageReady ? "Generate identity candidates" : "Generate identity still"
+                  ? gptImageReady && dolaImageReady ? "Generate feed seed candidates" : "Generate feed seed"
                   : gptImageReady && dolaImageReady ? "Generate scene candidates" : "Generate scene still"}
             </button>
             <p className="text-[11px] leading-relaxed text-grey">Each available image provider creates a candidate. Every result stays in the actor library until you explicitly choose the identity or first frame to use.</p>
@@ -1582,7 +1594,7 @@ export default function CharacterProductionStudio({
                           <p className="mt-0.5 text-[10px] text-grey">{candidate.model}</p>
                         </div>
                         <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent hover:bg-accent/10"}`}>
-                          {busy === "image-select" && !selected ? "Choosing..." : selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use as identity" : "Use for video"}
+                          {busy === "image-select" && !selected ? "Choosing..." : selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use as feed seed" : "Use for video"}
                         </button>
                       </div>
                     </article>
@@ -1761,6 +1773,30 @@ export default function CharacterProductionStudio({
 
         {message && <p className={`text-xs rounded-sm px-3 py-2 ${message.toLowerCase().includes("failed") || message.includes("not configured") ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-ink"}`}>{message}</p>}
       </div>
+      <aside className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-4 lg:flex lg:flex-col">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-accent">AI director</p>
+        <h3 className="reel-title mt-2 text-xl">Scene guidance</h3>
+        <p className="mt-3 text-xs leading-5 text-grey">{sceneBlueprint.dramaticBeat}</p>
+        <div className="mt-5 rounded-md border border-line bg-black/20 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400">Current note</p>
+          <p className="mt-2 text-xs leading-5 text-ink">Keep the visual identity locked, then make one clear emotional decision readable in the frame.</p>
+        </div>
+        <div className="mt-5 space-y-2">
+          {[
+            ["Strengthen visual beat", 5],
+            ["Refine the dialogue", 2],
+            ["Tighten motion", 6],
+          ].map(([label, step]) => (
+            <button key={label} type="button" onClick={() => jumpToStep(step as number)} className="flex w-full items-center justify-between rounded-md border border-line px-3 py-3 text-left text-[11px] font-semibold text-grey hover:border-accent hover:text-ink">
+              {label}<span className="text-accent">→</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-auto border-t border-line pt-4 text-[10px] leading-4 text-grey">
+          <p className="font-semibold uppercase tracking-wide text-ink">Scene locks</p>
+          <p className="mt-2">{productionBible.visual.recognitionLocks?.slice(0, 2).join(" · ")}</p>
+        </div>
+      </aside>
       </div>
     </section>
   );

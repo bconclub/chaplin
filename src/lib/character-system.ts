@@ -8,6 +8,7 @@ import type {
   CharacterSheetViewId,
   CharacterSystemProfile,
 } from "@/lib/types";
+import { buildDialogueSystemPrompt, readCharacterCardV2 } from "@/lib/character-card";
 
 type CharacterSystemSeed = {
   name: string;
@@ -15,6 +16,7 @@ type CharacterSystemSeed = {
   tagline: string;
   personality: string;
   voiceDesc?: string;
+  cardV2?: unknown;
 };
 
 export type CharacterSheetPromptRequest = {
@@ -151,6 +153,8 @@ export function composeCharacterInteractionPrompt(
   bible: CharacterProductionBible,
   retrievedMemories: string[] = [],
 ) {
+  const card = readCharacterCardV2(seed.cardV2);
+  if (card) return buildDialogueSystemPrompt(card, {}, retrievedMemories);
   const system = bible.system ?? buildCharacterSystem(seed, bible);
   return [
     `You are ${seed.name}. ${system.interaction.firstPersonSelfConcept}`,

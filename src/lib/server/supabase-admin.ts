@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { buildProductionBible } from "@/lib/production-prompting";
+import { readCharacterCardV2 } from "@/lib/character-card";
 import { SEED_WORLD } from "@/data/seed";
 import type { GenerationBilling } from "@/lib/server/billing";
 import type { Character } from "@/lib/types";
@@ -35,6 +36,9 @@ export interface AdminAssetRow {
 export interface AdminJobRow {
   id: string;
   character_id: string | null;
+  product_id: string | null;
+  video_brief_id: string | null;
+  video_type: string | null;
   kind: string;
   provider: string;
   model: string;
@@ -98,6 +102,8 @@ function characterRow(character: Character) {
     sfx_description: character.sfxDesc,
     theme_description: character.themeDesc,
     production_bible: character.productionBible ?? buildProductionBible(character),
+    card_v2: character.cardV2 ?? null,
+    card_version: character.cardV2 ? (character.cardVersion ?? 2) : null,
     avatar_hue: character.avatarHue,
     image_url: character.imageUrl ?? null,
     banner_url: character.bannerUrl ?? null,
@@ -137,6 +143,8 @@ interface CharacterCatalogRow {
   sfx_description: string;
   theme_description: string;
   production_bible: Character["productionBible"] | null;
+  card_v2: unknown | null;
+  card_version: number | null;
   avatar_hue: number;
   image_url: string | null;
   banner_url: string | null;
@@ -158,7 +166,7 @@ export async function listCharacters(): Promise<Character[]> {
   const [characters, voices, assets] = await Promise.all([
     supabase
       .from("characters")
-      .select("id,maker_id,name,archetype,tagline,personality,voice_gender,voice_description,sfx_description,theme_description,production_bible,avatar_hue,image_url,banner_url,license_type,royalty_rate,castings_count,fans_count,earnings_total,created_at,featured_voice_asset_id,featured_theme_asset_id,featured_video_asset_id,featured_cover_asset_id")
+      .select("id,maker_id,name,archetype,tagline,personality,voice_gender,voice_description,sfx_description,theme_description,production_bible,card_v2,card_version,avatar_hue,image_url,banner_url,license_type,royalty_rate,castings_count,fans_count,earnings_total,created_at,featured_voice_asset_id,featured_theme_asset_id,featured_video_asset_id,featured_cover_asset_id")
       .order("created_at", { ascending: false }),
     supabase
       .from("character_voices")
@@ -208,6 +216,8 @@ export async function listCharacters(): Promise<Character[]> {
       sfxDesc: row.sfx_description,
       themeDesc: row.theme_description,
       productionBible: row.production_bible ?? undefined,
+      cardV2: readCharacterCardV2(row.card_v2),
+      cardVersion: row.card_version ?? undefined,
       avatarHue: row.avatar_hue,
       imageUrl: featuredCover ?? media?.gallery[0] ?? media?.avatar ?? row.image_url ?? undefined,
       bannerUrl: featuredCover ?? media?.banner ?? row.banner_url ?? undefined,
@@ -347,7 +357,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     supabase.from("characters").select("id,name,archetype,tagline,image_url,banner_url,license_type,updated_at").order("name"),
     supabase.from("character_voices").select("character_id,provider_voice_id,status"),
     supabase.from("media_assets").select("id,character_id,kind,provider,url,created_at").order("created_at", { ascending: false }),
-    supabase.from("generation_jobs").select("id,character_id,kind,provider,model,status,prompt,provider_request_id,output_asset_id,error_message,usage,provider_credits,normalized_tokens,cost_usd,usd_to_inr_rate,cost_inr,cost_method,pricing_note,metadata,started_at,completed_at,created_at").order("created_at", { ascending: false }),
+    supabase.from("generation_jobs").select("id,character_id,product_id,video_brief_id,video_type,kind,provider,model,status,prompt,provider_request_id,output_asset_id,error_message,usage,provider_credits,normalized_tokens,cost_usd,usd_to_inr_rate,cost_inr,cost_method,pricing_note,metadata,started_at,completed_at,created_at").order("created_at", { ascending: false }),
     supabase.from("home_slots").select("character_id,position,status,editorial_note").order("position"),
   ]);
 
@@ -681,23 +691,39 @@ export function getSupabaseAdminClient() {
 }
 
 export async function beginGeneration(input: {
-  characterId: string;
+  /** Nullable for product-only jobs; legacy actor routes continue to pass it. */
+  characterId?: string;
   kind: string;
   provider: string;
   model: string;
   prompt?: string;
+  metadata?: Record<string, unknown>;
+  /** Typed video tags let admin cost/ledger views group product work by brand. */
+  videoType?: string;
+  productId?: string;
+  videoBriefId?: string;
   experimentId?: string;
   experimentVariantId?: string;
 }) {
   const supabase = adminClient();
+  const metadata = {
+    ...(input.metadata ?? {}),
+    ...(input.videoType ? { video_type: input.videoType } : {}),
+    ...(input.productId ? { product_id: input.productId } : {}),
+    ...(input.videoBriefId ? { video_brief_id: input.videoBriefId } : {}),
+  };
   const { data, error } = await supabase
     .from("generation_jobs")
     .insert({
-      character_id: input.characterId,
+      character_id: input.characterId ?? null,
       kind: input.kind,
       provider: input.provider,
       model: input.model,
       prompt: input.prompt ?? null,
+      metadata,
+      ...(input.videoType ? { video_type: input.videoType } : {}),
+      ...(input.productId ? { product_id: input.productId } : {}),
+      ...(input.videoBriefId ? { video_brief_id: input.videoBriefId } : {}),
       ...(input.experimentId && input.experimentVariantId ? {
         pipeline_experiment_id: input.experimentId,
         pipeline_experiment_variant_id: input.experimentVariantId,
@@ -802,6 +828,14 @@ export async function completeGeneration(
   providerRequestId?: string | null
 ) {
   const supabase = adminClient();
+  const existingJob = await supabase.from("generation_jobs").select("metadata").eq("id", jobId).maybeSingle();
+  assert(existingJob.error, "Load generation metadata");
+  const mergedMetadata = {
+    ...((existingJob.data?.metadata && typeof existingJob.data.metadata === "object" && !Array.isArray(existingJob.data.metadata))
+      ? existingJob.data.metadata as Record<string, unknown>
+      : {}),
+    ...(metadata ?? {}),
+  };
   assert(
     (
       await supabase
@@ -818,7 +852,7 @@ export async function completeGeneration(
           cost_inr: billing?.costInr ?? null,
           cost_method: billing?.costMethod ?? null,
           pricing_note: billing?.pricingNote ?? null,
-          metadata: metadata ?? {},
+          metadata: mergedMetadata,
           completed_at: new Date().toISOString(),
         })
         .eq("id", jobId)

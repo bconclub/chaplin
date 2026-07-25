@@ -57,6 +57,7 @@ export default function AdminGenerationLogList({
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <strong className="text-sm capitalize">{job.kind}</strong>
                   <span className="text-[10px] uppercase tracking-wide text-grey">{job.status}</span>
+                  {job.video_type && <span className="text-[10px] uppercase tracking-wide text-accent">{job.video_type}</span>}
                   <span className="text-[11px] text-grey">{character?.name ?? job.character_id ?? "System"}</span>
                 </span>
                 <span className="block text-[11px] text-grey mt-1 break-words">{job.provider} · {job.model} · {formatTimestamp(job.created_at)}</span>
@@ -70,6 +71,9 @@ export default function AdminGenerationLogList({
             <div className="border-t border-line p-4 sm:p-5 text-xs">
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                 {[
+                  ["Video type", job.video_type ?? "Character / legacy"],
+                  ["Product", job.product_id ?? "—"],
+                  ["Brief", job.video_brief_id ?? "—"],
                   ["Provider credits", job.provider_credits ?? "Not returned"],
                   ["Runtime", runtimeMs == null ? "—" : `${(runtimeMs / 1000).toFixed(2)}s`],
                   ["FX rate", job.usd_to_inr_rate == null ? "—" : `₹${number(job.usd_to_inr_rate).toFixed(4)} / $1`],

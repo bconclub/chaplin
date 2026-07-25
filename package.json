@@ -13,7 +13,10 @@
     "verify:system": "node scripts/verify-system.mjs",
     "verify:ui": "node scripts/verify-current-ui.mjs",
     "verify:pipeline": "node scripts/verify-pipeline.mjs",
-    "verify:mobile": "node scripts/verify-mobile.mjs"
+    "verify:mobile": "node scripts/verify-mobile.mjs",
+    "test:character-card": "node --import tsx --test src/lib/character-card.test.ts",
+    "test:video-types": "node --import tsx --test src/lib/video-brief.test.ts src/lib/production-prompting.test.ts",
+    "migrate:agni-maya": "tsx scripts/migrate-agni-maya.ts"
   },
   "dependencies": {
     "@elevenlabs/client": "^1.15.2",
@@ -25,6 +28,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -35,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   },
   "overrides": {
