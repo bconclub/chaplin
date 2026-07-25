@@ -10,13 +10,12 @@ import type { Character } from "@/lib/types";
 export default function CharacterStudioScreen({ character }: { character: Character }) {
   const router = useRouter();
   const activeRole = useChaplinStore((state) => state.activeRole);
-  const currentUserId = useChaplinStore((state) => state.currentUserId);
-  const canProduce = activeRole === "admin" || (activeRole === "maker" && character.makerId === currentUserId);
+  const canProduce = activeRole === "admin" || activeRole === "maker";
 
   if (!canProduce) {
     return (
       <main className="mx-auto flex min-h-[70dvh] max-w-2xl flex-col items-center justify-center px-6 text-center">
-        <p className="text-sm font-semibold">This production room belongs to {character.name}&apos;s maker.</p>
+        <p className="text-sm font-semibold">Sign in as a Creator to open {character.name}&apos;s production room.</p>
         <Link href={`/characters/${character.id}`} className="mt-4 text-sm font-semibold text-accent hover:underline">
           Back to {character.name}
         </Link>

@@ -6,10 +6,9 @@ import Avatar from "@/components/Avatar";
 import MediaPlayer from "@/components/MediaPlayer";
 import { useChaplinStore } from "@/lib/store";
 import type { FeedMediaKind, FeedPost, FeedReply, SharedFeedPost } from "@/lib/feed-types";
+import type { Character } from "@/lib/types";
 import { getClientAuthIdentity } from "@/lib/client-auth";
-
-type FeedView = "for-you" | "following";
-const FOLLOWING_STORAGE_KEY = "chaplin-feed-following";
+import { buildFeedShareCopy } from "@/lib/feed-share";
 
 function relativeTime(value: string) {
   const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -27,6 +26,139 @@ function FeedMedia({ kind, url, compact = false }: { kind: FeedMediaKind; url: s
     // eslint-disable-next-line @next/next/no-img-element
     <img src={url} alt="Post attachment" className={`w-full object-cover ${compact ? "max-h-56" : "max-h-[34rem]"}`} />
   );
+}
+
+type LockedProductionSummary = {
+  title: string;
+  sceneCount: number;
+  runtime: string;
+  format: string;
+  castNames: string[];
+  logline: string;
+};
+
+function lockedProductionSummary(body: string): LockedProductionSummary | null {
+  const lines = body.split("\n").map((line) => line.trim()).filter(Boolean);
+  const title = lines[0]?.match(/^Script locked:\s*(.+)$/i)?.[1]?.trim();
+  if (!title) return null;
+  const productionLine = lines[1]?.match(/^(\d+)\s+playable scenes?\s*·\s*([^ ]+)\s+(.+)$/i);
+  const castLineIndex = lines.findIndex((line) => /^Cast:\s*/i.test(line));
+  const castNames = castLineIndex >= 0
+    ? lines[castLineIndex].replace(/^Cast:\s*/i, "").split(",").map((name) => name.trim()).filter(Boolean)
+    : [];
+  return {
+    title,
+    sceneCount: Number(productionLine?.[1] ?? 0),
+    runtime: productionLine?.[2] ?? "",
+    format: productionLine?.[3] ?? "Production",
+    castNames,
+    logline: lines.slice(castLineIndex >= 0 ? castLineIndex + 1 : 2).join(" "),
+  };
+}
+
+function ProductionFeedPoster({
+  summary,
+  cast,
+  href,
+  productImageUrl,
+}: {
+  summary: LockedProductionSummary;
+  cast: Character[];
+  href?: string;
+  productImageUrl?: string;
+}) {
+  const visibleCast = cast.slice(0, 4);
+  const poster = (
+    <div className="group relative aspect-[16/9] overflow-hidden rounded-xl border border-white/15 bg-[#080b08] shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+      <div
+        className={`absolute inset-0 grid ${
+          visibleCast.length <= 1
+            ? "grid-cols-1"
+            : visibleCast.length === 2
+              ? "grid-cols-2"
+              : "grid-cols-2 grid-rows-2"
+        }`}
+      >
+        {visibleCast.length ? visibleCast.map((character, index) => {
+          const image = character.bannerUrl ?? character.imageUrl ?? character.galleryUrls?.[0];
+          return (
+            <div key={character.id} className="relative min-h-0 min-w-0 overflow-hidden">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- approved actor art is served from dynamic media hosts
+                <img
+                  src={image}
+                  alt=""
+                  className={`h-full w-full object-cover transition duration-700 group-hover:scale-[1.025] ${
+                    visibleCast.length === 2 && index === 0 ? "object-[55%_center]" : "object-center"
+                  }`}
+                />
+              ) : (
+                <div
+                  className="flex h-full items-center justify-center text-5xl font-semibold text-white/50"
+                  style={{ background: `hsl(${character.avatarHue} 32% 16%)` }}
+                >
+                  {character.name.slice(0, 1)}
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/15" />
+            </div>
+          );
+        }) : (
+          <div className="h-full w-full bg-[radial-gradient(circle_at_70%_20%,rgba(45,211,186,0.2),transparent_42%),linear-gradient(135deg,#171109,#06160e)]" />
+        )}
+      </div>
+
+      <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/28 to-black/25" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-transparent to-black/45" />
+      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-accent via-accent-secondary to-transparent" />
+
+      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
+        <span className="rounded-full border border-white/20 bg-black/45 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+          Chaplin original
+        </span>
+        <span className="rounded-full border border-accent/45 bg-black/55 px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-accent backdrop-blur-md">
+          {summary.runtime} · {summary.sceneCount || "—"} scenes
+        </span>
+      </div>
+
+      {productImageUrl && (
+        <div className="absolute right-3 top-12 h-14 w-14 overflow-hidden rounded-lg border border-white/30 bg-white/90 p-1 shadow-xl sm:right-4 sm:top-14 sm:h-16 sm:w-16">
+          {/* eslint-disable-next-line @next/next/no-img-element -- uploaded product reference uses a dynamic CDN URL */}
+          <img src={productImageUrl} alt="Product featured in this production" className="h-full w-full rounded-md object-contain" />
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-accent-secondary">
+          {summary.format}
+        </p>
+        <h3 className="mt-1 max-w-[80%] font-serif text-2xl leading-none text-white sm:text-3xl">
+          {summary.title}
+        </h3>
+        {summary.logline && (
+          <p className="mt-2 line-clamp-2 max-w-[78%] text-[10px] leading-4 text-white/70 sm:text-xs">
+            {summary.logline}
+          </p>
+        )}
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            {summary.castNames.slice(0, 4).map((name) => (
+              <span key={name} className="rounded-full border border-white/15 bg-black/45 px-2 py-1 text-[8px] font-semibold uppercase tracking-wide text-white/85 backdrop-blur">
+                {name}
+              </span>
+            ))}
+          </div>
+          {href && (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent/70 bg-accent text-sm text-white shadow-[0_0_24px_rgba(244,70,112,0.4)] transition group-hover:scale-105">
+              ▶
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return href ? <Link href={href} aria-label={`Open ${summary.title}`}>{poster}</Link> : poster;
 }
 
 function SharedPostCard({ post }: { post: SharedFeedPost }) {
@@ -51,8 +183,13 @@ function ReplyRow({ reply, onReply }: { reply: FeedReply; onReply: (reply: FeedR
   </div>;
 }
 
-function PostCard({ post, currentUserId, refresh, expanded, following, onToggleFollow }: { post: FeedPost; currentUserId: string; refresh: () => Promise<void>; expanded?: boolean; following: boolean; onToggleFollow: (authorId: string) => void }) {
+function PostCard({ post, currentUserId, refresh, expanded }: { post: FeedPost; currentUserId: string; refresh: () => Promise<void>; expanded?: boolean }) {
   const stories = useChaplinStore((state) => state.stories);
+  const characters = useChaplinStore((state) => state.characters);
+  const characterNames = useMemo(
+    () => characters.map((character) => character.name),
+    [characters],
+  );
   const [replying, setReplying] = useState(Boolean(expanded));
   const [replyBody, setReplyBody] = useState("");
   const [parentReply, setParentReply] = useState<FeedReply | null>(null);
@@ -82,8 +219,16 @@ function PostCard({ post, currentUserId, refresh, expanded, following, onToggleF
 
   async function copyShare() {
     const url = `${window.location.origin}/feed/${post.id}`;
-    if (navigator.share) await navigator.share({ title: `${post.author.name} on Chaplin`, text: post.body, url });
-    else await navigator.clipboard.writeText(url);
+    const shareCopy = buildFeedShareCopy(post, characterNames);
+    if (navigator.share) {
+      await navigator.share({
+        title: shareCopy.title,
+        text: shareCopy.text,
+        url,
+      });
+    } else {
+      await navigator.clipboard.writeText(`${shareCopy.text}\n\n${url}`);
+    }
   }
 
   const topReplies = post.replies.filter((reply) => !reply.parentReplyId);
@@ -94,6 +239,12 @@ function PostCard({ post, currentUserId, refresh, expanded, following, onToggleF
     children.set(reply.parentReplyId!, list);
   }
   const linkedProduction = stories.find((story) => post.body.startsWith(`Script locked: ${story.title}\n`));
+  const productionSummary = lockedProductionSummary(post.body);
+  const productionCast = productionSummary
+    ? productionSummary.castNames
+      .map((name) => characters.find((character) => character.name.toLowerCase() === name.toLowerCase()))
+      .filter((character): character is Character => Boolean(character))
+    : [];
 
   return <article data-feed-post={post.id} className="border-b border-line bg-paper px-4 py-6 sm:px-0">
     <div className="flex gap-3">
@@ -102,8 +253,7 @@ function PostCard({ post, currentUserId, refresh, expanded, following, onToggleF
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <span className="truncate font-semibold">{post.author.name}</span>
           <span className="truncate text-grey">{post.author.handle}</span>
-          {post.author.id !== currentUserId && <button type="button" onClick={() => onToggleFollow(post.author.id)} className={`ml-auto shrink-0 text-xs font-semibold ${following ? "text-grey hover:text-ink" : "text-accent hover:text-accent-light"}`}>{following ? "Following" : "Follow"}</button>}
-          <Link href={`/feed/${post.id}`} className={`${post.author.id === currentUserId ? "ml-auto" : ""} shrink-0 text-xs text-grey hover:text-accent`}>{relativeTime(post.createdAt)}</Link>
+          <Link href={`/feed/${post.id}`} className="ml-auto shrink-0 text-xs text-grey hover:text-accent">{relativeTime(post.createdAt)}</Link>
         </div>
         {post.body && <p className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-ink/95">{post.body}</p>}
       </div>
@@ -111,18 +261,14 @@ function PostCard({ post, currentUserId, refresh, expanded, following, onToggleF
 
     {post.sharedPost && <div className="ml-12"><SharedPostCard post={post.sharedPost} /></div>}
     {post.mediaKind && post.mediaUrl && <div className="ml-12 mt-3 overflow-hidden rounded-lg border border-line"><FeedMedia kind={post.mediaKind} url={post.mediaUrl} /></div>}
-    {linkedProduction && (
+    {productionSummary && (
       <div className="ml-12 mt-3">
-        <Link
-          href={`/productions/${linkedProduction.id}`}
-          className="flex items-center justify-between gap-4 rounded-xl border border-accent/45 bg-accent/[0.07] px-4 py-3 text-xs font-semibold text-ink transition hover:border-accent hover:bg-accent/[0.12]"
-        >
-          <span>
-            <span className="block text-[9px] uppercase tracking-[0.16em] text-accent">Production</span>
-            <span className="mt-1 block">Watch {linkedProduction.title}</span>
-          </span>
-          <span className="shrink-0 text-lg text-accent" aria-hidden="true">▶</span>
-        </Link>
+        <ProductionFeedPoster
+          summary={productionSummary}
+          cast={productionCast}
+          href={linkedProduction ? `/productions/${linkedProduction.id}` : undefined}
+          productImageUrl={linkedProduction?.productImageUrl}
+        />
       </div>
     )}
 
@@ -153,8 +299,6 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
   const [showMedia, setShowMedia] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authIdentity, setAuthIdentity] = useState<{ id: string } | null>(null);
-  const [view, setView] = useState<FeedView>("for-you");
-  const [following, setFollowing] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [feedLive, setFeedLive] = useState(false);
@@ -181,34 +325,6 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
     setPosts(data.posts ?? []);
     setFeedLive(true);
   }, [currentUserId, postId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    try {
-      const saved = window.localStorage.getItem(FOLLOWING_STORAGE_KEY);
-      if (saved) {
-        const savedIds = JSON.parse(saved) as string[];
-        queueMicrotask(() => { if (!cancelled) setFollowing(new Set(savedIds)); });
-      }
-    } catch {
-      // A blocked storage API should not prevent the feed from loading.
-    }
-    return () => { cancelled = true; };
-  }, []);
-
-  function toggleFollow(authorId: string) {
-    setFollowing((current) => {
-      const next = new Set(current);
-      if (next.has(authorId)) next.delete(authorId);
-      else next.add(authorId);
-      try {
-        window.localStorage.setItem(FOLLOWING_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // Keep the interaction working for this session if storage is blocked.
-      }
-      return next;
-    });
-  }
 
   useEffect(() => {
     let active = true;
@@ -245,12 +361,6 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
   }
 
   const title = useMemo(() => postId ? "Thread" : "Feed", [postId]);
-  const visiblePosts = useMemo(() => view === "following" ? posts.filter((post) => following.has(post.author.id)) : posts, [following, posts, view]);
-  const suggestedCreators = useMemo(() => {
-    const creators = new Map<string, FeedPost["author"]>();
-    for (const post of posts) if (post.author.id !== currentUserId) creators.set(post.author.id, post.author);
-    return [...creators.values()].slice(0, 4);
-  }, [currentUserId, posts]);
 
   return <main className="mx-auto grid w-full max-w-5xl gap-10 sm:px-5 sm:py-8 lg:grid-cols-[minmax(0,42rem)_17rem]">
     <div className="min-w-0">
@@ -271,9 +381,6 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
           </div>
           {!postId && <Link href="/create" className="hidden rounded-full border border-line px-4 py-2 text-xs hover:border-accent sm:inline-flex">Write</Link>}
         </div>
-        {!postId && <div className="flex gap-6" aria-label="Feed views">
-          {(["for-you", "following"] as FeedView[]).map((option) => <button key={option} type="button" onClick={() => setView(option)} className={`border-b-2 pb-3 text-sm font-semibold transition-colors ${view === option ? "border-accent text-ink" : "border-transparent text-grey hover:text-ink"}`}>{option === "for-you" ? "For you" : "Following"}</button>)}
-        </div>}
       </header>
 
       {!postId && authReady && authIdentity && <section data-feed-composer className="border-b border-line bg-paper px-4 py-5 sm:px-0">
@@ -286,12 +393,12 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
       </section>}
       {!postId && authReady && !authIdentity && <section className="border-b border-line px-4 py-6 sm:px-0">
         <p className="reel-title text-xl">Join the conversation.</p>
-        <p className="mt-1 text-sm text-grey">Sign in as a Creator or Brand to post, reply, like, and repost.</p>
+        <p className="mt-1 text-sm text-grey">Sign in as a Creator to post, reply, like, and repost.</p>
         <Link href="/auth" className="mt-4 inline-block rounded-full bg-accent px-5 py-2.5 text-xs font-semibold text-white">Sign in or create account</Link>
       </section>}
 
       {error && <p className="m-4 rounded-md border border-accent/40 bg-accent/10 p-3 text-sm sm:mx-0">{error}</p>}
-      <div>{visiblePosts.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} refresh={load} expanded={Boolean(postId)} following={following.has(post.author.id)} onToggleFollow={toggleFollow} />)}{!error && visiblePosts.length === 0 && <div className="border-b border-line p-10 text-center"><p className="reel-title text-xl">{view === "following" ? "Your reading list is ready for its first creator." : "Nothing has been posted here yet."}</p>{view === "following" && <button type="button" onClick={() => setView("for-you")} className="mt-3 text-sm font-semibold text-accent hover:text-accent-light">Discover creators →</button>}</div>}</div>
+      <div>{posts.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} refresh={load} expanded={Boolean(postId)} />)}{!error && posts.length === 0 && <div className="border-b border-line p-10 text-center"><p className="reel-title text-xl">Nothing has been posted here yet.</p></div>}</div>
     </div>
 
     {!postId && <aside className="hidden lg:block">
@@ -302,16 +409,6 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
           <p className="mt-3 text-sm leading-6 text-grey">Share scenes, production notes, pilots, and the process behind your characters.</p>
           <Link href="/create" className="mt-5 block rounded-full bg-accent px-4 py-2.5 text-center text-xs font-semibold text-white">Start creating</Link>
         </section>
-        {suggestedCreators.length > 0 && <section>
-          <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Creators to follow</h2><span className="text-[10px] uppercase tracking-wide text-grey">From the feed</span></div>
-          <div className="mt-3 divide-y divide-line border-y border-line">
-            {suggestedCreators.map((creator) => <div key={creator.id} className="flex items-center gap-3 py-3">
-              <Avatar hue={creator.avatarHue} label={creator.name} src={creator.imageUrl ?? undefined} size={34} />
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{creator.name}</p><p className="truncate text-[10px] text-grey">{creator.handle}</p></div>
-              <button type="button" onClick={() => toggleFollow(creator.id)} className={`text-[11px] font-semibold ${following.has(creator.id) ? "text-grey" : "text-accent"}`}>{following.has(creator.id) ? "Following" : "Follow"}</button>
-            </div>)}
-          </div>
-        </section>}
       </div>
     </aside>}
   </main>;

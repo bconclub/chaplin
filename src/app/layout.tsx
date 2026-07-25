@@ -24,6 +24,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.NEXT_PUBLIC_APP_URL
+        ?? "https://chaplin-gamma.vercel.app",
+  ),
   title: "Project Chaplin: Casting Marketplace for AI Actors",
   description:
     "Build AI actors, cast them into stories, and watch performers build a career of their own.",

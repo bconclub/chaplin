@@ -263,8 +263,8 @@ const ConciergeOrb = forwardRef<ConciergeOrbHandle, {
   const castings = useChaplinStore((state) => state.castings);
   const currentUserId = useChaplinStore((state) => state.currentUserId);
   const ownedCharacters = useMemo(
-    () => characters.filter((character) => character.makerId === currentUserId),
-    [characters, currentUserId],
+    () => characters,
+    [characters],
   );
   const ownedStories = useMemo(
     () => stories.filter((story) => story.authorId === currentUserId),

@@ -228,6 +228,7 @@ export default function StoryBuilderForm() {
   const [sceneAssistBusy, setSceneAssistBusy] = useState<number | null>(null);
   const [sceneAssistMessage, setSceneAssistMessage] = useState<{ index: number; text: string } | null>(null);
   const [scenePreviewBusy, setScenePreviewBusy] = useState<number | null>(null);
+  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [autoPreviewBatch, setAutoPreviewBatch] = useState<{ scenes: DraftScene[]; leadId: string } | null>(null);
   const [claudeConfigured, setClaudeConfigured] = useState<boolean | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -334,6 +335,7 @@ export default function StoryBuilderForm() {
             ? body.scenes.map((scene) => ({ ...scene, durationSeconds: 4 }))
             : [emptyScene()]
         );
+        setActiveSceneIndex(0);
         setStep(body.step === 2 || body.step === 3 ? body.step : 1);
         setDraftId(stored.id);
         setDraftReady(true);
@@ -497,13 +499,18 @@ export default function StoryBuilderForm() {
   }
 
   function addScene() {
-    setScenes((prev) => {
-      pendingSceneFocusRef.current = prev.length;
-      return [...prev, emptyScene()];
-    });
+    const nextIndex = scenes.length;
+    pendingSceneFocusRef.current = nextIndex;
+    setActiveSceneIndex(nextIndex);
+    setScenes((prev) => [...prev, emptyScene()]);
   }
   function removeScene(i: number) {
     setScenes((prev) => prev.filter((_, idx) => idx !== i));
+    setActiveSceneIndex((current) => {
+      if (current > i) return current - 1;
+      if (current === i) return Math.max(0, Math.min(i, scenes.length - 2));
+      return current;
+    });
   }
   function updateSceneSetting(i: number, value: string) {
     setScenes((prev) => prev.map((sc, idx) => (
@@ -614,6 +621,7 @@ export default function StoryBuilderForm() {
           lines: [],
         }]).map((scene) => ({ ...scene, durationSeconds: 4 }));
         setScenes(nextScenes);
+        setActiveSceneIndex(0);
         setStep(3);
         const previewLead = world.characters.find((character) => character.id === nextCastIds[0]) ?? lead;
         if (previewLead) setAutoPreviewBatch({ scenes: nextScenes, leadId: previewLead.id });
@@ -1067,7 +1075,7 @@ export default function StoryBuilderForm() {
           <div className="flex items-center gap-2">
             <h2 id="output-contract-heading" className="text-sm font-semibold">Choose output</h2>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-[8px] font-semibold text-grey">
-              {activeRole === "brand" ? "Brand" : activeRole === "admin" ? "Admin" : "Creator"}
+              {activeRole === "admin" ? "Admin" : "Creator"}
             </span>
           </div>
           <Link href="/studio/pipelines" className="text-[10px] text-grey hover:text-accent">Pipeline map →</Link>
@@ -1576,7 +1584,87 @@ export default function StoryBuilderForm() {
             <MagicWritingTimeline kind="draft" elapsedSeconds={magicElapsedSeconds} />
           )}
 
-          {scenes.map((scene, si) => (
+          <section className="rounded-xl border border-line bg-black/15 p-3" data-scene-storyboard>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent-secondary">Scene timeline</p>
+                <p className="mt-0.5 text-[10px] text-grey">Choose a frame to open its complete direction below.</p>
+              </div>
+              <span className="shrink-0 font-mono text-[10px] text-grey">
+                {scenes.length} × 4s
+              </span>
+            </div>
+            <div className="no-scrollbar grid auto-cols-[minmax(9rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Scene timeline">
+              {scenes.map((scene, si) => {
+                const active = activeSceneIndex === si;
+                const previewFallback = castCharacters[0]?.imageUrl
+                  ?? castCharacters[0]?.bannerUrl
+                  ?? castCharacters[0]?.galleryUrls?.[0];
+                const status = scenePreviewBusy === si
+                  ? "Framing"
+                  : scene.previewImageUrl
+                    ? "Frame ready"
+                    : scene.setting || scene.objective || scene.action
+                      ? "Planned"
+                      : "Empty";
+                return (
+                  <button
+                    key={si}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setActiveSceneIndex(si)}
+                    className={`group min-w-0 overflow-hidden rounded-lg border text-left transition ${
+                      active
+                        ? "border-accent bg-accent/[0.08] shadow-[0_0_0_1px_rgba(244,70,112,0.35)]"
+                        : "border-white/10 bg-black/25 hover:border-white/25"
+                    }`}
+                    data-scene-thumbnail={si}
+                  >
+                    <span className="relative block aspect-video overflow-hidden bg-black">
+                      {scene.previewImageUrl || previewFallback ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- generated and actor CDN thumbnails are dynamic
+                        <img
+                          src={scene.previewImageUrl || previewFallback}
+                          alt=""
+                          className={`h-full w-full object-cover transition duration-300 group-hover:scale-[1.025] ${scene.previewImageUrl ? "" : "opacity-35 grayscale"}`}
+                        />
+                      ) : (
+                        <span className="flex h-full items-center justify-center bg-white/[0.025] font-mono text-lg text-white/20">
+                          {String(si + 1).padStart(2, "0")}
+                        </span>
+                      )}
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/10" />
+                      <span className="absolute left-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 font-mono text-[8px] text-white">
+                        {String(si + 1).padStart(2, "0")}
+                      </span>
+                      <span className={`absolute right-2 top-2 h-1.5 w-1.5 rounded-full ${
+                        scenePreviewBusy === si
+                          ? "animate-pulse bg-accent"
+                          : scene.previewImageUrl
+                            ? "bg-emerald-400"
+                            : "bg-amber-300"
+                      }`} />
+                      <span className="absolute inset-x-2 bottom-2 truncate text-[9px] font-semibold uppercase text-white">
+                        {scene.setting || `Scene ${si + 1}`}
+                      </span>
+                    </span>
+                    <span className="flex items-center justify-between gap-2 px-2 py-1.5">
+                      <span className={`truncate text-[8px] font-semibold uppercase tracking-[0.12em] ${active ? "text-accent" : "text-grey"}`}>
+                        {status}
+                      </span>
+                      <span className="font-mono text-[8px] text-grey">4s</span>
+                    </span>
+                    <span className={`block h-0.5 transition-colors ${active ? "bg-accent" : scene.previewImageUrl ? "bg-emerald-400/60" : "bg-white/10"}`} />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {scenes.map((scene, si) => {
+            if (si !== activeSceneIndex) return null;
+            return (
             <div key={si} className="poster-card scroll-mt-24 rounded-md p-5" data-scene-card={si}>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="accent-rule w-6" />
@@ -1780,7 +1868,8 @@ export default function StoryBuilderForm() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           <button
             type="button"

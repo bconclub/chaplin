@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useChaplinStore } from "@/lib/store";
-import type { AppRole } from "@/lib/types";
 import Avatar from "@/components/Avatar";
 import HydrateStore from "@/components/HydrateStore";
 import { CHAPLIN_VERSION_LABEL } from "@/lib/version";
@@ -14,36 +13,10 @@ import {
   type ClientAuthIdentity,
 } from "@/lib/client-auth";
 
-const ROLE_META: Record<AppRole, { label: string; short: string; description: string }> = {
-  maker: {
-    label: "Creator",
-    short: "Creator",
-    description: "Build AI actors, write videos, and develop series.",
-  },
-  caster: {
-    label: "Creator",
-    short: "Creator",
-    description: "Build AI actors, write videos, and develop series.",
-  },
-  brand: {
-    label: "Brand",
-    short: "Brand",
-    description: "Pick a face off the shelf and make ads and reels.",
-  },
-  admin: {
-    label: "Super Admin",
-    short: "Admin",
-    description: "Inspect readiness, spend, jobs, and platform operations.",
-  },
-};
-
-const ROLE_ORDER: AppRole[] = ["maker", "brand", "admin"];
-
 export default function Header() {
   const users = useChaplinStore((state) => state.users);
   const currentUserId = useChaplinStore((state) => state.currentUserId);
   const activeRole = useChaplinStore((state) => state.activeRole);
-  const switchDemoRole = useChaplinStore((state) => state.switchDemoRole);
   const syncAuthenticatedUser = useChaplinStore((state) => state.syncAuthenticatedUser);
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -85,14 +58,12 @@ export default function Header() {
   const currentUser = users.find((user) => user.id === currentUserId) ?? users[0];
   const headerName = authIdentity?.name ?? (authReady ? "Preview mode" : currentUser?.name);
   const headerStatus = authIdentity
-    ? ROLE_META[activeRole].label
+    ? authIdentity.role === "admin" ? "Super Admin" : "Creator"
     : authReady
       ? "Not signed in"
       : "Checking account";
   const contextLink = activeRole === "admin"
     ? { href: authIdentity?.role === "admin" ? "/admin" : "/admin/login", label: "Admin" }
-    : activeRole === "brand"
-      ? { href: "/brand", label: "Brand desk" }
     : { href: "/feed", label: "Creator feed" };
 
   return (
@@ -153,7 +124,7 @@ export default function Header() {
             <button
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
-              aria-label="Switch demo login and role"
+              aria-label="Open account menu"
               className={`flex items-center rounded-full border py-1 transition-all duration-300 ${compact ? "gap-0 px-1" : "gap-2 px-1.5"} ${open ? "border-accent bg-white/[0.06]" : "border-line hover:border-accent"}`}
             >
               {currentUser && (
@@ -178,62 +149,51 @@ export default function Header() {
               <div className={`fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[24rem] max-h-[calc(100vh-5rem)] overflow-y-auto rounded-lg border border-line bg-paper-dim shadow-2xl p-3 z-[90] ${compact ? "top-[3.25rem]" : "top-[4.25rem]"}`}>
                 <div className="flex items-start justify-between gap-3 px-1 mb-3">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-accent font-semibold">{authIdentity ? "Signed-in account" : "Quick views"}</p>
-                    <p className="text-xs text-grey mt-1">{authIdentity ? `${authIdentity.email} · ${authIdentity.role}` : "Feel the app as a Creator, a Brand, or the Super Admin."}</p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-accent font-semibold">{authIdentity ? "Signed-in account" : "Chaplin account"}</p>
+                    <p className="text-xs text-grey mt-1">{authIdentity ? `${authIdentity.email} · ${authIdentity.role === "admin" ? "super admin" : "creator"}` : "Sign in once and start creating."}</p>
                   </div>
-                  <button onClick={() => setOpen(false)} className="text-grey hover:text-ink text-lg leading-none" aria-label="Close role switcher">×</button>
+                  <button onClick={() => setOpen(false)} className="text-grey hover:text-ink text-lg leading-none" aria-label="Close account menu">×</button>
                 </div>
 
-                {authIdentity && authIdentity.role !== "admin" ? (
+                {authIdentity?.role === "admin" ? (
+                  <Link href="/admin" onClick={() => setOpen(false)} className="block rounded-md border border-accent bg-accent/10 p-3">
+                    <span className="block text-xs font-semibold">Open Super Admin</span>
+                    <span className="mt-1 block text-[10px] leading-snug text-grey">Inspect providers, prompts, jobs, assets, spend, and failures.</span>
+                  </Link>
+                ) : authIdentity ? (
                   <div className="grid grid-cols-2 gap-2">
                     <Link href="/studio" onClick={() => setOpen(false)} className="rounded-md border border-line p-3 hover:border-accent/60">
                       <span className="block text-xs font-semibold">My Studio</span>
-                      <span className="mt-1 block text-[10px] leading-snug text-grey">Your actors, published work, and earnings.</span>
+                      <span className="mt-1 block text-[10px] leading-snug text-grey">All actors, published work, and drafts.</span>
                     </Link>
-                    <Link href="/studio" onClick={() => setOpen(false)} className="rounded-md border border-accent bg-accent/10 p-3">
-                      <span className="block text-xs font-semibold">My Drafts</span>
-                      <span className="mt-1 block text-[10px] leading-snug text-grey">Resume private ads, reels, and micro dramas.</span>
+                    <Link href="/create" onClick={() => setOpen(false)} className="rounded-md border border-accent bg-accent/10 p-3">
+                      <span className="block text-xs font-semibold">Start creating</span>
+                      <span className="mt-1 block text-[10px] leading-snug text-grey">Create an actor, scene, reel, or micro drama.</span>
                     </Link>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {ROLE_ORDER.map((role) => (
-                      <button
-                        key={role}
-                        data-quick-view={role}
-                        onClick={() => {
-                          if (role === "admin" && authIdentity?.role !== "admin") {
-                            setOpen(false);
-                            window.location.assign("/admin/login");
-                            return;
-                          }
-                          switchDemoRole(role);
-                          setOpen(false);
-                        }}
-                        className={`rounded-md border p-3 text-left transition-colors ${activeRole === role ? "border-accent bg-accent/10" : "border-line hover:border-accent/60"}`}
-                      >
-                        <span className="block text-xs font-semibold">{ROLE_META[role].label}</span>
-                        <span className="block text-[10px] text-grey mt-1 leading-snug">{ROLE_META[role].description}</span>
-                      </button>
-                    ))}
+                    <Link href="/auth" onClick={() => setOpen(false)} className="rounded-md border border-accent bg-accent/10 p-3">
+                      <span className="block text-xs font-semibold">Creator sign in</span>
+                      <span className="mt-1 block text-[10px] leading-snug text-grey">Sign in and start creating immediately.</span>
+                    </Link>
+                    <Link href="/admin/login" onClick={() => setOpen(false)} className="rounded-md border border-line p-3 hover:border-accent/60">
+                      <span className="block text-xs font-semibold">Super Admin</span>
+                      <span className="mt-1 block text-[10px] leading-snug text-grey">Open platform operations.</span>
+                    </Link>
                   </div>
                 )}
 
                 <div className="border-t border-line mt-3 pt-3 px-1 flex items-center justify-between gap-3">
                   {authIdentity ? <button type="button" onClick={() => void signOut()} className="text-xs font-semibold text-grey hover:text-accent">Sign out</button> : <Link href="/auth" onClick={() => setOpen(false)} className="text-xs font-semibold text-accent">Sign in or create account</Link>}
-                  {activeRole === "maker" && (
+                  {authIdentity?.role !== "admin" && (
                     <Link href="/characters/new" onClick={() => setOpen(false)} className="text-xs text-accent hover:underline whitespace-nowrap">
                       + New actor
                     </Link>
                   )}
-                  {activeRole === "admin" && (
+                  {authIdentity?.role === "admin" && (
                     <Link href={authIdentity?.role === "admin" ? "/admin" : "/admin/login"} onClick={() => setOpen(false)} className="text-xs text-accent hover:underline whitespace-nowrap">
                       Open admin →
-                    </Link>
-                  )}
-                  {activeRole !== "admin" && authIdentity?.role !== "admin" && (
-                    <Link href="/admin/login" onClick={() => setOpen(false)} className="text-xs text-accent hover:underline whitespace-nowrap">
-                      Super Admin login →
                     </Link>
                   )}
                 </div>

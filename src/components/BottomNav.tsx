@@ -12,27 +12,7 @@ import ConciergeOrb, {
 import { IconActors, IconFeed, IconFilm } from "@/components/Icons";
 import { useChaplinStore } from "@/lib/store";
 
-const CREATE_OPTIONS: Record<"brand" | "creator" | "admin", ConciergeQuickOption[]> = {
-  brand: [
-    {
-      kind: "ad",
-      href: "/studio/write?format=spot&duration=30",
-      title: "Create an ad",
-      copy: "Build a product-led spot with rights and approval gates.",
-    },
-    {
-      kind: "reel",
-      href: "/studio/write?format=spot&duration=30",
-      title: "Create a reel",
-      copy: "Start a short branded performance made for the feed.",
-    },
-    {
-      kind: "micro-drama",
-      href: "/studio/write?format=spot&duration=60",
-      title: "Create a micro drama",
-      copy: "Build a 60-second branded story ending on a cliffhanger.",
-    },
-  ],
+const CREATE_OPTIONS: Record<"creator" | "admin", ConciergeQuickOption[]> = {
   creator: [
     {
       kind: "actor",
@@ -90,11 +70,7 @@ export default function BottomNav() {
   const suppressClickRef = useRef(false);
   const createOpen = createOpenAt === pathname;
   const assistantMode = isCreationWorkspace(pathname);
-  const createOptions = activeRole === "brand"
-    ? CREATE_OPTIONS.brand
-    : activeRole === "admin"
-      ? CREATE_OPTIONS.admin
-      : CREATE_OPTIONS.creator;
+  const createOptions = activeRole === "admin" ? CREATE_OPTIONS.admin : CREATE_OPTIONS.creator;
   const navItemClass =
     "group relative flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5 pb-2 pt-3 text-[10px] font-semibold tracking-[0.04em] transition-colors sm:text-[11px]";
 

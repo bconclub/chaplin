@@ -11,12 +11,6 @@ const rolePaths = {
     { href: "/studio/write?format=punch", runtime: "15 SEC", title: "Create a Punch", copy: "Three approved shots: hook, pressure, and a memorable personality choice." },
     { href: "/studio/write?format=episode", runtime: "60 SEC", title: "Create an Episode", copy: "Twelve approved shots ending on a situation-changing cliffhanger." },
   ],
-  brand: [
-    { href: "/characters", runtime: "CAST", title: "Choose an actor", copy: "Start with an audience-ready face or commission an exclusive identity." },
-    { href: "/videos/new", runtime: "VIDEO", title: "Create a product video", copy: "Choose UGC, Product Hero, or Brand Spot and lock the product identity before shots." },
-    { href: "/studio/write?format=spot&duration=30", runtime: "30 SEC", title: "Create a Brand Spot", copy: "Six managed shots with rights, claims, review, and delivery gates." },
-    { href: "/studio/write?format=spot&duration=60", runtime: "60 SEC", title: "Create a Brand Spot", copy: "Twelve managed shots for a complete commercial performance." },
-  ],
   admin: [
     { href: "/studio/pipelines", runtime: "SYSTEM", title: "Inspect output pipelines", copy: "See every provider handoff, retry, approval, and publication gate." },
     { href: "/admin", runtime: "OPS", title: "Open production operations", copy: "Inspect jobs, provider readiness, failures, assets, and spend." },
@@ -26,14 +20,14 @@ const rolePaths = {
 
 export default function CreatePage() {
   const activeRole = useChaplinStore((state) => state.activeRole);
-  const role = activeRole === "brand" ? "brand" : activeRole === "admin" ? "admin" : "creator";
+  const role = activeRole === "admin" ? "admin" : "creator";
   const paths = rolePaths[role];
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-12">
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">{role} create desk</p>
       <h1 className="marquee-title mt-3 text-5xl sm:text-7xl">
-        {role === "creator" ? "BUILD A PERFORMER. MAKE THE PROOF." : role === "brand" ? "CHOOSE THE FACE. LOCK THE DELIVERY." : "OPERATE THE PRODUCTION SYSTEM."}
+        {role === "creator" ? "BUILD A PERFORMER. MAKE THE PROOF." : "OPERATE THE PRODUCTION SYSTEM."}
       </h1>
       <p className="mt-4 max-w-2xl text-grey">
         The output is chosen before the prompt. Runtime, shot count, approvals, destination, and who can publish are fixed from the start.

@@ -143,9 +143,18 @@ export async function POST(request: Request) {
     const production = VISUAL_FIELDS.has(field) ? await getCharacterProductionState(character.id) : null;
     const canonicalReference = production?.visualReference ?? null;
     const requestedReference = clean(body.referenceImage, 12000);
-    const visualReferenceUrl = requestedReference || canonicalReference?.url || "";
-    const visualReferenceSource = requestedReference ? "exact-first-frame" : canonicalReference?.source ?? null;
-    const visualReferenceAssetId = requestedReference ? null : canonicalReference?.assetId ?? null;
+    // Identity-image is a recasting operation, not a continuity operation.
+    // Enforce this server-side even if a stale editor sends its current cover.
+    const acceptsVisualReference = field !== "identity-image";
+    const visualReferenceUrl = acceptsVisualReference
+      ? requestedReference || canonicalReference?.url || ""
+      : "";
+    const visualReferenceSource = acceptsVisualReference
+      ? requestedReference ? "exact-first-frame" : canonicalReference?.source ?? null
+      : null;
+    const visualReferenceAssetId = acceptsVisualReference
+      ? requestedReference ? null : canonicalReference?.assetId ?? null
+      : null;
     const card = readCharacterCardV2(character.cardV2);
     const v2ConsumerContext = card
       ? field === "dialogue"
@@ -162,7 +171,9 @@ export async function POST(request: Request) {
       regenerationPass: variation,
       creativeInstruction: field === "dialogue"
         ? "Treat currentText as a disposable draft, not a line to preserve. Keep only useful scene intent. Make a genuinely different playable choice rooted in the actor's contradiction and immediate pressure; a synonym-level rewrite is a failure."
-        : "Make a genuinely different creative choice, not a synonym-level paraphrase. Preserve canon and user intent while changing the central playable beat, visual action, composition, or rhythm as appropriate for this field.",
+        : field === "identity-image"
+          ? "This is a fresh casting pass. Treat currentText as a rejected visual attempt, not continuity to preserve. Keep the user's explicit medium, age range, cultural context, archetype, and essential wardrobe intent, but cast a materially different original face and choose a different non-narrative casting composition. Do not reuse the previous facial geometry, hairstyle arrangement, pose, camera angle, or location."
+          : "Make a genuinely different creative choice, not a synonym-level paraphrase. Preserve canon and user intent while changing the central playable beat, visual action, composition, or rhythm as appropriate for this field.",
       actor: {
         name: character.name,
         ...(v2ConsumerContext
@@ -202,7 +213,7 @@ export async function POST(request: Request) {
     const anthropicBody: Record<string, unknown> = {
       model,
       max_tokens: Math.min(2000, writingConfig.maxTokens ?? 700),
-      system: `${writingConfig.promptPrelude} You are Chaplin's production copywriter. Rewrite exactly one field for an original fictional AI actor. This is creative regeneration pass ${variation}: make a materially new creative choice rather than paraphrasing the existing text. Preserve useful user intent, character continuity, and provider constraints. ${wantsStream ? "Return only the requested field as plain text. Do not wrap it in JSON, markdown, quotation marks, or a label." : "Return only the requested field in structured JSON."} ${FIELD_RULES[field]}`,
+      system: `${writingConfig.promptPrelude} You are Chaplin's production copywriter. Rewrite exactly one field for an original fictional AI actor. This is creative regeneration pass ${variation}: make a materially new creative choice rather than paraphrasing the existing text. ${field === "identity-image" ? "This pass is casting a replacement identity: preserve explicit user constraints but do not preserve any unapproved face, pose, composition, or setting from earlier attempts." : "Preserve useful user intent, character continuity, and provider constraints."} ${wantsStream ? "Return only the requested field as plain text. Do not wrap it in JSON, markdown, quotation marks, or a label." : "Return only the requested field in structured JSON."} ${FIELD_RULES[field]}`,
       messages: [{
         role: "user",
         content: messageContent,

@@ -153,7 +153,7 @@ export default function ShelfPage() {
       ) : (
         <div className="relative z-10 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
           {results.map((character) => {
-            const maker = getUser(world, character.makerId);
+            const maker = getUser(world, world.currentUserId);
             return <CharacterCard key={character.id} character={character} makerName={maker?.name} />;
           })}
         </div>

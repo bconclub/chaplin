@@ -128,12 +128,12 @@ export default function CharacterProfilePage() {
     );
   }
 
-  const maker = getUser(world, character.makerId);
+  const maker = getUser(world, world.currentUserId);
   const characterId = character.id;
   const resume = resumeForCharacter(world, character.id);
   const ledger = ledgerForCharacter(world, character.id);
-  const canProduce = world.activeRole === "admin" || (world.activeRole === "maker" && character.makerId === world.currentUserId);
-  const canCast = world.activeRole === "admin" || world.activeRole === "caster" || world.activeRole === "brand";
+  const canProduce = world.activeRole === "admin" || world.activeRole === "maker";
+  const canCast = canProduce;
 
   function openProductionStudio() {
     router.push(`/characters/${characterId}/studio`);
@@ -342,7 +342,7 @@ export default function CharacterProfilePage() {
               Cast {character.name.split(" ")[0]} in a story
             </Link>
           )}
-          {world.activeRole === "maker" && character.makerId === world.currentUserId && (
+          {world.activeRole === "maker" && (
             <Link
               href="/studio"
               className="border border-accent text-accent font-semibold text-center px-4 py-3 rounded-sm hover:bg-accent/10 transition-colors"

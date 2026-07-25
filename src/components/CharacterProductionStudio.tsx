@@ -718,7 +718,13 @@ export default function CharacterProductionStudio({
           variation,
           stream: true,
           character,
-          referenceImage: field === "video" ? videoReferenceImage : identityReferenceImage,
+          // Rewriting an identity is a clean casting pass. Only scene and
+          // motion prompts are allowed to inspect the approved actor image.
+          referenceImage: field === "video"
+            ? videoReferenceImage
+            : field === "image"
+              ? identityReferenceImage
+              : undefined,
           context: {
             voiceDescription,
             voicePreview: previewText,
@@ -997,6 +1003,19 @@ export default function CharacterProductionStudio({
 
   function generateImage() {
     void run("image", async () => {
+      const requestedPurpose = imagePurpose;
+      const identityVariationKey = requestedPurpose === "identity"
+        ? crypto.randomUUID()
+        : undefined;
+      const imageRequest = (imagePreset: string) => ({
+        prompt: imagePrompt,
+        imagePurpose: requestedPurpose,
+        // Fresh identity casting is prompt-only. Scene frames intentionally
+        // inherit the currently approved identity.
+        referenceImage: requestedPurpose === "scene" ? identityReferenceImage : undefined,
+        identityVariationKey,
+        imagePreset,
+      });
       setImageCandidates([]);
       setImageProviderErrors({});
       setSelectedImageAssetId("");
@@ -1004,34 +1023,19 @@ export default function CharacterProductionStudio({
       if (gptImageReady) {
         requests.push({
           provider: "openai",
-          result: jsonAction("image", {
-            prompt: imagePrompt,
-            imagePurpose,
-            referenceImage: identityReferenceImage,
-            imagePreset: "gpt-image-2",
-          }) as Promise<ImageCandidate>,
+          result: jsonAction("image", imageRequest("gpt-image-2")) as Promise<ImageCandidate>,
         });
       }
       if (nanoBananaReady) {
         requests.push({
           provider: "openrouter",
-          result: jsonAction("image", {
-            prompt: imagePrompt,
-            imagePurpose,
-            referenceImage: identityReferenceImage,
-            imagePreset: "nano-banana-2",
-          }) as Promise<ImageCandidate>,
+          result: jsonAction("image", imageRequest("nano-banana-2")) as Promise<ImageCandidate>,
         });
       }
       if (dolaImageReady) {
         requests.push({
           provider: "byteplus",
-          result: jsonAction("image", {
-            prompt: imagePrompt,
-            imagePurpose,
-            referenceImage: identityReferenceImage,
-            imagePreset: "dola-seedream-5",
-          }) as Promise<ImageCandidate>,
+          result: jsonAction("image", imageRequest("dola-seedream-5")) as Promise<ImageCandidate>,
         });
       }
       if (!requests.length) throw new Error("Connect an image provider before generating a still.");
@@ -1059,9 +1063,9 @@ export default function CharacterProductionStudio({
       const comparisonStatus = Object.keys(failures).length
         ? " One provider needs attention; its error is shown in the comparison."
         : " Compare the interpretations before choosing.";
-      setMessage((imagePurpose === "identity"
-        ? `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one to make it this actor’s canonical identity cover.`
-        : `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one as Seedance’s exact first frame.`) + comparisonStatus);
+      setMessage((requestedPurpose === "identity"
+        ? `${providers} ${results.length === 1 ? "is" : "are"} ready from a clean casting pass. The previous face was not sent to any image model. Choose one only if you want to replace the actor's canonical identity.`
+        : `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one as Seedance's exact first frame.`) + comparisonStatus);
     });
   }
 
@@ -1969,8 +1973,8 @@ export default function CharacterProductionStudio({
                 className={`rounded-sm px-3 py-2 text-left ${imagePurpose === "identity" ? "bg-accent text-paper" : "text-grey hover:text-ink"}`}
                 data-image-purpose-option="identity"
               >
-                <span className="block text-xs font-semibold">Identity Seed</span>
-                <span className="block text-[10px] opacity-75">Reusable feed reference</span>
+                <span className="block text-xs font-semibold">Fresh Identity</span>
+                <span className="block text-[10px] opacity-75">Cast without the old face</span>
               </button>
               <button
                 type="button"
@@ -1983,7 +1987,7 @@ export default function CharacterProductionStudio({
                 <span className="block text-[10px] opacity-75">What happens next</span>
               </button>
             </div>
-            {identityReferenceImage && (
+            {imagePurpose === "scene" && identityReferenceImage && (
               <div className="flex items-center gap-3 rounded-sm border border-accent/50 bg-accent/5 p-2" data-identity-reference>
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
                 <img src={identityReferenceImage} alt={`${character.name} canonical identity seed`} className="h-14 w-20 shrink-0 rounded-sm object-cover" />
@@ -1993,12 +1997,20 @@ export default function CharacterProductionStudio({
                 </span>
               </div>
             )}
+            {imagePurpose === "identity" && (
+              <div className="rounded-sm border border-cyan-400/35 bg-cyan-400/5 px-3 py-2" data-fresh-identity-mode>
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">Fresh casting · no seed image</span>
+                <span className="mt-1 block text-[10px] leading-4 text-grey">
+                  The current profile image is not sent to GPT Image, Nano Banana, or Seedream. It stays unchanged until you explicitly choose a new result.
+                </span>
+              </div>
+            )}
             <textarea data-scene-field="image" value={imagePrompt} onChange={(event) => setImagePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
-            <button onClick={generateImage} disabled={!imageGenerationReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
+            <button onClick={() => generateImage()} disabled={!imageGenerationReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "image"
                 ? `Generating ${readyImageProviderLabels.length === 1 ? "image" : `${readyImageProviderLabels.length} images`}...`
                 : imagePurpose === "identity"
-                  ? readyImageProviderLabels.length > 1 ? `Generate ${imageProviderRunLabel} feed seeds` : "Generate feed seed"
+                  ? readyImageProviderLabels.length > 1 ? `Cast fresh identities with ${imageProviderRunLabel}` : "Cast a fresh identity"
                   : readyImageProviderLabels.length > 1 ? `Generate ${imageProviderRunLabel} scene stills` : "Generate scene still"}
             </button>
             {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
@@ -2006,7 +2018,7 @@ export default function CharacterProductionStudio({
               generationKey="image"
               run={generationRun}
               providerLabel={imageProviderRunLabel || "Image provider"}
-              previewUrl={identityReferenceImage || undefined}
+              previewUrl={imagePurpose === "scene" ? identityReferenceImage || undefined : undefined}
             />
             {(imageCandidates.length > 0 || Object.keys(imageProviderErrors).length > 0) && (
               <section className="hidden" data-image-comparison>
@@ -2026,10 +2038,12 @@ export default function CharacterProductionStudio({
                         <div>
                           <p className="text-xs font-semibold">{providerLabel}</p>
                           <p className="mt-0.5 text-[10px] text-grey">{candidate.model}</p>
-                          <p className="mt-1 text-[9px] text-grey">Same prompt · same identity reference</p>
+                          <p className="mt-1 text-[9px] text-grey">
+                            {imagePurpose === "identity" ? "Fresh casting · no previous image" : "Same prompt · approved identity reference"}
+                          </p>
                         </div>
                         <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent hover:bg-accent/10"}`}>
-                          {busy === "image-select" && !selected ? "Choosing..." : selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use as feed seed" : "Use for video"}
+                          {busy === "image-select" && !selected ? "Choosing..." : selected ? "Chosen ✓" : imagePurpose === "identity" ? "Replace identity" : "Use for video"}
                         </button>
                       </div>
                     </article>

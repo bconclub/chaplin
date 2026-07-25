@@ -19,7 +19,7 @@ function setSessionCookies(response: NextResponse, session: { access_token: stri
 }
 
 function setRoleCookie(response: NextResponse, role: AccountRole) {
-  const appRole = role === "admin" ? "admin" : role === "brand" ? "brand" : "maker";
+  const appRole = role === "admin" ? "admin" : "maker";
   response.cookies.set("chaplin-demo-role", appRole, { sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365 });
 }
 

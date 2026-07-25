@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useChaplinStore } from "@/lib/store";
 import {
-  charactersByMaker,
   storiesByAuthor,
   ledgerForMaker,
   makerEarnings,
@@ -83,7 +82,7 @@ export default function StudioPage() {
   }, []);
 
   const user = getUser(world, currentUserId);
-  const myCharacters = charactersByMaker(world, currentUserId);
+  const myCharacters = world.characters;
   const myStories = storiesByAuthor(world, currentUserId);
   const myLedger = ledgerForMaker(world, currentUserId);
   const earnings = makerEarnings(world, currentUserId);

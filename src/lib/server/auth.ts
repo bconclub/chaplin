@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import { userAvatarUrl } from "@/lib/user-avatars";
 
-export type AccountRole = "creator" | "brand" | "admin";
+export type AccountRole = "creator" | "admin";
 
 export type AuthIdentity = {
   id: string;
@@ -30,15 +30,14 @@ export function getSupabaseAuthClient() {
 
 function roleBadges(role: AccountRole) {
   if (role === "admin") return ["admin"];
-  if (role === "brand") return ["brand"];
-  return ["maker", "caster"];
+  return ["maker"];
 }
 
 function requestedRole(user: User): AccountRole {
   const metadataRole = user.user_metadata?.account_role;
   const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "chaplin@chaplin.in").trim().toLowerCase();
   if (superAdminEmail && user.email?.toLowerCase() === superAdminEmail) return "admin";
-  return metadataRole === "brand" ? "brand" : "creator";
+  return metadataRole === "admin" ? "admin" : "creator";
 }
 
 export async function ensureAuthProfile(user: User): Promise<AuthIdentity> {
@@ -71,7 +70,7 @@ export async function ensureAuthProfile(user: User): Promise<AuthIdentity> {
     handle,
     role_badges: roleBadges(role),
     avatar_initial: name.slice(0, 1).toUpperCase(),
-    avatar_hue: role === "brand" ? 28 : role === "admin" ? 165 : 202,
+    avatar_hue: role === "admin" ? 165 : 202,
     image_url: imageUrl,
     updated_at: new Date().toISOString(),
   }, { onConflict: "id" });

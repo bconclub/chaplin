@@ -975,6 +975,11 @@ export async function POST(request: Request) {
           .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
           .slice(0, 10)
         : [];
+      const identityVariationKey = imagePurpose === "identity"
+        ? (typeof input.identityVariationKey === "string" && input.identityVariationKey.trim()
+            ? input.identityVariationKey.trim().slice(0, 80)
+            : crypto.randomUUID())
+        : null;
       const production = await getCharacterProductionState(characterId);
       const canonicalReference = production.visualReference;
       // Rebuilding an identity must not feed the existing face back into the
@@ -1004,7 +1009,7 @@ export async function POST(request: Request) {
       );
       const prompt = preserveIdentity
         ? lockVisualIdentity(generatedPrompt, Boolean(reference))
-        : `${newIdentityPrompt}\n\nNEW IDENTITY: Create a new original fictional actor from this written brief only. Do not copy, preserve, or derive the face from any existing profile, gallery, or cover image.`;
+        : `${newIdentityPrompt}\n\nFRESH CASTING PASS ${identityVariationKey}: Create a new original fictional actor from this written brief only. No image reference is attached. Keep explicit user requirements such as medium, age range, cultural context, presentation, and essential wardrobe, but cast a materially different face with its own facial proportions and natural asymmetry. Do not copy, preserve, or derive the face, pose, camera angle, or location from any existing profile, gallery, cover, or previous attempt.`;
       const configuredNegativePrompt = settingString(
         imageConfig,
         "negativePrompt",
@@ -1021,6 +1026,8 @@ export async function POST(request: Request) {
             : canonicalReference?.source ?? (requestedReference ? "request-fallback" : null)
           : "new-identity-no-reference",
         referenceImages: references,
+        referenceCount: references.length,
+        identityVariationKey,
       };
       const provider = imageProvider(imageConfig.provider);
       const exclusions = stylizedOutput
@@ -1039,7 +1046,10 @@ export async function POST(request: Request) {
         provider,
         model: imageConfig.model,
         prompt: effectivePrompt,
-        metadata: consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : undefined,
+        metadata: {
+          ...referenceMetadata,
+          ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
+        },
       });
       let generated: GeneratedImage;
       if (provider === "openrouter") {

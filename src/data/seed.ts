@@ -21,10 +21,7 @@ import type {
 
 export const USERS: User[] = [
   { id: "u-admin", name: "Chaplin Admin", handle: "@superadmin", roleBadges: ["admin"], avatarInitial: "S", avatarHue: 165, imageUrl: "/avatars/chaplin-admin-ocelot.webp" },
-  { id: "u-meera", name: "Meera Rao", handle: "@meera", roleBadges: ["maker"], avatarInitial: "M", avatarHue: 28, imageUrl: "/avatars/meera-caracal.webp" },
-  { id: "u-arjun", name: "Arjun Dev", handle: "@arjun", roleBadges: ["caster", "maker"], avatarInitial: "A", avatarHue: 202, imageUrl: "/avatars/arjun-owl.webp" },
-  { id: "u-priya", name: "Priya Nair", handle: "@priya", roleBadges: ["maker", "caster"], avatarInitial: "P", avatarHue: 335, imageUrl: "/avatars/priya-fox.webp" },
-  { id: "u-kabir", name: "Kabir Singh", handle: "@kabir", roleBadges: ["caster", "maker", "brand"], avatarInitial: "K", avatarHue: 150, imageUrl: "/avatars/kabir-raven.webp" },
+  { id: "u-creator", name: "Chaplin Creator", handle: "@creator", roleBadges: ["maker"], avatarInitial: "C", avatarHue: 202, imageUrl: "/avatars/arjun-owl.webp" },
 ];
 
 // license + rate baked in here; stats.{castings,fans,earnings} are placeholders
@@ -592,11 +589,13 @@ function computeStats(characterId: string) {
 
 export const CHARACTERS: Character[] = SEED_CHARACTERS.map((c) => ({
   ...c,
+  makerId: "u-creator",
   stats: computeStats(c.id),
 }));
 
 export const STORIES: Story[] = SEED_STORIES.map((s) => ({
   ...s,
+  authorId: "u-creator",
   views: 400 + SEED_CASTINGS.filter((c) => c.storyId === s.id).length * 260,
 }));
 
@@ -604,12 +603,15 @@ export const CASTINGS: Casting[] = SEED_CASTINGS.map((c) => ({
   id: c.id,
   characterId: c.characterId,
   storyId: c.storyId,
-  casterId: c.casterId,
+  casterId: "u-creator",
   timestamp: c.timestamp,
   fee: rateOf(c.characterId),
 }));
 
-export const LEDGER_ENTRIES: LedgerEntry[] = LEDGER;
+export const LEDGER_ENTRIES: LedgerEntry[] = LEDGER.map((entry) => ({
+  ...entry,
+  makerId: "u-creator",
+}));
 
 export const SEED_WORLD: ChaplinWorld = {
   users: USERS,

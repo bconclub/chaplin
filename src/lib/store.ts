@@ -63,9 +63,7 @@ interface ChaplinState extends ChaplinWorld {
   currentUserId: string;
   activeRole: AppRole;
   hydrated: boolean;
-  setCurrentUser: (userId: string) => void;
-  switchDemoRole: (role: AppRole) => void;
-  syncAuthenticatedUser: (profile: { id: string; name: string; role: "creator" | "brand" | "admin"; imageUrl: string }) => void;
+  syncAuthenticatedUser: (profile: { id: string; name: string; role: "creator" | "admin"; imageUrl: string }) => void;
   addCharacter: (input: NewCharacterInput) => Character;
   removeCharacter: (characterId: string) => void;
   addStory: (input: NewStoryInput) => Story;
@@ -105,50 +103,43 @@ function nowIso() {
 
 export const useChaplinStore = create<ChaplinState>((set, get) => ({
   ...SEED_WORLD,
-  currentUserId: "u-meera",
+  currentUserId: "u-creator",
   activeRole: "maker",
   hydrated: false,
 
-  setCurrentUser: (userId) => {
-    const user = get().users.find((item) => item.id === userId);
-    if (!user) return;
-    const activeRole = user.roleBadges.includes(get().activeRole)
-      ? get().activeRole
-      : user.roleBadges[0] ?? "caster";
-    set({ currentUserId: userId, activeRole });
-    persist(get());
-  },
-
-  switchDemoRole: (role) => {
-    const preferredUserId: Record<AppRole, string> = {
-      maker: "u-meera",
-      caster: "u-kabir",
-      brand: "u-kabir",
-      admin: "u-admin",
-    };
-    const user = get().users.find((item) => item.id === preferredUserId[role])
-      ?? get().users.find((item) => item.roleBadges.includes(role));
-    if (!user) return;
-    set({ currentUserId: user.id, activeRole: role });
-    persist(get());
-  },
-
   syncAuthenticatedUser: (profile) => {
-    const activeRole: AppRole = profile.role === "admin" ? "admin" : profile.role === "brand" ? "brand" : "maker";
-    const roleBadges: AppRole[] = profile.role === "admin" ? ["admin"] : profile.role === "brand" ? ["brand"] : ["maker", "caster"];
+    const activeRole: AppRole = profile.role === "admin" ? "admin" : "maker";
+    const roleBadges: AppRole[] = profile.role === "admin" ? ["admin"] : ["maker"];
     set((state) => {
       const existing = state.users.find((user) => user.id === profile.id);
+      const adminUser = state.users.find((user) => user.id === "u-admin")
+        ?? SEED_WORLD.users.find((user) => user.id === "u-admin");
       const authenticatedUser = {
         id: profile.id,
         name: profile.name,
         handle: existing?.handle ?? `@${profile.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "creator"}`,
         roleBadges,
         avatarInitial: profile.name.slice(0, 1).toUpperCase(),
-        avatarHue: existing?.avatarHue ?? (profile.role === "brand" ? 28 : profile.role === "admin" ? 165 : 202),
+        avatarHue: existing?.avatarHue ?? (profile.role === "admin" ? 165 : 202),
         imageUrl: profile.imageUrl || existing?.imageUrl,
       };
+      const users = profile.role === "admin"
+        ? [authenticatedUser]
+        : [authenticatedUser, ...(adminUser && adminUser.id !== authenticatedUser.id ? [adminUser] : [])];
       return {
-        users: existing ? state.users.map((user) => user.id === profile.id ? authenticatedUser : user) : [authenticatedUser, ...state.users],
+        users,
+        characters: profile.role === "admin"
+          ? state.characters
+          : state.characters.map((character) => ({ ...character, makerId: profile.id })),
+        stories: profile.role === "admin"
+          ? state.stories
+          : state.stories.map((story) => ({ ...story, authorId: profile.id })),
+        castings: profile.role === "admin"
+          ? state.castings
+          : state.castings.map((casting) => ({ ...casting, casterId: profile.id })),
+        ledger: profile.role === "admin"
+          ? state.ledger
+          : state.ledger.map((entry) => ({ ...entry, makerId: profile.id })),
         currentUserId: profile.id,
         activeRole,
       };
@@ -331,6 +322,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
         return {
           ...local,
           ...remote,
+          makerId: state.activeRole === "admin" ? remote.makerId : state.currentUserId,
           galleryUrls: [...new Set([
             ...(remote.galleryUrls ?? []),
             ...(local?.galleryUrls ?? []),
@@ -355,18 +347,10 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
         if (saved && Array.isArray(saved.characters)) {
           const currentCharacters = get().characters;
           const currentUsers = get().users;
-          const savedUsers = Array.isArray(saved.users) ? saved.users : [];
-          const mergedUsers = [
-            ...currentUsers.map((current) => ({
-              ...current,
-              ...(savedUsers.find((savedUser: { id?: string }) => savedUser.id === current.id) ?? {}),
-              roleBadges: current.roleBadges,
-              imageUrl: current.imageUrl,
-            })),
-            ...savedUsers.filter(
-              (savedUser: { id?: string }) => !currentUsers.some((current) => current.id === savedUser.id)
-            ),
-          ];
+          // Older builds persisted a full cast of demo people. Accounts now
+          // contain only the active Creator and Super Admin, so never revive
+          // those demo identities from local storage.
+          const mergedUsers = currentUsers;
           const savedCharacters = saved.characters as Character[];
           const mergedCharacters = [
             ...currentCharacters.map((current) => ({
@@ -379,9 +363,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
           ];
           const requestedUserId = saved.currentUserId ?? get().currentUserId;
           const requestedUser = mergedUsers.find((user) => user.id === requestedUserId);
-          const savedRole = (["maker", "caster", "brand", "admin"] as AppRole[]).includes(saved.activeRole)
-            ? (saved.activeRole as AppRole)
-            : null;
+          const savedRole: AppRole | null = saved.activeRole === "admin" ? "admin" : "maker";
           const activeRole = savedRole && requestedUser?.roleBadges.includes(savedRole)
             ? savedRole
             : requestedUser?.roleBadges[0] ?? get().activeRole;
@@ -389,6 +371,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
             users: mergedUsers,
             characters: mergedCharacters.map((character) => ({
               ...character,
+              makerId: requestedUser?.id ?? get().currentUserId,
               galleryUrls: character.galleryUrls
                 ? [...new Set(character.galleryUrls)]
                 : undefined,
@@ -397,9 +380,18 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
                 currentCharacters.find((current) => current.id === character.id)?.voiceGender ??
                 "androgynous",
             })),
-            stories: saved.stories ?? get().stories,
-            castings: saved.castings ?? get().castings,
-            ledger: saved.ledger ?? get().ledger,
+            stories: (saved.stories ?? get().stories).map((story: Story) => ({
+              ...story,
+              authorId: requestedUser?.id ?? get().currentUserId,
+            })),
+            castings: (saved.castings ?? get().castings).map((casting: Casting) => ({
+              ...casting,
+              casterId: requestedUser?.id ?? get().currentUserId,
+            })),
+            ledger: (saved.ledger ?? get().ledger).map((entry: LedgerEntry) => ({
+              ...entry,
+              makerId: requestedUser?.id ?? get().currentUserId,
+            })),
             currentUserId: requestedUser?.id ?? get().currentUserId,
             activeRole,
           });

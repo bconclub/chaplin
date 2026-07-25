@@ -4,7 +4,7 @@ export type ClientAuthIdentity = {
   id: string;
   email: string;
   name: string;
-  role: "creator" | "brand" | "admin";
+  role: "creator" | "admin";
   imageUrl: string;
 };
 
