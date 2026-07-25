@@ -517,6 +517,7 @@ export default function CharacterProductionStudio({
   const [generatedVideo, setGeneratedVideo] = useState("");
   const [assetHistory, setAssetHistory] = useState<ProductionAsset[]>([]);
   const [magicSceneIndex, setMagicSceneIndex] = useState(0);
+  const [magicSceneBrief, setMagicSceneBrief] = useState("");
   const [activeStep, setActiveStep] = useState<number>(1);
   const [sceneBlueprint, setSceneBlueprint] = useState<ShotBlueprint>(initialScene.blueprint);
   const [busy, setBusy] = useState("");
@@ -1168,7 +1169,11 @@ export default function CharacterProductionStudio({
       const response = await fetch("/api/write/scene", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character: { ...character, productionBible }, variation: nextIndex }),
+        body: JSON.stringify({
+          character: { ...character, productionBible },
+          variation: nextIndex,
+          brief: magicSceneBrief,
+        }),
       });
       if (!response.ok) throw new Error(await errorFrom(response));
       const data = await response.json() as { scene?: ScenePackage; provider?: string; warning?: string };
@@ -1293,7 +1298,7 @@ export default function CharacterProductionStudio({
             <article key={preview.generated_voice_id} className="rounded-md border border-line bg-black/15 p-2.5" data-asset-canvas-candidate="voice">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-semibold">Voice take {index + 1}</span>
-                <button type="button" onClick={() => lockVoice(preview)} disabled={Boolean(busy)} className="rounded-full border border-accent/60 px-2.5 py-1 text-[9px] font-semibold text-accent disabled:opacity-40">
+                <button type="button" onClick={() => lockVoice(preview)} disabled={Boolean(busy)} className="min-h-9 rounded-full border border-accent/60 px-3 py-1.5 text-[10px] font-semibold text-accent disabled:opacity-40">
                   {busy === "voice-save" ? "Locking…" : "Choose"}
                 </button>
               </div>
@@ -1339,7 +1344,7 @@ export default function CharacterProductionStudio({
                 <article key={candidate.assetId} className={`rounded-md border p-2.5 ${selected ? "border-emerald-400/40 bg-emerald-400/[0.05]" : "border-line bg-black/15"}`} data-asset-canvas-candidate="sfx">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="truncate text-[10px] font-semibold">Take {index + 1} · {candidate.label}</span>
-                    <button type="button" onClick={() => selectSfxCandidate(candidate)} disabled={Boolean(busy)} className={`shrink-0 text-[9px] font-semibold ${selected ? "text-emerald-300" : "text-accent"}`}>
+                    <button type="button" onClick={() => selectSfxCandidate(candidate)} disabled={Boolean(busy)} className={`min-h-9 shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold ${selected ? "border-emerald-400/50 text-emerald-300" : "border-accent/50 text-accent"}`}>
                       {selected ? "Selected ✓" : "Use take"}
                     </button>
                   </div>
@@ -1372,7 +1377,7 @@ export default function CharacterProductionStudio({
                       <span className="block truncate text-[10px] font-semibold">{imageProviderLabel(candidate.provider)}</span>
                       <span className="block truncate text-[9px] text-grey">{candidate.model}</span>
                     </span>
-                    <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent"}`}>
+                    <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`min-h-9 shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent"}`}>
                       {selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use seed" : "Use frame"}
                     </button>
                   </div>
@@ -1398,6 +1403,61 @@ export default function CharacterProductionStudio({
 
   return (
     <section data-production-workflow className="character-production-room">
+      <div
+        className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 py-2.5 backdrop-blur-xl sm:px-4"
+        data-magic-scene-toolbar
+      >
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex shrink-0 items-center justify-between gap-3 lg:w-[11rem] xl:w-[12rem]">
+            <span className="min-w-0">
+              <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">✦ Magic Scene</span>
+              <span className="mt-0.5 block truncate text-[9px] text-grey">Direct every production prompt</span>
+            </span>
+            {magicSceneIndex > 0 && (
+              <span className="rounded-full border border-accent/35 px-2 py-0.5 text-[8px] font-semibold text-accent">
+                Take {magicSceneIndex + 1}
+              </span>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              value={magicSceneBrief}
+              onChange={(event) => setMagicSceneBrief(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !busy) {
+                  event.preventDefault();
+                  applyMagicScene();
+                }
+              }}
+              maxLength={1600}
+              aria-label="Describe the scene or change for Magic Scene"
+              placeholder="Write the scene or change you want… e.g. Put her alone in a stalled metro as the lights return."
+              className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/25 px-3 py-2 text-[11px] text-ink outline-none placeholder:text-grey/65 focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={applyMagicScene}
+              disabled={Boolean(busy)}
+              data-action="magic-scene"
+              className="shrink-0 rounded-md bg-accent px-3.5 py-2 text-[10px] font-semibold text-paper hover:bg-accent-light disabled:opacity-40"
+            >
+              {busy === "magic-scene" && generationRun?.key === "magic-scene"
+                ? `Directing ${estimatedGenerationProgress(generationRun)}%`
+                : "Build prompts"}
+            </button>
+          </div>
+        </div>
+        {generationRun?.key === "magic-scene" && (
+          <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+            <span
+              className={`block h-full rounded-full transition-[width] duration-500 ${
+                generationRun.status === "failed" ? "bg-red-500" : "bg-gradient-to-r from-accent to-accent-secondary"
+              }`}
+              style={{ width: `${estimatedGenerationProgress(generationRun)}%` }}
+            />
+          </div>
+        )}
+      </div>
       <div className="studio-production-grid lg:grid lg:grid-cols-[12rem_minmax(0,1fr)_22rem] xl:grid-cols-[13rem_minmax(0,1fr)_25rem]">
       <aside
         className="studio-production-rail border-b border-line bg-[#0a0f0c] px-3 py-3 lg:border-b-0 lg:border-r"
@@ -1656,39 +1716,6 @@ export default function CharacterProductionStudio({
             </section>
           </div>
         </details>
-        {activeStep > 1 && <details className="rounded-md border border-accent/30 bg-accent/[0.03] px-3 py-2" data-magic-scene-assist>
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <span className="text-[10px] font-semibold">✦ Magic scene</span>
-            <span className="text-sm text-accent">＋</span>
-          </summary>
-          <div className="mt-3 flex flex-col justify-between gap-3 border-t border-line pt-3 sm:flex-row sm:items-center">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold">Quick scene change</p>
-                {magicSceneIndex >= 0 && (
-                  <span className="rounded-full border border-accent/40 px-2 py-0.5 text-[9px] uppercase tracking-wide text-accent">
-                    {sceneBlueprint.sceneName}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-grey mt-1">
-                AI directs one playable beat, then writes separate instructions for dialogue, SFX, music, the first frame, and image-to-video motion.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={applyMagicScene}
-              disabled={Boolean(busy)}
-              data-action="magic-scene"
-              className="shrink-0 rounded-full bg-accent text-paper px-4 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-40"
-            >
-              {busy === "magic-scene" ? "Directing scene..." : "✦ Build scene prompts"}
-            </button>
-          </div>
-          <div className="mt-3">
-            <GenerationTimeline generationKey="magic-scene" run={generationRun} />
-          </div>
-        </details>}
         <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
           <h3 className="text-sm font-semibold">{activeStepMeta.label}</h3>
           <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">Step {activeStepMeta.id}/{WORKFLOW_STEPS.length}</span>
@@ -1795,8 +1822,8 @@ export default function CharacterProductionStudio({
 
               {previews.length > 0 && (
                 <div className="rounded-sm border border-accent-secondary/35 bg-accent-secondary/[0.05] px-3 py-2.5">
-                  <p className="text-xs font-semibold">Three voice takes are ready on the Asset Canvas.</p>
-                  <p className="mt-1 text-[10px] text-grey">Listen and choose from the right panel.</p>
+                  <p className="text-xs font-semibold">Three voice takes are ready in Generated.</p>
+                  <p className="mt-1 text-[10px] text-grey">Listen and choose below on mobile, or from the Asset Canvas on desktop.</p>
                 </div>
               )}
               {lockedVoiceId && (
@@ -2186,6 +2213,49 @@ export default function CharacterProductionStudio({
             </div>
           )}
         </details>
+
+        <section
+          className="overflow-hidden rounded-md border border-line bg-[#090d0b] lg:hidden"
+          data-mobile-asset-tray
+          aria-live="polite"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-line bg-black/20 px-3 py-3">
+            <span className="min-w-0">
+              <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">Generated</span>
+              <span className="mt-0.5 block truncate text-xs font-semibold">{activeStepMeta.label} preview</span>
+            </span>
+            <span className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold ${
+              activeStepRunning
+                ? "border-accent/50 text-accent"
+                : activeStepHasOutput
+                  ? "border-emerald-400/40 text-emerald-300"
+                  : "border-line text-grey"
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${activeStepRunning ? "animate-pulse bg-accent" : activeStepHasOutput ? "bg-emerald-300" : "bg-grey/40"}`} />
+              {activeStepRunning ? "Generating" : activeStepHasOutput ? "Ready" : "Waiting"}
+            </span>
+          </div>
+          <div className="p-3">
+            {(activeStepRunning || !activeStepHasOutput) && (
+              <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
+            )}
+            {activeStepHasOutput && (
+              <div className={activeStepRunning ? "mt-3" : ""}>
+                {renderActiveAssetPreview()}
+              </div>
+            )}
+            {activeStep === 5 && Object.keys(imageProviderErrors).length > 0 && (
+              <div className="mt-3 space-y-2">
+                {Object.entries(imageProviderErrors).map(([provider, error]) => error ? (
+                  <div key={provider} className="rounded-sm border border-red-400/35 bg-red-500/[0.05] px-3 py-2">
+                    <p className="text-[10px] font-semibold text-red-300">{imageProviderLabel(provider as ImageProviderKey)} needs attention</p>
+                    <p className="mt-1 text-[9px] leading-relaxed text-grey">{error}</p>
+                  </div>
+                ) : null)}
+              </div>
+            )}
+          </div>
+        </section>
 
         {message && <p className={`text-xs rounded-sm px-3 py-2 ${message.toLowerCase().includes("failed") || message.includes("not configured") ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-ink"}`}>{message}</p>}
       </div>
