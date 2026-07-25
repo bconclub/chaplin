@@ -1,62 +1,229 @@
-# Changelog
+# Chaplin Changelog
 
-## 2026-07-23 · Role-aware production contracts
+This changelog records user-facing product changes, production-pipeline changes,
+provider integrations, and the validation boundary for each major Chaplin update.
 
-- Replaced the generic story/ad/reel choice with exact outputs chosen before prompting: Spark (5 seconds, 1 shot), Punch (15 seconds, 3 shots), Episode (60 seconds, 12 shots), and Brand Spot (30 or 60 seconds, 6 or 12 shots).
-- Split Create by Creator, Brand, and Super Admin, with matching quick actions, Concierge intents, writer choices, and admin operations.
-- Changed the writer's final action from instant publishing to a private production handoff. Cast, script, runtime, shot count, pipeline steps, providers, and approval gates now stay visible until the output is ready.
-- Added the character path from canon brief through identity, voice lock, a five-second Spark test, and casting shelf readiness.
-- Kept in-progress productions out of the public Story and Watch feeds.
+## 2026-07-25 - Character Identity OS and node workspace
 
-## 2026-07-23 · Durable media output pipelines
+### Character system
 
-- Defined ten first-class outputs: identity still, gallery still, poster, Spark, Punch, shot package, episode, brand spot, trailer/cutdown, and delivery package.
-- Added provider-neutral pipeline runs and ordered steps with idempotency, retries, review gates, manifests, generation-job lineage, and explicit terminal states.
-- Added versioned episode-shot takes so rejected generations remain traceable; only an approved take with a final muxed asset is promoted to the active shot.
-- Added `/api/pipeline` orchestration endpoints, the `/studio/pipelines` output catalog, and an episode production board for initializing the 12-shot master workflow.
-- Locked the production boundary: Seedream makes reference frames, Seedance makes silent motion plates, ElevenLabs makes separate audio stems, and FFmpeg performs deterministic mix, mux, QC, captions, and assembly.
+- Added a versioned `CharacterSystemProfile` to every production bible.
+- Added eight canonical reference-sheet targets: front, left/right three-quarter,
+  left/right profile, back, full body, and under-pressure expression.
+- Added younger, canonical, and older age states while preserving four recognition
+  locks across every generated variation.
+- Added interaction rules that keep a character in first person, preserve the
+  dramatic contradiction, maintain locked voice continuity, and prevent biography
+  or system-prompt recitation.
+- Added a memory policy with immutable canon, allowed memory types, forbidden
+  writes, and separate recent/salient retrieval budgets.
+- Added provider-ready character-sheet and interaction prompt composers.
+- Added `docs/CHARACTER_SYSTEM.md` as the implementation and data-contract reference.
 
-## 2026-07-23 · Live-voice Concierge (ElevenLabs agent) + three quick views + speed telemetry
+### Node-based character workspace
 
-- The Concierge is now a real ElevenLabs Conversational AI agent ("Chaplin Concierge", provisioned programmatically by scripts/setup-concierge-agent.mjs with persona, guardrails — no celebrity likeness, brand-safe briefs — and three client tools). You talk to it live; it calls create_character / create_video / open_page in the browser and the builders start generating in front of you.
-- Signed-URL auth via /api/agent/voice-session (key stays server-side). Graceful fallback to the typed intent flow when mic/voice is unavailable.
-- Mission log in the orb: every step timed on screen (signed session, connect, heard user, intent, opening builder). Full timings shipped to /api/agent/telemetry → generation_jobs kind "concierge-telemetry" → /admin/logs, so we can measure and improve speed.
-- Quick create chips now state exactly what will be made (Spark 5s, Punch 15s, Episode 60s, Spot 30–60s) before the AI takes over.
-- Header: exactly three quick views — Creator, Brand, Super Admin. Demo-login user list removed.
-- User-facing: everything above.
+- Added `/characters/[id]/system`, a dedicated visual operating system for each
+  character.
+- Added draggable, persistent desktop nodes for canonical identity, direction
+  bible, reference-sheet generation, sheet outputs, voice and sound, memory and
+  interaction, scene performance, and reusable media.
+- Added a mobile-safe connected stack so the workspace stays readable without a
+  giant horizontal canvas.
+- Added live angle and age selectors that regenerate the provider-ready reference
+  prompt from the character's existing canon.
+- Added links between the character profile, node workspace, media library, and
+  existing production studio rather than creating a second generation pipeline.
+- Added branded canvas and prompt scrollbars plus locally persisted node positions.
 
-## 2026-07-23 · Chaplin Concierge — voice-first Create agent
+### Image-provider controls
 
-- The + button now opens the Concierge: an animated orb that greets you out loud ("What are we creating today?"), listens (browser speech-to-text, tap the orb) or takes a typed sentence, and understands what you want via Claude structured intent.
-- One sentence → it extracts the name, picks archetypes, writes a canon brief, speaks a confirmation, and lands you in the right builder with Magic already running: characters → /characters/new prefilled + auto-building; videos/ads/reels → /studio/write with the draft auto-writing; series → pilot builder.
-- The old role-aware create options remain as quick chips inside the Concierge.
-- Every Concierge session is logged to generation_jobs (kind "concierge") and visible in /admin/logs, plus [concierge] server log lines.
-- Also: home gallery locked to 100dvh on mobile (no scroll, no bottom-nav overlap; site footer hidden on home only).
-- User-facing: everything above.
+- Expanded the Super Admin image model list for OpenRouter-routed Google, OpenAI,
+  and Seedream models.
+- Kept OpenRouter opt-in: adding `OPENROUTER_API_KEY` makes the provider available,
+  while BytePlus remains the default until an administrator changes the pipeline.
+- Preserved canonical image references in image-generation requests and kept
+  provider usage/cost logging in the existing generation ledger.
 
-## 2026-07-23 · Social platform: feed, series, auth + full home/nav/watch redesign
+### Actor discovery and mobile layout
 
-- Codex work: auth (creator/brand/super-admin accounts), creator feed with replies/likes/reposts, series + episode schema and pages, /create paths, profile media selection, brand assets.
-- Home: grid gallery with 2×2 expanding hover-video tiles, flush fill with repeated tiles + 1-cell create CTA, Poppins heading "The World of AI Actors", width-animated rotating subtext (single-line at all breakpoints).
-- Bottom nav: iOS-style notch cutout (CSS mask) with floating Create button that opens a role-aware popup (creator: character/video/series · brand: ad/reel · caster: video/series).
-- Watch (/series): Netflix-style browse — autoplay hero, Top Stories, hover-play Top Sparks, Ads & Reels (auto-appears), Series slate.
-- Magic Writer: cast picker strip with actor thumbnails right in the writer, visual "cast, together" board in the Script step.
-- Shelf: compact pill filter bar (single scroll chip row), 2-up mobile grid with clamped taglines and one-line stats.
-- Feed seeded with 47 real generated media posts (scripts/seed-feed-media.mjs, idempotent).
-- Fixes: blurred logo (server-side downscale + q90), image quality config, brief-required gate server-side, thinking disabled on structured-output routes.
-- User-facing: everything above.
+- Fixed mobile actor-gallery packing so the selected four-column preview no longer
+  leaves broken empty cells or pushes the interface outside the viewport.
+- Preserved the full-height actor universe, floating Create control, and bottom
+  navigation while keeping expanded character previews in place.
 
-## 2026-07-22 · Diagnose "stuck" Magic Character build, add progress feedback
+### Validation
 
-- Verified directly against Anthropic (bypassing the app) that a full production-bible JSON build genuinely takes 35-55s on Sonnet 5 — constrained decoding on a large nested schema, not a bug. It only looked stuck because there was zero progress feedback and the page had been reloaded mid-request.
-- `write/character` and `write/magic`: explicitly set `thinking: {type: "disabled"}` — this is a structured-fill task, no reasoning benefit, and removes any latency variance from Sonnet 5's default-adaptive-thinking behavior.
-- Raised `maxDuration` 60→120 on both routes — observed latency (39-54s) was uncomfortably close to the old ceiling and risked a mid-generation kill in production.
-- User-facing: AI Actor Builder now shows a live elapsed-time line ("Claude is writing… 23s — a full identity build usually takes 30–55s, hang tight") during a Magic Character build so the wait no longer looks broken.
+- Passed the Next.js production build, TypeScript, targeted ESLint, `git diff
+  --check`, and HTTP checks for the character profile and character-system routes.
+- Provider calls still require populated environment keys and real provider quota;
+  build success does not claim that paid generation was executed.
+- Added tracked, sanitized web and mobile environment templates while keeping
+  `.env.local` and all real credentials ignored.
 
-## 2026-07-22 · Archetype mix + required Magic Character brief
+## 2026-07-24 - Cinematic prompting, creation flow, and native production
 
-- AI Actor Builder: archetypes are now multi-select — first pick leads (★), the rest blend in as contradictions. Stored as `archetypeMix` (primary stays in `archetype` for filters/DB).
-- Magic Character: new required brief field (min a line or two) — treated as binding canon for every generated field; build blocked with a clear message until provided.
-- `/api/write/character`: accepts `archetypes[]` + `characterBrief`, passes both to Claude with blend/canon guidance; local fallback also blends secondary archetypes and folds the brief in.
-- Raised Claude `max_tokens` 3000→8000 (character) and 4000→8000 (magic draft) — 3000 truncated the production-bible JSON and silently dropped to local fallback.
-- User-facing: archetype chips toggle, ★ marks the lead; brief textarea inside Magic Character card.
+### Shot-director knowledge base
+
+- Added a structured library of camera movements with use cases, motion language,
+  continuity rules, and anti-patterns.
+- Added shot-direction logic that chooses camera motion from the dramatic beat
+  instead of appending generic camera language.
+- Added image-to-video guardrails: the supplied frame is the visual source of
+  truth; prompts describe only visible motion, one camera move, secondary motion,
+  and a short failure-focused negative list.
+- Added reference-aware character generation so the canonical image remains the
+  identity seed for later angles, scenes, and motion.
+- Added concise image prompting organized around identity locks, composition,
+  lens, camera height, motivated light, wardrobe, material response, and medium.
+- Added explicit medium control: photoreal by default, with manga, animation, or
+  stylized rendering only when the character canon requests it.
+- Added `docs/shot-director-knowledge-base.md`.
+
+### Creation and production UX
+
+- Simplified duplicate Magic controls into a single assisted concept entry point.
+- Added a visible writing timeline so users can see when concept, cast, script, and
+  production-plan work is active.
+- Added scene thumbnails and per-shot preview structure for multi-scene productions.
+- Standardized short shots around four-to-five-second generation units that can be
+  reviewed and assembled into longer outputs.
+- Added clear idle, running, blocked, review, failed, and completed states to the
+  production canvas.
+- Added direct recovery actions for regenerate, review outputs, exit production,
+  and return to the actor profile.
+- Kept voice, effects, theme, still, video, approval, and assembly as distinct
+  production stages.
+
+### Native creator beta
+
+- Added the isolated Expo application under `mobile/` without replacing the Next.js
+  web product.
+- Added creator authentication, actor building, editable Spark writing, five-second
+  Spark production, library, studio, settings, and native draft storage.
+- Added `/api/v1/mobile/*` endpoints for sessions, characters, drafts, prompt
+  generation, reference upload, media generation, and library retrieval.
+- Added bearer-authenticated native API access and support for an absolute
+  `EXPO_PUBLIC_API_URL`.
+- Added EAS configuration and native verification scripts.
+
+## 2026-07-23 - Truthful production, playable outputs, and approval flow
+
+### Media output contracts
+
+- Defined ten first-class outputs: identity still, gallery still, poster, Spark,
+  Punch, shot package, episode, brand spot, trailer/cutdown, and delivery package.
+- Added provider-neutral pipeline runs and ordered steps with idempotency, retries,
+  review gates, manifests, generation-job lineage, and explicit terminal states.
+- Added versioned episode-shot takes; rejected generations remain traceable and only
+  an approved take with a final muxed asset is promoted.
+- Added `/api/pipeline`, `/api/pipeline/[id]`, `/api/pipeline/assemble`, and
+  `/api/pipeline/mix`.
+- Added the `/studio/pipelines` catalog and production boards for Spark, Punch,
+  Episode, and Brand Spot workflows.
+
+### Real output and preview behavior
+
+- Connected pipeline success to a persisted media asset with a playable URL and
+  asset ID.
+- Added a live production canvas showing the latest real frame/video instead of a
+  checklist pretending to be output.
+- Added explicit "nothing generated yet" and "waiting for first frame" states.
+- Added clear human-approval cards and actions at identity/composition and final-shot
+  gates.
+- Added feed links back to the production or media output so published status is
+  not a dead end.
+- Added FFmpeg-backed deterministic audio/video assembly for completed Punch output.
+
+### Scene and ad reliability
+
+- Fixed Magic Scene parsing so valid scenes are produced from story concepts even
+  when the model response differs from the preferred schema.
+- Added local structured fallback scenes when the writing provider cannot return a
+  playable beat.
+- Made the product reference image the first required input for product ads.
+- Carried product identity into script, shot, reference-frame, and video prompts.
+- Added scene objective, visible action, dialogue, duration, preview image, camera
+  movement, and reference-asset fields to the story model.
+- Added meaningful regeneration with higher creative variance while preserving the
+  actor's immutable identity locks.
+
+### Character production
+
+- Rebuilt actor production as a staged workflow: voice, dialogue, short SFX takes,
+  theme, still, motion, review, and profile selection.
+- Fixed ElevenLabs minimum/maximum text-length failures with stage-specific prompt
+  normalization.
+- Kept the locked voice ID attached to dialogue generation so preview voices do not
+  silently replace the selected character voice.
+- Added media selection for profile voice, theme, effects, cover, and featured video.
+- Added generated video availability above license terms on actor profiles.
+
+### Admin and observability
+
+- Added protected Super Admin login and server-side role checks.
+- Added complete generation logs with provider, model, prompt/input, output,
+  provider credits, runtime, estimated method, USD, INR, and Chaplin token views.
+- Added editable pipeline controls for writing, voice, SFX, music, image, video, and
+  pricing assumptions.
+- Added generation events to the creator feed across accounts while keeping
+  incomplete/private productions out of public Watch surfaces.
+
+## 2026-07-23 - Role-aware product and social platform
+
+- Replaced generic creation choices with exact production formats: Spark (5 seconds,
+  1 shot), Punch (15 seconds, 3 shots), Episode (60 seconds, 12 shots), and Brand
+  Spot (30 or 60 seconds, 6 or 12 shots).
+- Split Create by Creator, Brand, and Super Admin with matching quick actions and
+  Concierge intents.
+- Added creator/brand email authentication, private drafts, continue-from-draft,
+  account-aware creation, and Super Admin access.
+- Added the creator feed with posts, images/video, replies, likes, reposts, shares,
+  and cross-account generation activity.
+- Added series and episode data, pages, and creation paths.
+- Rebuilt Watch as a browse surface for stories, Sparks, ads/reels, and series.
+- Rebuilt the bottom navigation with persistent Feed, Actors, Create, Watch, and
+  Studio destinations.
+- Added a full-height actor gallery with expanding playable tiles, rotating format
+  copy, and an in-place Create entry point.
+
+## 2026-07-22 - Voice-first Concierge and actor-builder intelligence
+
+### Concierge
+
+- Added the ElevenLabs Conversational AI Concierge with signed server-side session
+  URLs and typed-intent fallback.
+- Added live listening, speaking, thinking, and handoff states so the orb does not
+  look idle while work is happening.
+- Added character/video navigation tools and mission telemetry for connection,
+  recognition, intent, and builder-open timings.
+- Added Claude structured intent for one-sentence actor, video, ad, reel, and series
+  creation.
+- Added graceful OS-voice fallback and preferred an appropriate Indian narrator
+  voice when the live ElevenLabs agent is unavailable.
+
+### Actor builder
+
+- Added multi-select archetype mixes with one leading archetype and supporting
+  contradictions.
+- Added a required canon brief and blocked Magic Character generation until the
+  brief is meaningful.
+- Increased structured-generation token budgets and guarded against truncated JSON.
+- Disabled adaptive thinking for structured field-writing routes to reduce latency
+  variance.
+- Added elapsed-time progress feedback for full character-bible generation.
+- Added Claude-powered Quick Write and Magic suggestions throughout character and
+  scene fields.
+
+## 2026-07-21 - Persistent actor media and first generation pipeline
+
+- Added persistent Supabase character, generation-job, asset, voice, feed, and
+  ledger records.
+- Added ElevenLabs voice candidates, locked character voice reuse, dialogue, SFX,
+  and theme generation.
+- Added Seedream image generation and Seedance five-second image-to-video generation.
+- Added canonical reference-image reuse for later character scenes.
+- Added actor profile galleries, featured images/videos, sound controls, B-roll,
+  resume, licensing, earnings, and maker management.
+- Added Maker, Caster, Brand, and Super Admin product views.
+- Added the initial role-aware homepage, actor shelf, story creation, and casting
+  flows.
