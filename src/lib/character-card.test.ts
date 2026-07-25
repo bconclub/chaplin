@@ -15,6 +15,14 @@ test("Agni Maya v2 card validates and has a single active age", () => {
   const card = CharacterCardV2Schema.parse(AGNI_MAYA_CARD_V2);
   assert.equal(card.age_states.filter((state) => state.active).length, 1);
   assert.equal(card.persona_card.dialogue_exemplars.length, 9);
+  assert.equal(card.signature_sfx_events?.length, 3);
+  assert.deepEqual(card.consumer_tags.signature_sfx_events, ["sfx"]);
+});
+
+test("stored v2 cards without atomic SFX events remain valid", () => {
+  const { signature_sfx_events: _events, ...legacyCard } = AGNI_MAYA_CARD_V2;
+  const card = CharacterCardV2Schema.parse(legacyCard);
+  assert.equal(card.signature_sfx_events, undefined);
 });
 
 test("image builder injects the identity block verbatim and exactly one wardrobe state", () => {

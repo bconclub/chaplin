@@ -47,7 +47,7 @@ const FIELD_RULES: Record<QuickField, string> = {
   "voice-preview": "Write one natural spoken sentence of 5-8 words. It must reveal the actor's personality without pause-heavy punctuation and perform in 4-5 seconds, never more than 7 seconds. Output dialogue only.",
   dialogue: "Write one original, performable line of 8-24 words for this exact dramatic moment. These must be the exact words the actor says aloud to another person, with an implied listener; use first person, direct address, or a natural reply. Never write third-person narration, a character description, an action phrase, a logline, a tagline, or a sentence that merely says what the actor is doing. The line must make a tactical move—test, withhold, dare, confess, accuse, bargain, deflect, or reverse the power dynamic—rather than merely sound atmospheric. Let the actor's central contradiction create the subtext. Use one precise detail from the supplied scene only when it sharpens the pressure; never invent a random prop, meal, door, clue, or backstory just to sound specific. The last phrase must land a turn, cost, or invitation that changes what the other person can do next. Before answering, silently reject any line that could belong to a different actor, explains an emotion or visible action, sounds like a slogan, or relies on a stock threat. Output spoken words only: no speaker label, quotation marks, parentheses, brackets, stage directions, or written pause cues. Use punctuation for cadence. Output dialogue only.",
   sfx: "Write only an ElevenLabs 1-2 second non-musical signature-sound prompt. Translate the actor's personality into one physical source, a precise material texture, a close acoustic distance, one unusual identifying detail, and a clean stop. It must work as a short repeatable sonic logo, not a sequence, biography, ambience bed, or score. No speech, voice, melody, riser, or trailer braam. 30-55 words.",
-  theme: "Write only an Eleven Music prompt for a 12-second instrumental ident. Include BPM, key, a three-note motif, exact instruments, 0-3s / 3-8s / 8-12s development, mix priority, and final cadence. No biography, sound-effect sequence, vocals, choir, lyrics, or copyrighted imitation. 55-95 words.",
+  theme: "Write only a natural-language Eleven Music production brief for an approximately 8-second instrumental identity cue. State a culturally grounded genre/style anchor with an era, the mood in plain words, two to four named instruments, how the cue opens and builds, one emotional turn, and whether it resolves, stops hard, or ends on an unresolved sustained note. End with: About 8 seconds, ends cleanly, no fade-out. Instrumental only, no vocals. Never use BPM fields, key-of fields, time signatures, timestamp slots, mix-priority slots, biography, lyrics, choir, or copyrighted imitation. 45-90 words.",
   "identity-image": "Write only a concise 16:9 identity-image prompt, 90-140 words. Treat the requested visual medium as binding: preserve manga, animation, illustration, or other explicit styling exactly; default to cinematic live-action photography only when no medium is requested. Use one direct paragraph covering medium and rendering language, visible subject anatomy, exact hair and wardrobe, expression and gesture, restrained world detail, camera, light, and palette. Then add one short Negative line and one Recognition locks line containing exactly four short visible invariants. Those four carry recognition; everything else may move between scenes. No biography, plot summary, symbolism essay, generic hero pose, dialogue, text, logo, UI, or watermark.",
   image: "Write only a concise Seedream 16:9 story first-frame prompt. Unless the user explicitly requests a stylized medium, require a visually striking live-action cinematic photograph of a real human with natural skin, believable anatomy, tactile materials, optical depth, physical camera character, and motivated light. Use coherent natural-language blocks: SUBJECT identity anchors; PLAYABLE MOMENT; SET; CAMERA; LIGHT; CONTINUITY; EXCLUSIONS. Show one decision through face, hands, weight, and eyeline. No biography, plot summary, camera movement, dialogue, typography, logo, or watermark. Keep only generation-critical facts. 80-130 words.",
   video: "Inspect the supplied image as the exact first frame. Write only a 30-60 word Seedance motion prompt using actions physically possible inside its visible crop. Never introduce an object, body part, doorway, prop, or environmental effect that is not visible. Use one clear subject-motion beat, one simple named camera move, optional subtle motion already supported by the frame, and one ending state. Use ordering words, not timestamps, percentages, lens notes, source-of-truth preambles, or lighting restatements. Add exactly four relevant failure negatives and end with --duration 5.",
@@ -55,6 +55,31 @@ const FIELD_RULES: Record<QuickField, string> = {
 
 function clean(value: unknown, max = 4000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function cleanQuickWriteResult(field: QuickField, value: unknown) {
+  const text = clean(value);
+  if (field === "voice-preview") return compactVoicePreview(text);
+  if (field === "dialogue") return dialogueForEditor(text);
+  return text;
+}
+
+function ndjsonLine(value: Record<string, unknown>) {
+  return new TextEncoder().encode(`${JSON.stringify(value)}\n`);
+}
+
+function takeSseEvents(buffer: string) {
+  const normalized = buffer.replace(/\r\n/g, "\n");
+  const blocks = normalized.split("\n\n");
+  const remainder = blocks.pop() ?? "";
+  const data = blocks.flatMap((block) => {
+    const lines = block
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart());
+    return lines.length ? [lines.join("\n")] : [];
+  });
+  return { data, remainder };
 }
 
 function localRewrite(field: QuickField, character: Character, currentText: string) {
@@ -93,6 +118,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "AI actor context is invalid." }, { status: 400 });
     }
     const currentText = clean(body.currentText);
+    const wantsStream = body.stream === true;
     const variation = Math.max(1, Math.floor(Number(body.variation) || 1));
     fallbackField = field;
     fallbackCharacter = character;
@@ -173,6 +199,29 @@ export async function POST(request: Request) {
       model,
       prompt: currentText || `${field} for ${character.name}`,
     });
+    const anthropicBody: Record<string, unknown> = {
+      model,
+      max_tokens: Math.min(2000, writingConfig.maxTokens ?? 700),
+      system: `${writingConfig.promptPrelude} You are Chaplin's production copywriter. Rewrite exactly one field for an original fictional AI actor. This is creative regeneration pass ${variation}: make a materially new creative choice rather than paraphrasing the existing text. Preserve useful user intent, character continuity, and provider constraints. ${wantsStream ? "Return only the requested field as plain text. Do not wrap it in JSON, markdown, quotation marks, or a label." : "Return only the requested field in structured JSON."} ${FIELD_RULES[field]}`,
+      messages: [{
+        role: "user",
+        content: messageContent,
+      }],
+      stream: wantsStream,
+    };
+    if (!wantsStream) {
+      anthropicBody.output_config = {
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text"],
+            properties: { text: { type: "string" } },
+          },
+        },
+      };
+    }
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -180,27 +229,100 @@ export async function POST(request: Request) {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: Math.min(2000, writingConfig.maxTokens ?? 700),
-        system: `${writingConfig.promptPrelude} You are Chaplin's production copywriter. Rewrite exactly one field for an original fictional AI actor. This is creative regeneration pass ${variation}: make a materially new creative choice rather than paraphrasing the existing text. Preserve useful user intent, character continuity, and provider constraints. Return only the requested field in structured JSON. ${FIELD_RULES[field]}`,
-        messages: [{
-          role: "user",
-          content: messageContent,
-        }],
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              required: ["text"],
-              properties: { text: { type: "string" } },
-            },
-          },
-        },
-      }),
+      body: JSON.stringify(anthropicBody),
     });
+    if (wantsStream) {
+      if (!response.ok) {
+        const data = await response.json() as { error?: { message?: string } };
+        throw new Error(data.error?.message || `Claude returned ${response.status}.`);
+      }
+      if (!response.body) throw new Error("Claude returned no Quick Write stream.");
+      const providerRequestId = response.headers.get("request-id");
+      const activeJobId = jobId;
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const reader = response.body!.getReader();
+          const decoder = new TextDecoder();
+          let eventBuffer = "";
+          let output = "";
+          let inputTokens = 0;
+          let outputTokens = 0;
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              eventBuffer += decoder.decode(value, { stream: !done });
+              const parsed = takeSseEvents(eventBuffer);
+              eventBuffer = parsed.remainder;
+              for (const raw of parsed.data) {
+                if (!raw || raw === "[DONE]") continue;
+                const event = JSON.parse(raw) as {
+                  type?: string;
+                  delta?: { type?: string; text?: string };
+                  error?: { message?: string };
+                  message?: { usage?: { input_tokens?: number } };
+                  usage?: { output_tokens?: number };
+                };
+                if (event.type === "error") {
+                  throw new Error(event.error?.message || "Claude stopped the Quick Write stream.");
+                }
+                if (event.type === "message_start") {
+                  inputTokens = Number(event.message?.usage?.input_tokens ?? inputTokens);
+                }
+                if (event.type === "message_delta") {
+                  outputTokens = Number(event.usage?.output_tokens ?? outputTokens);
+                }
+                const delta = event.type === "content_block_delta" && event.delta?.type === "text_delta"
+                  ? event.delta.text ?? ""
+                  : "";
+                if (delta) {
+                  output += delta;
+                  controller.enqueue(ndjsonLine({ type: "delta", text: delta }));
+                }
+              }
+              if (done) break;
+            }
+            const text = cleanQuickWriteResult(field, output);
+            if (!text) throw new Error("Claude returned an empty Quick Write result.");
+            const usage = {
+              inputTokens,
+              outputTokens,
+              providerTokens: inputTokens + outputTokens,
+              providerUsage: { input_tokens: inputTokens, output_tokens: outputTokens },
+            };
+            await completeGeneration(
+              activeJobId,
+              undefined,
+              { field, characterId: character.id, visualReference: visualReferenceUrl || null, visualReferenceSource, streamed: true },
+              await calculateGenerationBilling({ kind: "anthropic-prompt", usage }),
+              providerRequestId,
+            );
+            controller.enqueue(ndjsonLine({ type: "done", text, provider: "anthropic", model, usage, configured: true }));
+          } catch (streamError) {
+            const message = streamError instanceof Error ? streamError.message : "Quick Write stream failed.";
+            await failGeneration(activeJobId, message);
+            const text = localRewrite(field, character, currentText);
+            controller.enqueue(ndjsonLine({
+              type: "done",
+              text,
+              provider: "chaplin-local",
+              configured: true,
+              warning: `Claude could not finish streaming: ${message} Local Quick Write was used instead.`,
+            }));
+          } finally {
+            reader.releaseLock();
+            controller.close();
+          }
+        },
+      });
+      jobId = null;
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
     const data = await response.json() as {
       content?: Array<{ type?: string; text?: string }>;
       error?: { message?: string };
@@ -210,11 +332,7 @@ export async function POST(request: Request) {
     const output = data.content?.find((block) => block.type === "text")?.text;
     if (!output) throw new Error("Claude returned no Quick Write result.");
     const result = JSON.parse(output) as { text?: unknown };
-    const text = field === "voice-preview"
-      ? compactVoicePreview(clean(result.text))
-      : field === "dialogue"
-        ? dialogueForEditor(clean(result.text))
-      : clean(result.text);
+    const text = cleanQuickWriteResult(field, result.text);
     if (!text) throw new Error("Claude returned an empty Quick Write result.");
     const usage = {
       inputTokens: Number(data.usage?.input_tokens ?? 0),

@@ -7,8 +7,17 @@ import Lenis from "lenis";
 export default function SmoothScroll() {
   const lenisRef = useRef<Lenis | null>(null);
   const pathname = usePathname();
+  const usesNativeWorkspaceScroll =
+    pathname === "/studio" ||
+    (pathname.startsWith("/characters/") && pathname.endsWith("/studio"));
 
   useEffect(() => {
+    if (usesNativeWorkspaceScroll) {
+      lenisRef.current?.destroy();
+      lenisRef.current = null;
+      return;
+    }
+
     const lenis = new Lenis({
       duration: 1.1,
       smoothWheel: true,
@@ -27,7 +36,7 @@ export default function SmoothScroll() {
       lenis.destroy();
       lenisRef.current = null;
     };
-  }, []);
+  }, [usesNativeWorkspaceScroll]);
 
   // Next's App Router does its own scroll-to-top on navigation, but Lenis
   // intercepts native scroll and keeps its own internal position, so it

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
-import { composeCharacterSheetPrompt } from "@/lib/character-system";
+import { composeCharacterInteractionPrompt, composeCharacterSheetPrompt } from "@/lib/character-system";
 import {
   buildProductionBible,
   buildScenePackage,
@@ -31,7 +31,15 @@ function stageLabel(config: PipelineConfig, stage: PipelineStageId) {
 }
 
 function PromptCardView({ card, config }: { card: PromptCard; config: PipelineConfig }) {
+  const [copied, setCopied] = useState(false);
   const stage = card.stage ? config.stages[card.stage] : null;
+
+  async function copyPrompt() {
+    await navigator.clipboard.writeText(card.prompt);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   return (
     <article className="poster-card rounded-md p-4" data-prompt-stage={card.id}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -50,6 +58,11 @@ function PromptCardView({ card, config }: { card: PromptCard; config: PipelineCo
       <details open className="mt-3 rounded-sm border border-line bg-black/10">
         <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-grey">Prompt emitted by Chaplin</summary>
         <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line p-3 font-sans text-[11px] leading-5 text-ink">{card.prompt}</pre>
+        <div className="flex justify-end border-t border-line p-2">
+          <button type="button" onClick={() => void copyPrompt()} className="rounded-full border border-accent/50 px-3 py-1.5 text-[10px] font-semibold text-accent hover:bg-accent/10">
+            {copied ? "Copied ✓" : "Copy prompt"}
+          </button>
+        </div>
       </details>
       {stage?.promptPrelude && (
         <details className="mt-2 rounded-sm border border-line bg-black/5">
@@ -75,6 +88,14 @@ export default function AdminSceneWiringMap({ characters, config }: { characters
   }
 
   const promptCards: PromptCard[] = [
+    {
+      id: "master",
+      step: "00 · Runtime identity",
+      title: "Master character prompt",
+      destination: "Character conversation agent",
+      note: "The complete runtime identity, behavior, safety boundaries, memory contract, and voice continuity. Only authenticated Super Admin accounts can inspect or copy this prompt.",
+      prompt: composeCharacterInteractionPrompt(character, bible),
+    },
     {
       id: "sheet",
       step: "01 · Identity reference",

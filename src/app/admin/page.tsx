@@ -181,7 +181,10 @@ export default async function AdminPage() {
                       </span>
                     </td>
                     <td className="px-4 text-right">
-                      <Link href={`/characters/${character.id}`} className="text-xs text-accent hover:underline">Open production →</Link>
+                      <div className="flex flex-col items-end gap-1">
+                        <Link href={`/characters/${character.id}/system`} className="text-xs font-semibold text-[#36e0cd] hover:underline">Master prompt →</Link>
+                        <Link href={`/characters/${character.id}`} className="text-[10px] text-accent hover:underline">Open production</Link>
+                      </div>
                     </td>
                   </tr>
                 );

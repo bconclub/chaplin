@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import Avatar from "@/components/Avatar";
-import { buildCharacterSystem, composeCharacterSheetPrompt } from "@/lib/character-system";
+import {
+  buildCharacterSystem,
+  composeCharacterInteractionPrompt,
+  composeCharacterSheetPrompt,
+} from "@/lib/character-system";
 import { buildProductionBible } from "@/lib/production-prompting";
 import { useChaplinStore } from "@/lib/store";
 import type { Character, CharacterAgeStateId, CharacterSheetViewId } from "@/lib/types";
@@ -161,6 +165,8 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
   const [sheetBusy, setSheetBusy] = useState(false);
   const [sheetMessage, setSheetMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [masterPromptOpen, setMasterPromptOpen] = useState(false);
+  const [masterPromptCopied, setMasterPromptCopied] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     id: NodeId;
@@ -288,6 +294,10 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
     }),
     [ageId, bible, character, expression, viewId, wardrobe],
   );
+  const masterPrompt = useMemo(
+    () => composeCharacterInteractionPrompt(character, bible),
+    [bible, character],
+  );
   const mediaCount = (character.galleryUrls?.length ?? 0) + (character.imageUrl ? 1 : 0) + (character.videoUrl ? 1 : 0);
   const canonicalImage = character.imageUrl ?? character.bannerUrl;
   const activeSlotKey = sheetSlotKey(viewId, ageId);
@@ -297,6 +307,12 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
     await navigator.clipboard.writeText(sheetPrompt);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  async function copyMasterPrompt() {
+    await navigator.clipboard.writeText(masterPrompt);
+    setMasterPromptCopied(true);
+    window.setTimeout(() => setMasterPromptCopied(false), 1600);
   }
 
   function resetLayout() {
@@ -394,6 +410,13 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
           </div>
           <div className="flex items-center gap-2">
             <TinyStatus active>Canon connected</TinyStatus>
+            <button
+              type="button"
+              onClick={() => setMasterPromptOpen(true)}
+              className="rounded-full border border-accent/45 bg-accent/10 px-3 py-2 text-[9px] font-semibold text-accent hover:bg-accent/15"
+            >
+              View master prompt
+            </button>
             <div className="hidden items-center rounded-full border border-white/10 bg-black/20 sm:flex">
               <button type="button" onClick={() => zoomTo(camera.scale / 1.18)} className="px-2.5 py-2 text-sm text-grey hover:text-ink" aria-label="Zoom out">−</button>
               <button type="button" onClick={fitLayout} className="min-w-12 border-x border-white/10 px-2 py-2 text-[9px] font-semibold text-grey hover:text-ink" aria-label="Fit all notes">{Math.round(camera.scale * 100)}%</button>
@@ -416,6 +439,30 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
           </div>
         </div>
       </header>
+
+      {masterPromptOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="master-prompt-title">
+          <section className="flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/12 bg-[#0b1208] shadow-2xl">
+            <header className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Super Admin only</p>
+                <h2 id="master-prompt-title" className="mt-1 text-lg font-semibold">{character.name} · master character prompt</h2>
+                <p className="mt-1 text-[10px] text-grey">This is the runtime identity sent to the character conversation agent. Makers, brands, and casters are redirected before this page renders.</p>
+              </div>
+              <button type="button" onClick={() => setMasterPromptOpen(false)} className="rounded-full border border-white/10 px-3 py-2 text-[10px] font-semibold text-grey hover:text-ink">
+                Close
+              </button>
+            </header>
+            <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-5 font-sans text-xs leading-6 text-ink">{masterPrompt}</pre>
+            <footer className="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3">
+              <span className="text-[9px] uppercase tracking-[0.14em] text-grey">Private system material</span>
+              <button type="button" onClick={() => void copyMasterPrompt()} className="rounded-full bg-accent px-4 py-2 text-[10px] font-bold text-[#090b08]">
+                {masterPromptCopied ? "Copied to clipboard ✓" : "Copy complete master prompt"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       <div
         ref={viewportRef}

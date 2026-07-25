@@ -148,13 +148,15 @@ export default function CharacterProfilePage() {
         <IconArrowLeft className="w-4 h-4" />
         Shelf
       </Link>
-      <Link
-        href={`/characters/${character.id}/system`}
-        className="ml-2 inline-flex items-center gap-2 rounded-full border border-[#07d2be]/35 bg-[#07d2be]/8 px-4 py-2 text-sm font-semibold text-[#36e0cd] transition-colors hover:bg-[#07d2be]/14"
-      >
-        <span className="h-2 w-2 rounded-full bg-[#07d2be] shadow-[0_0_12px_#07d2be]" />
-        Character system
-      </Link>
+      {world.activeRole === "admin" && (
+        <Link
+          href={`/characters/${character.id}/system`}
+          className="ml-2 inline-flex items-center gap-2 rounded-full border border-[#07d2be]/35 bg-[#07d2be]/8 px-4 py-2 text-sm font-semibold text-[#36e0cd] transition-colors hover:bg-[#07d2be]/14"
+        >
+          <span className="h-2 w-2 rounded-full bg-[#07d2be] shadow-[0_0_12px_#07d2be]" />
+          Master prompt
+        </Link>
+      )}
       {canProduce && (
         <button
           type="button"

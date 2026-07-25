@@ -1,24 +1,24 @@
-"use client";
-
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import CharacterNodeWorkspace from "@/components/CharacterNodeWorkspace";
-import { getCharacter } from "@/lib/selectors";
-import { useChaplinStore } from "@/lib/store";
+import { getServerAuthIdentity } from "@/lib/server/auth";
+import { listCharacters } from "@/lib/server/supabase-admin";
 
-export default function CharacterSystemPage() {
-  const params = useParams<{ id: string }>();
-  const world = useChaplinStore((state) => state);
-  const character = getCharacter(world, params.id);
+export const dynamic = "force-dynamic";
 
-  if (!character) {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-24 text-center">
-        <p className="text-grey">This character system is not available on this device yet.</p>
-        <Link href="/characters" className="mt-4 inline-block text-accent">← Return to actors</Link>
-      </main>
-    );
+export default async function CharacterSystemPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const identity = await getServerAuthIdentity();
+  if (identity?.role !== "admin") {
+    redirect(`/admin/login?next=${encodeURIComponent(`/characters/${id}/system`)}`);
   }
+
+  const characters = await listCharacters();
+  const character = characters.find((item) => item.id === id);
+  if (!character) notFound();
 
   return <CharacterNodeWorkspace character={character} />;
 }

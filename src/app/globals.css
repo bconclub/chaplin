@@ -189,6 +189,16 @@ body {
   box-shadow: 0 16px 40px rgba(28, 37, 28, 0.1);
 }
 
+[data-create-toggle] {
+  left: 50%;
+  top: 0;
+  transform: translate3d(-50%, -52%, 0);
+}
+
+[data-create-toggle]:hover {
+  transform: translate3d(-50%, -58%, 0);
+}
+
 /* Desktop production studio: a self-contained 100dvh editing room. The
    regular site chrome is intentionally removed here so the scene workspace
    can keep its actor rail, director notes, and primary canvas visible. */
@@ -226,12 +236,11 @@ body {
   }
 
   [data-create-toggle] {
-    left: 1rem;
-    top: 1rem;
-    height: 3.45rem;
-    width: 3.45rem;
-    transform: none;
-    translate: 0;
+    left: 50% !important;
+    top: 0.4rem !important;
+    height: 3.45rem !important;
+    width: 3.45rem !important;
+    transform: translate3d(-50%, 0, 0) !important;
   }
 
   body > main {
@@ -239,7 +248,8 @@ body {
   }
 
   body:has([data-home-gallery]) > main {
-    min-height: 100dvh;
+    height: calc(100dvh - 4rem);
+    min-height: 0;
     padding-bottom: 0;
   }
 
@@ -294,23 +304,47 @@ body {
   .studio-production-grid {
     min-height: 0;
     flex: 1 1 auto;
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
 
   .studio-production-rail,
   .studio-production-content,
   .studio-director-panel {
+    height: 100%;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
   }
 
   .studio-production-content {
     background: linear-gradient(180deg, rgba(255,255,255,0.018), transparent 18rem);
+    padding-bottom: max(2rem, env(safe-area-inset-bottom));
   }
 
   .studio-stage-strip::-webkit-scrollbar {
     height: 0;
   }
+}
+
+@keyframes studio-queued-sweep {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0.2;
+  }
+  45% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(340%);
+    opacity: 0.2;
+  }
+}
+
+.studio-queued-timeline {
+  animation: studio-queued-sweep 2.4s ease-in-out infinite;
 }
 
 /* Homepage actor universe: a lighter, data-aware adaptation of the Infinite Menu sphere. */

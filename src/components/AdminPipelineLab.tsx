@@ -26,10 +26,11 @@ type RecentRun = {
 type FieldDefinition = {
   key: string;
   label: string;
-  type: "number" | "text" | "boolean";
+  type: "number" | "text" | "boolean" | "select";
   min?: number;
   max?: number;
   step?: number;
+  options?: ReadonlyArray<{ value: string | number; label: string }>;
   note: string;
 };
 
@@ -52,10 +53,21 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
     { key: "minimumDurationSeconds", label: "Minimum seconds", type: "number", min: 0.5, max: 5, step: 0.1, note: "Lower clamp for editor requests." },
     { key: "maximumDurationSeconds", label: "Maximum seconds", type: "number", min: 0.5, max: 8, step: 0.1, note: "Upper clamp for editor requests." },
     { key: "promptInfluence", label: "Prompt influence", type: "number", min: 0, max: 1, step: 0.01, note: "Higher values follow the written material and acoustic direction more tightly." },
+    { key: "loop", label: "Seamless loop", type: "boolean", note: "Native ElevenLabs v2 control. Keep off for atomic signature events with a clean stop." },
     { key: "candidateCount", label: "Candidate takes", type: "number", min: 1, max: 6, step: 1, note: "Variations offered to the sound engineer." },
   ],
   theme: [
-    { key: "durationSeconds", label: "Theme seconds", type: "number", min: 3, max: 30, step: 1, note: "Length of the generated identity theme." },
+    {
+      key: "durationSeconds",
+      label: "Theme seconds",
+      type: "select",
+      options: [
+        { value: 5, label: "5 seconds · sting" },
+        { value: 8, label: "8 seconds · default ident" },
+        { value: 15, label: "15 seconds · extended cue" },
+      ],
+      note: "Chaplin sends this as ElevenLabs music_length_ms. Studio choices are intentionally limited to edit-ready presets.",
+    },
     { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Blocks generated vocals and lyrics." },
     { key: "signWithC2pa", label: "C2PA provenance", type: "boolean", note: "Requests provider provenance signing when available." },
   ],
@@ -368,6 +380,26 @@ export default function AdminPipelineLab({
                         <span className="block text-xs font-semibold">{definition.label}</span>
                         <span className="block text-[10px] text-grey mt-1">{definition.note}</span>
                       </span>
+                    </label>
+                  );
+                }
+                if (definition.type === "select") {
+                  return (
+                    <label key={definition.key}>
+                      <span className="text-xs font-semibold">{definition.label}</span>
+                      <select
+                        className="field mt-2 w-full"
+                        value={String(value ?? "")}
+                        onChange={(event) => {
+                          const option = definition.options?.find((item) => String(item.value) === event.target.value);
+                          updateSetting(definition.key, typeof option?.value === "number" ? Number(event.target.value) : event.target.value);
+                        }}
+                      >
+                        {definition.options?.map((option) => (
+                          <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-grey mt-1 block">{definition.note}</span>
                     </label>
                   );
                 }

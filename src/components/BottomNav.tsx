@@ -206,7 +206,7 @@ export default function BottomNav() {
             conciergeRef.current?.stopPushToTalk();
           }}
           onContextMenu={(event) => event.preventDefault()}
-          className="absolute left-1/2 top-0 z-10 flex h-[4.25rem] w-[4.25rem] touch-none select-none -translate-x-1/2 -translate-y-[52%] items-center justify-center rounded-full bg-[linear-gradient(135deg,#ff2f6d_8%,#d57eaf_48%,#20d9d2_88%)] p-[2px] shadow-[0_0_12px_rgba(32,217,210,0.14),0_0_10px_rgba(255,47,109,0.12)] transition-transform duration-200 hover:-translate-y-[58%] sm:h-[4.75rem] sm:w-[4.75rem]"
+          className="absolute z-10 flex h-[4.25rem] w-[4.25rem] touch-none select-none items-center justify-center rounded-full bg-[linear-gradient(135deg,#ff2f6d_8%,#d57eaf_48%,#20d9d2_88%)] p-[2px] shadow-[0_0_12px_rgba(32,217,210,0.14),0_0_10px_rgba(255,47,109,0.12)] transition-transform duration-200 sm:h-[4.75rem] sm:w-[4.75rem]"
           data-create-toggle
           data-create-orb={createOpen ? "active" : "idle"}
           data-push-to-talk={createOpen ? "true" : undefined}

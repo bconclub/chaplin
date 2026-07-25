@@ -515,6 +515,32 @@ export async function selectCharacterSfxAsset(input: { characterId: string; asse
   return { assetId: selected.id, url: selected.url };
 }
 
+export async function getCharacterSfxAssetsById(input: {
+  characterId: string;
+  assetIds: string[];
+}) {
+  const supabase = adminClient();
+  const uniqueIds = [...new Set(input.assetIds)];
+  if (!uniqueIds.length) return [];
+  const assets = await supabase
+    .from("media_assets")
+    .select("id,url,kind,metadata")
+    .eq("character_id", input.characterId)
+    .eq("kind", "sfx")
+    .in("id", uniqueIds);
+  assert(assets.error, "Load signature SFX event assets");
+  const rows = assets.data ?? [];
+  if (rows.length !== uniqueIds.length) {
+    throw new Error("One or more signature SFX events are missing from this actor's library.");
+  }
+  return rows as Array<{
+    id: string;
+    url: string;
+    kind: "sfx";
+    metadata: Record<string, unknown> | null;
+  }>;
+}
+
 export type CharacterProfileSlot = "voice" | "theme" | "video" | "cover";
 
 const PROFILE_SLOT_COLUMNS: Record<CharacterProfileSlot, string> = {

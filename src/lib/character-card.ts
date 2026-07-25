@@ -60,6 +60,25 @@ const dialogueExemplarSchema = z.object({
   line: z.string().min(2),
 });
 
+export const SignatureSfxEventSchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  label: z.string().min(2).max(80),
+  prompt: z.string().min(10).max(300),
+  duration_seconds: z.number().min(1).max(3),
+  start_ms: z.number().int().min(0).max(4999),
+  gain_db: z.number().min(-24).max(12),
+});
+
+export const ThemeProfileSchema = z.object({
+  style_anchor: z.string().min(3).max(180),
+  mood: z.string().min(3).max(120),
+  instruments: z.array(z.string().min(2).max(80)).min(2).max(4),
+  opening: z.string().min(3).max(180),
+  build: z.string().min(3).max(180),
+  emotional_turn: z.string().min(3).max(180),
+  ending: z.string().min(3).max(180),
+});
+
 export const CharacterCardV2Schema = z.object({
   version: z.literal(CHARACTER_CARD_VERSION),
   consumer_tags: z.record(z.string(), consumers).superRefine((tags, context) => {
@@ -108,10 +127,19 @@ export const CharacterCardV2Schema = z.object({
   }),
   dramatic_engine: z.string().min(2),
   story_grammar: z.string().min(2),
+  /**
+   * Additive and optional so stored v2 cards continue to parse. Legacy cards
+   * use Character.sfxDesc until a maker explicitly authors atomic events.
+   */
+  signature_sfx_events: z.array(SignatureSfxEventSchema).min(2).max(4).optional(),
+  /** Natural-language music direction; legacy cards fall back to themeDesc. */
+  theme_profile: ThemeProfileSchema.optional(),
 });
 
 export type CharacterCardV2 = z.infer<typeof CharacterCardV2Schema>;
 export type CharacterCardVoiceSlot = z.infer<typeof voiceSlotSchema>;
+export type SignatureSfxEvent = z.infer<typeof SignatureSfxEventSchema>;
+export type ThemeProfile = z.infer<typeof ThemeProfileSchema>;
 
 /** Explicit per-field routing. Builders use this as an auditable contract. */
 export const CHARACTER_CARD_V2_ROUTING: Record<string, readonly CardConsumer[]> = {
@@ -126,6 +154,8 @@ export const CHARACTER_CARD_V2_ROUTING: Record<string, readonly CardConsumer[]> 
   persona_card: ["dialogue"],
   dramatic_engine: ["writing"],
   story_grammar: ["writing"],
+  signature_sfx_events: ["sfx"],
+  theme_profile: ["music"],
 };
 
 export type CardSceneInput = {

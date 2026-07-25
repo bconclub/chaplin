@@ -28,6 +28,15 @@ import {
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
 import { requireRequestIdentity } from "@/lib/server/auth";
 import { assertPromptConsistency, readCharacterCardV2 } from "@/lib/character-card";
+import {
+  assertSignatureSfxPrompt,
+  assertThemePromptV2,
+  composeSignatureSfxEventPrompt,
+  isThemeDurationPreset,
+  withThemeDurationDirection,
+} from "@/lib/production-prompting";
+import { assembleSignatureSfx } from "@/lib/server/signature-sfx";
+import { enforceThemeDuration } from "@/lib/server/audio-postprocess";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -74,7 +83,7 @@ function requireStage(stage: PipelineStageConfig, label: string) {
 
 function stageForGenerationAction(action: string): PipelineStageId | null {
   if (["voice-design", "voice-save", "speech"].includes(action)) return "voice";
-  if (action === "sfx") return "sfx";
+  if (action === "sfx" || action === "signature-sfx") return "sfx";
   if (action === "theme") return "theme";
   if (action === "image") return "image";
   if (action === "video") return "video";
@@ -715,6 +724,7 @@ export async function POST(request: Request) {
         text: prompt,
         duration_seconds: durationSeconds,
         prompt_influence: settingNumber(sfxConfig, "promptInfluence", 0.35),
+        loop: settingBoolean(sfxConfig, "loop", false),
         model_id: sfxConfig.model,
       });
       const bytes = await response.arrayBuffer();
@@ -736,12 +746,147 @@ export async function POST(request: Request) {
       return new Response(bytes, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", "X-Asset-Url": asset.url, "X-Asset-Id": asset.id, "X-SFX-Duration": String(durationSeconds) } });
     }
 
+    if (action === "signature-sfx") {
+      const sfxConfig = pipeline.stages.sfx;
+      requireStage(sfxConfig, "SFX");
+      const card = readCharacterCardV2(requestCharacter?.cardV2);
+      const events = card?.signature_sfx_events;
+      if (!events?.length) {
+        throw new RequestValidationError("This actor does not have structured signature SFX events. Use the legacy SFX take flow.");
+      }
+      const minimumDuration = Math.max(1, settingNumber(sfxConfig, "minimumDurationSeconds", 1));
+      const maximumDuration = Math.min(3, Math.max(minimumDuration, settingNumber(sfxConfig, "maximumDurationSeconds", 3)));
+      const promptInfluence = settingNumber(sfxConfig, "promptInfluence", 0.35);
+      const loop = settingBoolean(sfxConfig, "loop", false);
+      const generatedEvents: Array<{
+        id: string;
+        label: string;
+        assetId: string;
+        url: string;
+        startMs: number;
+        gainDb: number;
+        durationSeconds: number;
+      }> = [];
+
+      for (const event of events) {
+        const durationSeconds = Math.min(maximumDuration, Math.max(minimumDuration, event.duration_seconds));
+        const prompt = providerPrompt(sfxConfig, composeSignatureSfxEventPrompt(event), 450);
+        assertSignatureSfxPrompt(prompt);
+        const providerSettings = {
+          duration_seconds: durationSeconds,
+          prompt_influence: promptInfluence,
+          loop,
+        };
+        jobId = await startGeneration({
+          characterId,
+          kind: "sfx-event",
+          provider: sfxConfig.provider,
+          model: sfxConfig.model,
+          prompt,
+          metadata: {
+            signatureSfxRole: "event",
+            eventId: event.id,
+            startMs: event.start_ms,
+            gainDb: event.gain_db,
+            providerSettings,
+          },
+        });
+        const response = await eleven("/sound-generation?output_format=mp3_44100_128", {
+          text: prompt,
+          ...providerSettings,
+          model_id: sfxConfig.model,
+        });
+        const bytes = await response.arrayBuffer();
+        const eventMetadata = {
+          signatureSfxRole: "event",
+          eventId: event.id,
+          eventLabel: event.label,
+          startMs: event.start_ms,
+          gainDb: event.gain_db,
+          providerSettings,
+        };
+        const asset = await saveMediaAsset({
+          characterId,
+          kind: "sfx",
+          provider: "elevenlabs",
+          bytes,
+          contentType: response.headers.get("content-type") ?? "audio/mpeg",
+          prompt,
+          durationSeconds,
+          metadata: eventMetadata,
+        });
+        await completeGeneration(
+          jobId,
+          asset.id,
+          eventMetadata,
+          await calculateGenerationBilling({
+            kind: "sfx",
+            usage: {
+              inputCharacters: prompt.length,
+              durationSeconds,
+              providerCredits: headerNumber(response, "character-cost"),
+            },
+          }),
+          response.headers.get("request-id"),
+        );
+        generatedEvents.push({
+          id: event.id,
+          label: event.label,
+          assetId: asset.id,
+          url: asset.url,
+          startMs: event.start_ms,
+          gainDb: event.gain_db,
+          durationSeconds,
+        });
+      }
+
+      // All paid provider jobs are already complete. Assembly is a separate,
+      // local operation and must not rewrite a successful provider job.
+      jobId = undefined;
+      const signature = await assembleSignatureSfx({
+        characterId,
+        timeline: generatedEvents.map((event) => ({
+          assetId: event.assetId,
+          startMs: event.startMs,
+          gainDb: event.gainDb,
+        })),
+      });
+      return Response.json({
+        url: signature.url,
+        assetId: signature.id,
+        durationSeconds: signature.durationSeconds,
+        events: generatedEvents,
+      });
+    }
+
     if (action === "theme") {
       const themeConfig = pipeline.stages.theme;
       requireStage(themeConfig, "Theme");
-      const prompt = directedPrompt(themeConfig, text(input, "prompt", 10, 1000));
-      const durationSeconds = settingNumber(themeConfig, "durationSeconds", 12);
-      jobId = await startGeneration({ characterId, kind: "theme", provider: themeConfig.provider, model: themeConfig.model, prompt });
+      const configuredDuration = settingNumber(themeConfig, "durationSeconds", 8);
+      const requestedDuration = input.durationSeconds == null ? configuredDuration : Number(input.durationSeconds);
+      if (!isThemeDurationPreset(requestedDuration)) {
+        throw new RequestValidationError("Theme duration must be one of 5, 8, or 15 seconds.");
+      }
+      const durationSeconds = requestedDuration;
+      const prompt = withThemeDurationDirection(
+        directedPrompt(themeConfig, text(input, "prompt", 10, 1000)),
+        durationSeconds,
+      );
+      if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+      const generationMetadata = {
+        grammarVersion: "v2",
+        requestedDurationSeconds: durationSeconds,
+        providerDurationParameter: "music_length_ms",
+        providerDurationMilliseconds: durationSeconds * 1000,
+      };
+      jobId = await startGeneration({
+        characterId,
+        kind: "theme",
+        provider: themeConfig.provider,
+        model: themeConfig.model,
+        prompt,
+        metadata: generationMetadata,
+      });
       const response = await eleven("/music?output_format=mp3_44100_128", {
         prompt,
         music_length_ms: durationSeconds * 1000,
@@ -749,32 +894,47 @@ export async function POST(request: Request) {
         force_instrumental: settingBoolean(themeConfig, "forceInstrumental", true),
         sign_with_c2pa: settingBoolean(themeConfig, "signWithC2pa", false),
       });
-      const bytes = await response.arrayBuffer();
+      const delivered = await enforceThemeDuration(await response.arrayBuffer(), durationSeconds);
+      const durationMetadata = {
+        ...generationMetadata,
+        originalDurationSeconds: delivered.originalDurationSeconds,
+        deliveredDurationSeconds: delivered.deliveredDurationSeconds,
+        durationTrimmed: delivered.trimmed,
+        fadeOutMilliseconds: delivered.fadeOutMilliseconds,
+      };
       const asset = await saveMediaAsset({
         characterId,
         kind: "theme",
         provider: "elevenlabs",
-        bytes,
+        bytes: delivered.bytes,
         contentType: response.headers.get("content-type") ?? "audio/mpeg",
         prompt,
-        durationSeconds,
-        metadata: { songId: response.headers.get("song-id") },
+        durationSeconds: delivered.deliveredDurationSeconds,
+        metadata: { songId: response.headers.get("song-id"), ...durationMetadata },
       });
       await completeGeneration(
         jobId,
         asset.id,
-        { songId: response.headers.get("song-id") },
+        { songId: response.headers.get("song-id"), ...durationMetadata },
         await calculateGenerationBilling({
           kind: "theme",
           usage: {
             inputCharacters: prompt.length,
-            durationSeconds,
+            durationSeconds: delivered.originalDurationSeconds,
             providerCredits: headerNumber(response, "character-cost"),
           },
         }),
         response.headers.get("request-id") ?? response.headers.get("song-id")
       );
-      return new Response(bytes, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", "X-Asset-Url": asset.url } });
+      return new Response(delivered.bytes, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": "no-store",
+          "X-Asset-Url": asset.url,
+          "X-Theme-Original-Duration": String(delivered.originalDurationSeconds),
+          "X-Theme-Delivered-Duration": String(delivered.deliveredDurationSeconds),
+        },
+      });
     }
 
     if (action === "image") {

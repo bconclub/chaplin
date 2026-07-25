@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, WheelEvent } from "react";
 import type { Character } from "@/lib/types";
 import { useChaplinStore } from "@/lib/store";
 import MediaPlayer from "@/components/MediaPlayer";
@@ -70,6 +71,10 @@ type ProviderStatus = {
       sfx?: {
         settings?: Record<string, string | number | boolean>;
       };
+      theme?: {
+        model?: string;
+        settings?: Record<string, string | number | boolean>;
+      };
       image?: {
         provider?: string;
         model?: string;
@@ -106,6 +111,7 @@ type ImageCandidate = {
   provider: "openai" | "byteplus";
   model: string;
 };
+type ImageProviderKey = ImageCandidate["provider"];
 type QuickWriteField =
   | "voice-description"
   | "voice-preview"
@@ -115,6 +121,22 @@ type QuickWriteField =
   | "identity-image"
   | "image"
   | "video";
+type QuickWriteStreamEvent = {
+  type?: "delta" | "done";
+  text?: string;
+  provider?: string;
+  warning?: string;
+};
+
+async function revealTextProgressively(text: string, update: (value: string) => void) {
+  const pieces = text.match(/\S+\s*/g) ?? [text];
+  let visible = "";
+  for (const piece of pieces) {
+    visible += piece;
+    update(visible);
+    await new Promise((resolve) => window.setTimeout(resolve, 18));
+  }
+}
 
 const WORKFLOW_STEPS = [
   { id: 1, stage: "voice", label: "Voice", title: "Define the voice" },
@@ -154,6 +176,11 @@ const VOICE_BUILD_STAGES = [
 ] as const;
 
 const GENERATION_TIMELINES = {
+  "voice-build": {
+    title: "Building the actor voice",
+    expectedSeconds: 45,
+    stages: ["Read identity", "Direct performance", "Create takes", "Prepare review"],
+  },
   "magic-scene": {
     title: "Directing the complete scene",
     expectedSeconds: 35,
@@ -199,12 +226,61 @@ type GenerationRun = {
   error?: string;
 };
 
+const PRODUCTION_TASK_TO_STEP: Record<string, number> = {
+  "voice-build": 1,
+  "voice-save": 1,
+  speech: 2,
+  sfx: 3,
+  "sfx-select": 3,
+  theme: 4,
+  image: 5,
+  "image-select": 5,
+  upload: 5,
+  video: 6,
+};
+
+const QUICK_WRITE_TO_STEP: Record<string, number> = {
+  "voice-description": 1,
+  "voice-preview": 1,
+  dialogue: 2,
+  sfx: 3,
+  theme: 4,
+  "identity-image": 5,
+  image: 5,
+  video: 6,
+};
+
+function estimatedGenerationProgress(run: GenerationRun) {
+  const timeline = GENERATION_TIMELINES[run.key];
+  if (run.status === "complete") return 100;
+  if (run.status === "failed") {
+    return Math.min(99, Math.max(8, Math.round((run.elapsedSeconds / timeline.expectedSeconds) * 88)));
+  }
+  return Math.min(94, Math.max(6, Math.round(6 + (run.elapsedSeconds / timeline.expectedSeconds) * 86)));
+}
+
 const SFX_VARIATIONS = [
   { label: "Raw material", direction: "Use one close, dry physical action only. Prioritize the initial contact and material grain; no tonal ring, musical contour, reverb, or second beat." },
   { label: "Resonant detail", direction: "Use the same signature source but reveal a clearly different material resonance: one unusual texture, a short natural decay, and no repeated attack." },
   { label: "Kinetic release", direction: "Make this a fast pressure-release or compact movement version of the source: a sharper transient, controlled air movement, and an immediate stop." },
   { label: "Two-part reveal", direction: "Create a deliberately distinct two-part punctuation: a small preparatory micro-detail followed by one decisive physical hit, then silence. Keep it non-musical." },
 ] as const;
+
+const THEME_DURATION_PRESETS = [5, 8, 15] as const;
+type ThemeDurationPreset = typeof THEME_DURATION_PRESETS[number];
+
+function themeDurationPreset(value: unknown): ThemeDurationPreset {
+  const duration = Number(value);
+  return THEME_DURATION_PRESETS.includes(duration as ThemeDurationPreset)
+    ? duration as ThemeDurationPreset
+    : 8;
+}
+
+function characterSignatureSfxEventCount(character: Character) {
+  if (!character.cardV2 || typeof character.cardV2 !== "object") return 0;
+  const events = (character.cardV2 as unknown as Record<string, unknown>).signature_sfx_events;
+  return Array.isArray(events) ? Math.min(4, events.length) : 0;
+}
 
 const SEEDANCE_SETUP_URL = "https://docs.byteplus.com/en/docs/ModelArk/2291680";
 
@@ -258,11 +334,7 @@ function GenerationTimeline({
   const timeline = GENERATION_TIMELINES[generationKey];
   const statusLabel = run.status === "complete" ? "Ready to review" : run.status === "failed" ? "Needs attention" : "Working";
   const expectedSeconds = timeline.expectedSeconds;
-  const estimatedProgress = run.status === "complete"
-    ? 100
-    : run.status === "failed"
-      ? Math.min(99, Math.max(8, Math.round((run.elapsedSeconds / expectedSeconds) * 88)))
-      : Math.min(94, Math.max(6, Math.round(6 + (run.elapsedSeconds / expectedSeconds) * 86)));
+  const estimatedProgress = estimatedGenerationProgress(run);
   const activeStage = run.status === "complete"
     ? timeline.stages.length - 1
     : Math.min(timeline.stages.length - 1, Math.floor((estimatedProgress / 100) * timeline.stages.length));
@@ -356,6 +428,7 @@ export default function CharacterProductionStudio({
   const [themePrompt, setThemePrompt] = useState(
     initialScene.theme
   );
+  const [themeDurationSeconds, setThemeDurationSeconds] = useState<ThemeDurationPreset>(8);
   const [themeUrl, setThemeUrl] = useState("");
   const [imagePurpose, setImagePurpose] = useState<ImagePurpose>("identity");
   const [imagePrompt, setImagePrompt] = useState(composeIdentityImagePrompt(character));
@@ -363,6 +436,7 @@ export default function CharacterProductionStudio({
     initialScene.video
   );
   const [imageCandidates, setImageCandidates] = useState<ImageCandidate[]>([]);
+  const [imageProviderErrors, setImageProviderErrors] = useState<Partial<Record<ImageProviderKey, string>>>({});
   const [selectedImageAssetId, setSelectedImageAssetId] = useState("");
   const [generatedImage, setGeneratedImage] = useState("");
   const [canonicalReferenceImage, setCanonicalReferenceImage] = useState("");
@@ -401,8 +475,44 @@ export default function CharacterProductionStudio({
   function jumpToStep(stepId: number) {
     setActiveStep(stepId);
     window.requestAnimationFrame(() => {
-      workflowContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      workflowContentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     });
+  }
+
+  function advanceAfterCompletion(stepId: number) {
+    window.setTimeout(() => jumpToStep(stepId), 320);
+  }
+
+  function scrollWorkspacePanel(event: WheelEvent<HTMLElement>) {
+    const panel = event.currentTarget;
+    if (panel.scrollHeight <= panel.clientHeight || event.deltaY === 0) return;
+    panel.scrollTop = Math.max(
+      0,
+      Math.min(panel.scrollHeight - panel.clientHeight, panel.scrollTop + event.deltaY),
+    );
+    event.stopPropagation();
+  }
+
+  function scrollWorkspacePanelWithKeyboard(event: KeyboardEvent<HTMLElement>) {
+    const panel = event.currentTarget;
+    if (panel.scrollHeight <= panel.clientHeight) return;
+    const page = Math.max(120, Math.round(panel.clientHeight * 0.8));
+    const next = event.key === "PageDown"
+      ? panel.scrollTop + page
+      : event.key === "PageUp"
+        ? panel.scrollTop - page
+        : event.key === "ArrowDown"
+          ? panel.scrollTop + 48
+          : event.key === "ArrowUp"
+            ? panel.scrollTop - 48
+            : event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? panel.scrollHeight
+                : null;
+    if (next === null) return;
+    event.preventDefault();
+    panel.scrollTop = Math.max(0, Math.min(panel.scrollHeight - panel.clientHeight, next));
   }
 
   useEffect(() => {
@@ -410,6 +520,7 @@ export default function CharacterProductionStudio({
       .then((response) => response.json())
       .then((data: ProviderStatus) => {
         setStatus(data);
+        setThemeDurationSeconds(themeDurationPreset(data.pipeline?.stages?.theme?.settings?.durationSeconds));
         const production = data.production;
         if (!production) return;
         const assets = production.assets ?? [];
@@ -516,6 +627,8 @@ export default function CharacterProductionStudio({
     currentText: string,
     update: (value: string) => void
   ) {
+    const writingStep = QUICK_WRITE_TO_STEP[field];
+    if (writingStep) jumpToStep(writingStep);
     setQuickWriting(field);
     setMessage("");
     quickWriteRevisionRef.current += 1;
@@ -528,6 +641,7 @@ export default function CharacterProductionStudio({
           field,
           currentText,
           variation,
+          stream: true,
           character,
           referenceImage: field === "video" ? videoReferenceImage : identityReferenceImage,
           context: {
@@ -542,9 +656,53 @@ export default function CharacterProductionStudio({
         }),
       });
       if (!response.ok) throw new Error(await errorFrom(response));
+      if (response.headers.get("content-type")?.includes("application/x-ndjson") && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamedText = "";
+        let finalEvent: QuickWriteStreamEvent | null = null;
+        update("");
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event = JSON.parse(line) as QuickWriteStreamEvent;
+            if (event.type === "delta" && event.text) {
+              streamedText += event.text;
+              update(streamedText);
+            }
+            if (event.type === "done") {
+              finalEvent = event;
+            }
+          }
+          if (done) break;
+        }
+        if (buffer.trim()) {
+          const event = JSON.parse(buffer) as QuickWriteStreamEvent;
+          if (event.type === "done") {
+            finalEvent = event;
+          }
+        }
+        if (!finalEvent?.text) throw new Error("Quick Write stream ended without a completed field.");
+        if (streamedText) {
+          update(finalEvent.text);
+        } else {
+          await revealTextProgressively(finalEvent.text, update);
+        }
+        setMessage(
+          finalEvent.warning || (finalEvent.provider === "anthropic"
+            ? "Claude streamed this rewrite using the actor's complete identity."
+            : "Quick Write streamed a local fallback.")
+        );
+        return;
+      }
       const data = await response.json() as { text?: string; provider?: string; warning?: string };
       if (!data.text) throw new Error("Quick Write returned no text.");
-      update(data.text);
+      await revealTextProgressively(data.text, update);
       setMessage(
         data.warning || (data.provider === "anthropic"
           ? "Claude rewrote this field using the actor's complete identity."
@@ -606,12 +764,12 @@ export default function CharacterProductionStudio({
     return persistentUrl ?? URL.createObjectURL(await response.blob());
   }
 
-  async function generateSfxTake(prompt: string) {
+  async function generateSfxTake(prompt: string, durationSeconds: number) {
     await ensureCharacterIsSaved();
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "sfx", characterId: character.id, character, prompt, durationSeconds: 1.5 }),
+      body: JSON.stringify({ action: "sfx", characterId: character.id, character, prompt, durationSeconds }),
     });
     if (!response.ok) throw new Error(await errorFrom(response));
     const url = response.headers.get("X-Asset-Url") ?? URL.createObjectURL(await response.blob());
@@ -622,6 +780,8 @@ export default function CharacterProductionStudio({
 
   async function run(label: string, task: () => Promise<void>) {
     const hasTimeline = label in GENERATION_TIMELINES;
+    const taskStep = label === "magic-scene" ? activeStep : PRODUCTION_TASK_TO_STEP[label];
+    if (taskStep) jumpToStep(taskStep);
     setBusy(label);
     setMessage("");
     if (hasTimeline) {
@@ -709,6 +869,7 @@ export default function CharacterProductionStudio({
           ? `${character.name}'s voice was already locked. It is ready for dialogue.`
           : `Voice locked to ${character.name}. Every future line can now use the same voice ID.`
       );
+      advanceAfterCompletion(2);
     });
   }
 
@@ -721,19 +882,36 @@ export default function CharacterProductionStudio({
       setSpeechUrl(await audioAction("speech", { speechText }));
       await refreshHistory();
       setMessage("Dialogue generated from the server-verified locked voice in continuity mode.");
+      advanceAfterCompletion(3);
     });
   }
 
   function generateSfx() {
     void run("sfx", async () => {
       setSfxCandidates([]);
+      const eventCount = characterSignatureSfxEventCount(character);
+      if (eventCount > 0) {
+        const signature = await jsonAction("signature-sfx", {}) as {
+          url?: string;
+          assetId?: string;
+          events?: unknown[];
+        };
+        if (!signature.url) throw new Error("The assembled signature SFX returned no playable audio.");
+        setSfxUrl(signature.url);
+        await refreshHistory();
+        setMessage(
+          `${signature.events?.length ?? eventCount} atomic SFX events were generated, preserved as separate assets, and assembled into the actor’s five-second signature.`
+        );
+        advanceAfterCompletion(4);
+        return;
+      }
       const candidates: SfxCandidate[] = [];
       const requestedCount = Number(status?.pipeline?.stages?.sfx?.settings?.candidateCount ?? 4);
       const candidateCount = Math.min(SFX_VARIATIONS.length, Math.max(1, Math.round(requestedCount)));
       const durationSeconds = Number(status?.pipeline?.stages?.sfx?.settings?.durationSeconds ?? 1.5);
       for (const variation of SFX_VARIATIONS.slice(0, candidateCount)) {
         const candidatePrompt = `${sfxPrompt} ${variation.direction} Total duration ${durationSeconds} seconds.`;
-        const generated = await generateSfxTake(candidatePrompt);
+        const generated = await generateSfxTake(candidatePrompt, durationSeconds);
         candidates.push({ ...variation, ...generated });
         setSfxCandidates([...candidates]);
       }
@@ -749,47 +927,83 @@ export default function CharacterProductionStudio({
       await refreshHistory();
       window.dispatchEvent(new CustomEvent("chaplin:media-updated", { detail: { characterId: character.id } }));
       setMessage(`${candidate.label} is now ${character.name}'s reusable signature SFX.`);
+      advanceAfterCompletion(4);
     });
   }
 
   function generateTheme() {
     void run("theme", async () => {
-      setThemeUrl(await audioAction("theme", { prompt: themePrompt }));
+      setThemeUrl(await audioAction("theme", {
+        prompt: themePrompt,
+        durationSeconds: themeDurationSeconds,
+        grammarVersion: "v2",
+      }));
       await refreshHistory();
-      setMessage("The actor theme was generated, archived to the CDN, and added to the public Sound Profile.");
+      setMessage(
+        themeUrl
+          ? "A new theme was generated with the v2 production brief. The earlier theme remains in the asset history."
+          : "The actor theme was generated with the v2 production brief, archived to the CDN, and added to the public Sound Profile."
+      );
+      advanceAfterCompletion(5);
     });
   }
 
   function generateImage() {
     void run("image", async () => {
       setImageCandidates([]);
+      setImageProviderErrors({});
       setSelectedImageAssetId("");
-      const requests: Array<Promise<ImageCandidate>> = [];
+      const requests: Array<{ provider: ImageProviderKey; result: Promise<ImageCandidate> }> = [];
       if (gptImageReady) {
-        requests.push(jsonAction("image", {
-          prompt: imagePrompt,
-          imagePurpose,
-          referenceImage: identityReferenceImage,
-          imagePreset: "gpt-image-2",
-        }) as Promise<ImageCandidate>);
+        requests.push({
+          provider: "openai",
+          result: jsonAction("image", {
+            prompt: imagePrompt,
+            imagePurpose,
+            referenceImage: identityReferenceImage,
+            imagePreset: "gpt-image-2",
+          }) as Promise<ImageCandidate>,
+        });
       }
       if (dolaImageReady) {
-        requests.push(jsonAction("image", {
-          prompt: imagePrompt,
-          imagePurpose,
-          referenceImage: identityReferenceImage,
-          imagePreset: "dola-seedream-5",
-        }) as Promise<ImageCandidate>);
+        requests.push({
+          provider: "byteplus",
+          result: jsonAction("image", {
+            prompt: imagePrompt,
+            imagePurpose,
+            referenceImage: identityReferenceImage,
+            imagePreset: "dola-seedream-5",
+          }) as Promise<ImageCandidate>,
+        });
       }
       if (!requests.length) throw new Error("Connect an image provider before generating a still.");
-      const results = await Promise.all(requests);
+      const settled = await Promise.allSettled(requests.map((request) => request.result));
+      const results: ImageCandidate[] = [];
+      const failures: Partial<Record<ImageProviderKey, string>> = {};
+      settled.forEach((result, index) => {
+        const provider = requests[index].provider;
+        if (result.status === "fulfilled") {
+          results.push(result.value);
+          return;
+        }
+        failures[provider] = result.reason instanceof Error
+          ? result.reason.message
+          : "This provider did not return an image.";
+      });
+      setImageProviderErrors(failures);
+      if (!results.length) {
+        throw new Error(Object.values(failures).join(" ") || "Neither image provider returned a still.");
+      }
       setImageCandidates(results);
       results.forEach((candidate) => addCharacterImage(character.id, candidate.url));
       await refreshHistory();
       const providers = results.map((candidate) => candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5").join(" and ");
-      setMessage(imagePurpose === "identity"
+      const comparisonStatus = Object.keys(failures).length
+        ? " One provider needs attention; its error is shown in the comparison."
+        : " Compare both interpretations before choosing.";
+      setMessage((imagePurpose === "identity"
         ? `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one to make it this actor’s canonical identity cover.`
-        : `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one as Seedance’s exact first frame.`);
+        : `${providers} ${results.length === 1 ? "is" : "are"} ready. Choose one as Seedance’s exact first frame.`) + comparisonStatus);
     });
   }
 
@@ -813,7 +1027,7 @@ export default function CharacterProductionStudio({
       setMessage(imagePurpose === "identity"
         ? `${candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5"} is now the actor’s canonical identity cover. You can move on to video when ready.`
         : `${candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5"} is now Seedance’s exact first frame.`);
-      jumpToStep(6);
+      advanceAfterCompletion(6);
     });
   }
 
@@ -840,6 +1054,7 @@ export default function CharacterProductionStudio({
       if (!character.galleryUrls?.includes(data.url)) addCharacterImage(character.id, data.url);
       await refreshHistory();
       setMessage("Reference image uploaded. It is now the actor’s canonical visual seed and Seedance’s exact first frame.");
+      advanceAfterCompletion(6);
       jumpToStep(6);
     });
   }
@@ -953,6 +1168,7 @@ export default function CharacterProductionStudio({
     Math.max(1, Math.round(Number(status?.pipeline?.stages?.sfx?.settings?.candidateCount ?? 4)))
   );
   const configuredSfxDuration = Number(status?.pipeline?.stages?.sfx?.settings?.durationSeconds ?? 1.5);
+  const signatureSfxEventCount = characterSignatureSfxEventCount(character);
   const activeStepMeta = WORKFLOW_STEPS.find((step) => step.id === activeStep) ?? WORKFLOW_STEPS[0];
   const completedSteps = new Set<number>([
     ...(lockedVoiceId ? [1] : []),
@@ -962,6 +1178,33 @@ export default function CharacterProductionStudio({
     ...(generatedImage || identityReferenceImage ? [5] : []),
     ...(generatedVideo || character.videoUrl ? [6] : []),
   ]);
+  const reviewSteps = new Set<number>([
+    ...(previews.length > 0 && !lockedVoiceId ? [1] : []),
+    ...(sfxCandidates.length > 0 && !sfxUrl ? [3] : []),
+    ...(imageCandidates.length > 0 && !selectedImageAssetId ? [5] : []),
+  ]);
+  const processingStep = busy
+    ? (busy === "magic-scene" ? activeStep : PRODUCTION_TASK_TO_STEP[busy] ?? activeStep)
+    : quickWriting
+      ? QUICK_WRITE_TO_STEP[quickWriting] ?? activeStep
+      : null;
+
+  function progressForStep(stepId: number) {
+    if (processingStep === stepId) {
+      if (stepId === 1 && voiceBuildStage !== null) {
+        return VOICE_BUILD_STAGES[voiceBuildStage].progress;
+      }
+      if (generationRun?.status === "running") {
+        const runStep = generationRun.key === "magic-scene"
+          ? activeStep
+          : PRODUCTION_TASK_TO_STEP[generationRun.key];
+        if (runStep === stepId) return estimatedGenerationProgress(generationRun);
+      }
+      return 54;
+    }
+    if (reviewSteps.has(stepId)) return 100;
+    return completedSteps.has(stepId) ? 100 : 0;
+  }
 
   return (
     <section data-production-workflow className="character-production-room">
@@ -974,9 +1217,11 @@ export default function CharacterProductionStudio({
           {WORKFLOW_STEPS.map((step) => {
             const complete = completedSteps.has(step.id);
             const active = activeStep === step.id;
+            const processing = processingStep === step.id;
             return (
-              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`min-w-20 flex-1 rounded-md px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-[0.08em] ${active ? "bg-accent text-white" : complete ? "bg-emerald-400/10 text-emerald-300" : "text-grey hover:bg-white/[0.04] hover:text-ink"}`}>
-                <span className="mr-1 opacity-60">{step.id}</span>{step.label}{complete && <span className="ml-1">✓</span>}
+              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`relative min-w-20 flex-1 overflow-hidden rounded-md px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-[0.08em] ${processing ? "bg-accent text-white shadow-[0_0_24px_rgba(242,78,112,.22)]" : active ? "bg-accent/15 text-accent" : complete ? "bg-emerald-400/10 text-emerald-300" : "text-grey hover:bg-white/[0.04] hover:text-ink"}`}>
+                <span className="mr-1 opacity-60">{step.id}</span>{step.label}{complete && !processing && <span className="ml-1">✓</span>}
+                {processing && <span className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse bg-white/80" />}
               </button>
             );
           })}
@@ -987,6 +1232,10 @@ export default function CharacterProductionStudio({
       <aside
         className="studio-production-rail border-b border-line bg-[#0a0f0c] px-3 py-3 lg:border-b-0 lg:border-r"
         data-production-task-rail
+        data-lenis-prevent
+        tabIndex={0}
+        onWheel={scrollWorkspacePanel}
+        onKeyDown={scrollWorkspacePanelWithKeyboard}
       >
         <div className="flex items-center justify-between px-1">
           <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">Stages</span>
@@ -996,23 +1245,90 @@ export default function CharacterProductionStudio({
           {WORKFLOW_STEPS.map((step) => {
             const isActive = step.id === activeStep;
             const isComplete = completedSteps.has(step.id);
+            const isProcessing = processingStep === step.id;
+            const showsComplete = isComplete && !isProcessing;
+            const isReview = reviewSteps.has(step.id) && !isProcessing && !showsComplete;
+            const progress = progressForStep(step.id);
+            const statusLabel = isProcessing
+              ? `${progress}%`
+              : showsComplete
+                ? "Ready"
+                : isReview
+                  ? "Review"
+                : isActive
+                  ? "Current"
+                  : "Queued";
             return (
               <button
                 key={step.id}
                 type="button"
                 onClick={() => jumpToStep(step.id)}
-                className={`group flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2.5 text-left transition-colors ${isActive ? "border-accent bg-accent/10" : "border-transparent hover:border-line hover:bg-white/[0.03]"}`}
+                className={`group min-w-0 rounded-md border px-2.5 py-2.5 text-left transition-all ${
+                  isProcessing
+                    ? "border-accent bg-accent/10 shadow-[0_0_24px_rgba(242,78,112,.12)]"
+                    : showsComplete
+                      ? "border-emerald-400/30 bg-emerald-400/[0.055]"
+                      : isReview
+                        ? "border-accent-secondary/45 bg-accent-secondary/[0.06]"
+                      : isActive
+                        ? "border-accent/50 bg-accent/[0.055]"
+                        : "border-transparent hover:border-line hover:bg-white/[0.03]"
+                }`}
                 aria-current={isActive ? "step" : undefined}
-                aria-label={`${step.id}. ${step.title}${isComplete ? ", complete" : ""}`}
+                aria-label={`${step.id}. ${step.title}, ${statusLabel}`}
                 data-production-step-jump={step.stage}
+                data-production-process={showsComplete ? "complete" : isProcessing ? "running" : isReview ? "review" : isActive ? "current" : "queued"}
               >
-                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-                  isActive ? "bg-accent text-white" : isComplete ? "bg-emerald-400/15 text-emerald-300" : "bg-white/[0.04] text-grey"
-                }`}>{isComplete && !isActive ? "✓" : step.id}</span>
-                <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${
-                  isActive ? "text-ink" : isComplete ? "text-accent-secondary" : "text-grey"
-                }`}>
-                  {step.label}
+                <span className="flex items-center gap-2">
+                  <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                    {!showsComplete && (
+                      <span className={`absolute inset-0 rounded-full border ${
+                        isProcessing
+                          ? "animate-spin border-accent/20 border-t-accent border-r-accent-secondary shadow-[0_0_16px_rgba(242,78,112,.32)] [animation-duration:.9s]"
+                          : isReview
+                            ? "animate-pulse border-accent-secondary/40 border-t-accent-secondary shadow-[0_0_14px_rgba(45,212,191,.25)]"
+                          : isActive
+                            ? "animate-spin border-accent/15 border-t-accent/75 [animation-duration:1.8s]"
+                            : "animate-spin border-white/[0.07] border-t-accent-secondary/45 [animation-duration:3.4s]"
+                      }`} />
+                    )}
+                    {showsComplete && (
+                      <span className="absolute inset-0 rounded-full border border-emerald-300 bg-emerald-400/15 shadow-[0_0_16px_rgba(52,211,153,.48)]" />
+                    )}
+                    <span className={`relative text-[9px] font-bold ${
+                      showsComplete ? "text-emerald-200" : isProcessing ? "text-white" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
+                    }`}>
+                      {showsComplete ? "✓" : step.id}
+                    </span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                      showsComplete ? "text-emerald-200" : isProcessing ? "text-ink" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
+                    }`}>
+                      {step.label}
+                    </span>
+                    <span className={`mt-0.5 block text-[8px] ${
+                      showsComplete ? "text-emerald-400" : isProcessing ? "text-accent" : isReview ? "text-accent-secondary" : "text-grey/60"
+                    }`}>
+                      {statusLabel}
+                    </span>
+                  </span>
+                </span>
+                <span className="relative mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.07]">
+                  {showsComplete || isProcessing || isReview ? (
+                    <span
+                      className={`block h-full rounded-full transition-[width] duration-700 ${
+                        showsComplete
+                          ? "bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,.9)]"
+                          : isReview
+                            ? "bg-accent-secondary shadow-[0_0_10px_rgba(45,212,191,.7)]"
+                          : "bg-gradient-to-r from-accent to-accent-secondary shadow-[0_0_10px_rgba(242,78,112,.7)]"
+                      }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  ) : (
+                    <span className="studio-queued-timeline absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-accent-secondary/55 to-transparent" />
+                  )}
                 </span>
               </button>
             );
@@ -1050,7 +1366,15 @@ export default function CharacterProductionStudio({
         )}
       </aside>
 
-      <div ref={workflowContentRef} className="studio-production-content scroll-mt-24 p-4 sm:p-5 flex flex-col gap-5">
+      <div
+        ref={workflowContentRef}
+        className="studio-production-content flex flex-col gap-5 p-4 sm:p-5"
+        data-lenis-prevent
+        tabIndex={0}
+        aria-label={`${activeStepMeta.label} production controls`}
+        onWheel={scrollWorkspacePanel}
+        onKeyDown={scrollWorkspacePanelWithKeyboard}
+      >
         {seedModelsNeedActivation && (
           <div className="rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1389,10 +1713,18 @@ export default function CharacterProductionStudio({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button onClick={generateSfx} disabled={!elevenReady || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "sfx"
-                ? `Creating take ${Math.min(sfxCandidates.length + 1, configuredSfxCount)} of ${configuredSfxCount}...`
-                : `Generate ${configuredSfxCount} short SFX ${configuredSfxCount === 1 ? "take" : "takes"}`}
+                ? signatureSfxEventCount
+                  ? `Building ${signatureSfxEventCount}-event signature...`
+                  : `Creating take ${Math.min(sfxCandidates.length + 1, configuredSfxCount)} of ${configuredSfxCount}...`
+                : signatureSfxEventCount
+                  ? "Build 5-second signature"
+                  : `Generate ${configuredSfxCount} short SFX ${configuredSfxCount === 1 ? "take" : "takes"}`}
             </button>
-            <span className="text-[10px] uppercase tracking-[0.14em] text-grey">{configuredSfxDuration}s each</span>
+            <span className="text-[10px] uppercase tracking-[0.14em] text-grey">
+              {signatureSfxEventCount
+                ? `${signatureSfxEventCount} atomic events · mixed after`
+                : `${configuredSfxDuration}s each`}
+            </span>
           </div>
           <GenerationTimeline generationKey="sfx" run={generationRun} />
           {sfxCandidates.length > 0 ? (
@@ -1434,11 +1766,34 @@ export default function CharacterProductionStudio({
           </div>
           <input data-scene-field="theme" value={themePrompt} onChange={(event) => setThemePrompt(event.target.value)} className="bg-paper border border-line rounded-sm p-3 text-xs focus:outline-none focus:border-accent" />
           <div className="flex flex-wrap items-center gap-3">
-            <button onClick={generateTheme} disabled={!elevenReady || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
-              {busy === "theme" ? "Composing theme..." : "Generate 12-second theme"}
+            <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-grey">
+              Duration
+              <select
+                value={themeDurationSeconds}
+                onChange={(event) => setThemeDurationSeconds(themeDurationPreset(event.target.value))}
+                disabled={Boolean(busy)}
+                className="rounded-sm border border-line bg-paper px-2 py-2 text-xs font-semibold text-ink outline-none focus:border-accent disabled:opacity-40"
+                aria-label="Theme duration"
+              >
+                {THEME_DURATION_PRESETS.map((seconds) => (
+                  <option key={seconds} value={seconds}>{seconds}s</option>
+                ))}
+              </select>
+            </label>
+            <button onClick={() => generateTheme()} disabled={!elevenReady || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
+              {busy === "theme"
+                ? "Composing theme..."
+                : themeUrl
+                  ? "Regenerate with v2 grammar"
+                  : `Generate ${themeDurationSeconds}-second theme`}
             </button>
             {themeUrl && <div className="flex-1 min-w-64"><MediaPlayer src={themeUrl} label={`${character.name} theme`} compact /></div>}
           </div>
+          {themeUrl && (
+            <p className="text-[10px] leading-4 text-grey">
+              Regeneration is manual. The current theme stays selected until you create and approve a replacement.
+            </p>
+          )}
           <GenerationTimeline generationKey="theme" run={generationRun} />
         </div>
 
@@ -1487,10 +1842,10 @@ export default function CharacterProductionStudio({
             <textarea data-scene-field="image" value={imagePrompt} onChange={(event) => setImagePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
             <button onClick={generateImage} disabled={!imageGenerationReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "image"
-                ? "Creating stills..."
+                ? gptImageReady && dolaImageReady ? "Generating both images..." : "Generating image..."
                 : imagePurpose === "identity"
-                  ? gptImageReady && dolaImageReady ? "Generate feed seed candidates" : "Generate feed seed"
-                  : gptImageReady && dolaImageReady ? "Generate scene candidates" : "Generate scene still"}
+                  ? gptImageReady && dolaImageReady ? "Generate GPT + Seedream feed seeds" : "Generate feed seed"
+                  : gptImageReady && dolaImageReady ? "Generate GPT + Seedream scene stills" : "Generate scene still"}
             </button>
             {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
             <GenerationTimeline
@@ -1499,8 +1854,13 @@ export default function CharacterProductionStudio({
               providerLabel={gptImageReady && dolaImageReady ? "GPT Image 2 + Dola Seedream 5" : gptImageReady ? "GPT Image 2" : "Dola Seedream 5"}
               previewUrl={identityReferenceImage || undefined}
             />
-            {imageCandidates.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2" data-image-candidates>
+            {(imageCandidates.length > 0 || Object.keys(imageProviderErrors).length > 0) && (
+              <section data-image-comparison>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold">Same prompt, two image models</p>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-grey">Compare, then choose one</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2" data-image-candidates>
                 {imageCandidates.map((candidate) => {
                   const selected = selectedImageAssetId === candidate.assetId;
                   const providerLabel = candidate.provider === "openai" ? "GPT Image 2" : "Dola Seedream 5";
@@ -1512,6 +1872,7 @@ export default function CharacterProductionStudio({
                         <div>
                           <p className="text-xs font-semibold">{providerLabel}</p>
                           <p className="mt-0.5 text-[10px] text-grey">{candidate.model}</p>
+                          <p className="mt-1 text-[9px] text-grey">Same prompt · same identity reference</p>
                         </div>
                         <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent hover:bg-accent/10"}`}>
                           {busy === "image-select" && !selected ? "Choosing..." : selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use as feed seed" : "Use for video"}
@@ -1520,7 +1881,19 @@ export default function CharacterProductionStudio({
                     </article>
                   );
                 })}
-              </div>
+                {(["openai", "byteplus"] as const).map((provider) => {
+                  const error = imageProviderErrors[provider];
+                  if (!error) return null;
+                  const providerLabel = provider === "openai" ? "GPT Image 2" : "Dola Seedream 5";
+                  return (
+                    <article key={`${provider}-error`} className="rounded-sm border border-red-400/40 bg-red-500/5 p-4">
+                      <p className="text-xs font-semibold text-red-300">{providerLabel} needs attention</p>
+                      <p className="mt-2 text-[10px] leading-relaxed text-grey">{error}</p>
+                    </article>
+                  );
+                })}
+                </div>
+              </section>
             )}
             <div className="flex items-center gap-2">
               <span className="h-px bg-line flex-1" />
@@ -1692,7 +2065,13 @@ export default function CharacterProductionStudio({
 
         {message && <p className={`text-xs rounded-sm px-3 py-2 ${message.toLowerCase().includes("failed") || message.includes("not configured") ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-ink"}`}>{message}</p>}
       </div>
-      <aside className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-3 lg:flex lg:flex-col">
+      <aside
+        className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-3 lg:flex lg:flex-col"
+        data-lenis-prevent
+        tabIndex={0}
+        onWheel={scrollWorkspacePanel}
+        onKeyDown={scrollWorkspacePanelWithKeyboard}
+      >
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-xs text-accent">✦</span>
           <div>

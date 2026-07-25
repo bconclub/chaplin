@@ -132,8 +132,9 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
       settings: {
         durationSeconds: 1.5,
         minimumDurationSeconds: 0.5,
-        maximumDurationSeconds: 2,
+        maximumDurationSeconds: 3,
         promptInfluence: 0.35,
+        loop: false,
         candidateCount: 4,
       },
     },
@@ -145,7 +146,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
       temperature: null,
       maxTokens: null,
       settings: {
-        durationSeconds: 12,
+        durationSeconds: 8,
         forceInstrumental: true,
         signWithC2pa: false,
       },
@@ -212,6 +213,14 @@ export function normalizePipelineConfig(input: unknown, metadata?: {
     const settings = raw.settings && typeof raw.settings === "object" && !Array.isArray(raw.settings)
       ? { ...defaults.settings, ...raw.settings }
       : { ...defaults.settings };
+    if (id === "theme") {
+      const duration = Number(settings.durationSeconds);
+      settings.durationSeconds = [5, 8, 15].includes(duration) ? duration : 8;
+    }
+    if (id === "sfx") {
+      settings.promptInfluence = finiteNumber(settings.promptInfluence, 0.35, 0, 1);
+      settings.loop = typeof settings.loop === "boolean" ? settings.loop : false;
+    }
     stages[id] = {
       enabled: typeof raw.enabled === "boolean" ? raw.enabled : defaults.enabled,
       provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider.trim().slice(0, 80) : defaults.provider,

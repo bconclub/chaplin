@@ -7,6 +7,7 @@ import {
   buildVoiceDesignPrompt as buildCardVoiceDesignPrompt,
   readCharacterCardV2,
   selectedWardrobeState,
+  type SignatureSfxEvent,
 } from "@/lib/character-card";
 import { productIdentityLock, type ProductCard } from "@/lib/product-card";
 import { VideoType, isProductVideoType } from "@/lib/video-brief";
@@ -649,9 +650,125 @@ export function composeSfxPrompt(character: CharacterIdentityInput, sceneTexture
   return `A 1-2 second non-musical signature sound for ${character.name}: ${source}. ${sceneTexture ? `Let the material character subtly reflect ${sceneTexture}.` : "One immediate physical attack, one distinctive material detail, then a clean stop."} Dry close foreground, realistic texture, instantly recognizable at low volume. No sequence, ambience bed, speech, voice, melody, riser, or trailer braam.`;
 }
 
-export function composeThemePrompt(character: CharacterIdentityInput, dramaticBeat?: string) {
+export function signatureSfxPromptIssues(prompt: string) {
+  const issues: string[] = [];
+  if (/(?:\bthen\b|\bfollowed by\b|\bafter (?:that|it)\b|\bnext\b|(?:^|\s)\d+(?:\.\d+)?s\s*[-—:])/i.test(prompt)) {
+    issues.push("SFX prompt describes a sequence rather than one atomic event");
+  }
+  return issues;
+}
+
+export function assertSignatureSfxPrompt(prompt: string) {
+  const issues = signatureSfxPromptIssues(prompt);
+  if (!issues.length) return issues;
+  const message = `Signature SFX prompt failure: ${issues.join("; ")}`;
+  if (process.env.NODE_ENV !== "production") throw new Error(message);
+  console.warn(message);
+  return issues;
+}
+
+/** Builds one provider request. Timeline and other events are deliberately absent. */
+export function composeSignatureSfxEventPrompt(event: SignatureSfxEvent) {
+  const prompt = `${event.prompt.replace(/\s+/g, " ").trim()}. Single concrete physical event only, realistic material response in the named space, close and dry, clean stop. No sequence, ambience bed, music, or speech.`;
+  assertSignatureSfxPrompt(prompt);
+  return prompt;
+}
+
+export const THEME_DURATION_PRESETS = [5, 8, 15] as const;
+export type ThemeDurationPreset = (typeof THEME_DURATION_PRESETS)[number];
+
+export function isThemeDurationPreset(value: unknown): value is ThemeDurationPreset {
+  return typeof value === "number" && THEME_DURATION_PRESETS.some((preset) => preset === value);
+}
+
+function themeClause(value: string | undefined) {
+  if (!value) return "";
+  return value
+    .split(/[,;\n]/)
+    .map((clause) => clause.trim())
+    .filter(Boolean)
+    .filter((clause) => !(
+      /\bBPM\b/i.test(clause)
+      || /\bkey\s+of\b/i.test(clause)
+      || /\b(?:[1-9]|1[0-6])\s*\/\s*(?:2|4|8|16)\b/.test(clause)
+      || /^\s*[A-G](?:#|b)?\s+(?:major|minor)\s*$/i.test(clause)
+      || /\bmix priority\b/i.test(clause)
+      || /\b(?:5|8|12|15)\s*s\b/i.test(clause)
+      || /\b(?:\d+(?:\.\d+)?|five|eight|twelve|fifteen)[- ]+sec(?:ond)?s?\b/i.test(clause)
+    ))
+    .join(", ")
+    .replace(/\s+/g, " ")
+    .replace(/[.,;:\s]+$/, "");
+}
+
+function naturalList(values: string[]) {
+  if (values.length < 2) return values[0] ?? "";
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
+
+function sentenceStart(value: string) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+/** Add provider timing without allowing a stale cue length in an editable prompt to win. */
+export function withThemeDurationDirection(prompt: string, durationSeconds: ThemeDurationPreset) {
+  const withoutPriorTiming = prompt
+    .replace(/\babout\s+\d+(?:\.\d+)?\s+seconds?,\s*ends cleanly,\s*no fade-out\.?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .replace(/\s+([.,])/g, "$1")
+    .replace(/[.\s]+$/, "");
+  const instrumentalMarker = /\bInstrumental only,\s*no vocals\.?/i;
+  const marker = instrumentalMarker.exec(withoutPriorTiming);
+  if (!marker) {
+    return `${withoutPriorTiming}. About ${durationSeconds} seconds, ends cleanly, no fade-out. Instrumental only, no vocals.`;
+  }
+  const before = withoutPriorTiming.slice(0, marker.index).trim().replace(/[.\s]+$/, "");
+  const after = withoutPriorTiming.slice(marker.index + marker[0].length).trim().replace(/[.\s]+$/, "");
+  const productionDirection = [before, after].filter(Boolean).join(". ");
+  return `${productionDirection}. About ${durationSeconds} seconds, ends cleanly, no fade-out. Instrumental only, no vocals.`;
+}
+
+export function assertThemePromptV2(prompt: string) {
+  const forbidden = [
+    { pattern: /\bBPM\b/i, label: "BPM slot" },
+    { pattern: /\bkey\s+of\b/i, label: "key-of slot" },
+    { pattern: /\b(?:[1-9]|1[0-6])\s*\/\s*(?:2|4|8|16)\b/, label: "time-signature token" },
+  ];
+  const violation = forbidden.find(({ pattern }) => pattern.test(prompt));
+  if (violation) throw new Error(`Theme v2 prompt contains a forbidden ${violation.label}.`);
+}
+
+export function composeThemePrompt(
+  character: CharacterIdentityInput,
+  dramaticBeat?: string,
+  durationSeconds: ThemeDurationPreset = 8,
+) {
+  if (!isThemeDurationPreset(durationSeconds)) {
+    throw new Error(`Theme duration must be one of ${THEME_DURATION_PRESETS.join(", ")} seconds.`);
+  }
+  const card = readCharacterCardV2(character.cardV2);
   const bible = buildProductionBible(character);
-  return `Twelve-second instrumental-only character ident. ${character.themeDesc || "A compact original cinematic motif"}. 92 BPM, D minor. 0-3s: state one three-note motif. 3-8s: develop it with restrained percussion and one contrasting instrument. 8-12s: ${dramaticBeat || bible.story.payoffPattern}, then land on a clean unresolved final accent suitable for a cut. Front-clear motif, controlled low end, no vocals, no choir, no lyrics, no imitation of an existing composition.`;
+  const profile = card?.theme_profile;
+  const turn = themeClause(dramaticBeat) || profile?.emotional_turn || themeClause(bible.story.payoffPattern);
+  const productionBrief = profile
+    ? [
+        `${sentenceStart(themeClause(profile.style_anchor))}, ${themeClause(profile.mood)}.`,
+        `Built around ${naturalList(profile.instruments.map((instrument) => themeClause(instrument)))}.`,
+        `${sentenceStart(themeClause(profile.opening))}, ${themeClause(profile.build)}, ${themeClause(turn)}, and ${themeClause(profile.ending)}.`,
+      ].join(" ")
+    : [
+        `${themeClause(character.themeDesc) || "Intimate cinematic character theme"}, emotionally specific and fully produced.`,
+        "Piano, low strings, and restrained hand percussion.",
+        `A concise melodic gesture opens, a low pulse and contrasting texture build underneath, ${turn || "one tense accent marks the emotional turn"}, and the cue ends on a clean unresolved accent.`,
+      ].join(" ");
+  const prompt = withThemeDurationDirection(
+    `${productionBrief} No imitation of an existing composition. Instrumental only, no vocals.`,
+    durationSeconds,
+  );
+  if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+  return prompt;
 }
 
 export function composeImagePrompt(character: CharacterIdentityInput, shot: ShotBlueprint) {

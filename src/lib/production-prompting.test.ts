@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { composeProductImagePrompt, composeProductVideoPrompt, productDialogueAllowlist, type CharacterIdentityInput, type ShotBlueprint } from "@/lib/production-prompting";
+import {
+  assertSignatureSfxPrompt,
+  assertThemePromptV2,
+  composeProductImagePrompt,
+  composeProductVideoPrompt,
+  composeSignatureSfxEventPrompt,
+  composeThemePrompt,
+  productDialogueAllowlist,
+  withThemeDurationDirection,
+  type CharacterIdentityInput,
+  type ShotBlueprint,
+} from "@/lib/production-prompting";
 import { ProductCardSchema } from "@/lib/product-card";
 import { VideoType } from "@/lib/video-brief";
+import { AGNI_MAYA_CARD_V2 } from "@/lib/character-card-fixtures";
+import { buildSignatureSfxFilterGraph } from "@/lib/signature-sfx";
 
 const product = ProductCardSchema.parse({
   brand_name: "Northstar",
@@ -70,4 +83,59 @@ test("brand spot grammar requires an actor and product", () => {
 
 test("UGC dialogue allowlist never adds unapproved claims", () => {
   assert.deepEqual(productDialogueAllowlist(product, "Look what I packed.", "Pack yours."), [product.claims_allowed[0], "Look what I packed.", "Pack yours."]);
+});
+
+test("Agni Maya atomic SFX builder emits one concrete event per provider prompt", () => {
+  const event = AGNI_MAYA_CARD_V2.signature_sfx_events?.[0];
+  assert.ok(event);
+  const prompt = composeSignatureSfxEventPrompt(event);
+  assert.ok(prompt.includes(event.prompt));
+  assert.match(prompt, /single concrete physical event/i);
+  assert.doesNotMatch(prompt, /\bthen\b|\bfollowed by\b/i);
+  assert.throws(
+    () => assertSignatureSfxPrompt("A bangle rings, then cloth snaps."),
+    /sequence rather than one atomic event/,
+  );
+});
+
+test("signature SFX timeline creates independent delays and a five-second mix", () => {
+  const events = AGNI_MAYA_CARD_V2.signature_sfx_events;
+  assert.ok(events);
+  const graph = buildSignatureSfxFilterGraph(events.map((event, index) => ({
+    assetId: `asset-${index}`,
+    startMs: event.start_ms,
+    gainDb: event.gain_db,
+  })));
+  assert.match(graph, /adelay=0:all=1/);
+  assert.match(graph, /adelay=1450:all=1/);
+  assert.match(graph, /amix=inputs=4:duration=first/);
+  assert.match(graph, /atrim=0:5/);
+});
+
+test("Agni Maya theme grammar is a produced natural-language brief", () => {
+  const prompt = composeThemePrompt({
+    ...actor,
+    name: "Agni Maya",
+    cardV2: AGNI_MAYA_CARD_V2,
+    themeDesc: "92 BPM, key of D minor, 3/4, sparse single-chord piano",
+  });
+  assert.match(prompt, /Hindi film-score lullaby/i);
+  assert.match(prompt, /solo piano/i);
+  assert.match(prompt, /low cello pulse enters underneath/i);
+  assert.match(prompt, /soft taiko hit marks the turn/i);
+  assert.match(prompt, /unresolved sustained piano note/i);
+  assert.match(prompt, /About 8 seconds, ends cleanly, no fade-out/i);
+  assert.match(prompt, /Instrumental only, no vocals/i);
+  assert.doesNotMatch(prompt, /\bBPM\b|\bkey of\b|\b3\s*\/\s*4\b/i);
+});
+
+test("theme duration direction replaces prior timing and the guard rejects theory slots", () => {
+  const prompt = withThemeDurationDirection(
+    "Produced chamber cue. About 8 seconds, ends cleanly, no fade-out. Instrumental only, no vocals.",
+    15,
+  );
+  assert.equal(prompt.match(/About \d+ seconds/g)?.length, 1);
+  assert.match(prompt, /About 15 seconds, ends cleanly, no fade-out\./);
+  assert.match(prompt, /Instrumental only, no vocals\.$/);
+  assert.throws(() => assertThemePromptV2("A cue in 4/4 at 90 BPM."), /forbidden/);
 });

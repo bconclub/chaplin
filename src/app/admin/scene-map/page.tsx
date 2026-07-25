@@ -19,7 +19,7 @@ export default async function AdminSceneMapPage() {
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Super Admin · Production system</p>
           <h1 className="marquee-title text-3xl leading-tight sm:text-5xl">SCENE WIRING MAP</h1>
-          <p className="mt-2 max-w-3xl text-sm text-grey">Inspect the actor bible, every generated prompt, its active provider route, and the boundaries that keep the finished scene coherent.</p>
+          <p className="mt-2 max-w-3xl text-sm text-grey">Choose any actor to inspect and copy the private master character prompt, every generated production prompt, its active provider route, and the boundaries that keep the finished scene coherent. This screen is restricted to Super Admin.</p>
         </div>
         <AdminRefreshButton />
       </div>
