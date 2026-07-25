@@ -98,7 +98,7 @@ export default function InfiniteCharacterGallery() {
           </p>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-4 auto-rows-[minmax(0,1fr)] gap-1.5 sm:grid-cols-8 sm:gap-2" data-home-gallery-grid>
+        <div className="grid min-h-0 flex-1 grid-flow-dense grid-cols-4 auto-rows-[minmax(0,1fr)] gap-1.5 sm:grid-cols-8 sm:gap-2" data-home-gallery-grid>
           {characters.map((character) => (
             <HeroGridCard
               key={character.id}
