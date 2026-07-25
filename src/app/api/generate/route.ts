@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import type { NextRequest } from "next/server";
 import {
   beginGeneration,
   completeGeneration,
@@ -20,9 +21,12 @@ import {
   settingBoolean,
   settingNumber,
   settingString,
+  normalizePipelineConfig,
   type PipelineStageConfig,
+  type PipelineStageId,
 } from "@/lib/pipeline-config";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
+import { requireRequestIdentity } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -65,6 +69,15 @@ function modelArkKey() {
 
 function requireStage(stage: PipelineStageConfig, label: string) {
   if (!stage.enabled) throw new Error(`${label} generation is paused by Super Admin.`);
+}
+
+function stageForGenerationAction(action: string): PipelineStageId | null {
+  if (["voice-design", "voice-save", "speech"].includes(action)) return "voice";
+  if (action === "sfx") return "sfx";
+  if (action === "theme") return "theme";
+  if (action === "image") return "image";
+  if (action === "video") return "video";
+  return null;
 }
 
 function directedPrompt(stage: PipelineStageConfig, prompt: string) {
@@ -493,14 +506,49 @@ export async function POST(request: Request) {
       return Response.json(await selectCharacterSfxAsset({ characterId, assetId }));
     }
 
-    const pipeline = await getPipelineConfig();
+    let pipeline = await getPipelineConfig();
+    let experimentId: string | undefined;
+    let experimentVariantId: string | undefined;
+    if (input.pipelineExperiment && typeof input.pipelineExperiment === "object") {
+      const identity = await requireRequestIdentity(request as NextRequest);
+      if (identity.role !== "admin") throw new Error("Super Admin access is required for isolated pipeline tests.");
+      const experiment = input.pipelineExperiment as Record<string, unknown>;
+      experimentId = text(experiment, "id", 1, 100);
+      experimentVariantId = text(experiment, "variantId", 1, 40);
+      const stageId = stageForGenerationAction(action);
+      if (!stageId) throw new RequestValidationError("This generation action cannot run in Pipeline Lab.");
+      if (experiment.stage !== stageId) throw new RequestValidationError("Experiment stage does not match the requested generation action.");
+      const stageOverride = experiment.config;
+      if (!stageOverride || typeof stageOverride !== "object") {
+        throw new RequestValidationError("Pipeline Lab requires an isolated stage configuration.");
+      }
+      pipeline = normalizePipelineConfig({
+        ...pipeline,
+        stages: { ...pipeline.stages, [stageId]: stageOverride },
+      }, {
+        revision: pipeline.revision,
+        updatedAt: pipeline.updatedAt,
+        updatedBy: pipeline.updatedBy,
+      });
+    }
+    const startGeneration = (details: {
+      characterId: string;
+      kind: string;
+      provider: string;
+      model: string;
+      prompt?: string;
+    }) => beginGeneration({
+      ...details,
+      experimentId,
+      experimentVariantId,
+    });
 
     if (action === "voice-design") {
       const voiceConfig = pipeline.stages.voice;
       requireStage(voiceConfig, "Voice");
       const description = voiceDesignDescription(voiceConfig, text(input, "description", 20, 4000));
       const previewText = voiceDesignAuditionText(text(input, "previewText", 12, 1000));
-      jobId = await beginGeneration({ characterId, kind: "voice-design", provider: voiceConfig.provider, model: voiceConfig.model, prompt: description });
+      jobId = await startGeneration({ characterId, kind: "voice-design", provider: voiceConfig.provider, model: voiceConfig.model, prompt: description });
       const response = await eleven("/text-to-voice/design?output_format=mp3_44100_128", {
         voice_description: description,
         text: previewText,
@@ -531,7 +579,7 @@ export async function POST(request: Request) {
       if (currentProduction.voiceId === generatedVoiceId) {
         return Response.json({ voice_id: generatedVoiceId, already_locked: true });
       }
-      jobId = await beginGeneration({ characterId, kind: "voice-lock", provider: "elevenlabs", model: "text-to-voice", prompt: description });
+      jobId = await startGeneration({ characterId, kind: "voice-lock", provider: "elevenlabs", model: "text-to-voice", prompt: description });
       const response = await eleven("/text-to-voice", {
         voice_name: text(input, "name", 1, 100),
         voice_description: description,
@@ -567,7 +615,7 @@ export async function POST(request: Request) {
         style: settingNumber(voiceConfig, "style", DIALOGUE_VOICE_SETTINGS.style),
         use_speaker_boost: settingBoolean(voiceConfig, "speakerBoost", DIALOGUE_VOICE_SETTINGS.use_speaker_boost),
       };
-      jobId = await beginGeneration({ characterId, kind: "dialogue", provider: voiceConfig.provider, model: dialogueModel, prompt: speechText });
+      jobId = await startGeneration({ characterId, kind: "dialogue", provider: voiceConfig.provider, model: dialogueModel, prompt: speechText });
       const response = await eleven(`/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
         text: performanceText,
         model_id: dialogueModel,
@@ -626,7 +674,7 @@ export async function POST(request: Request) {
       const durationSeconds = Number.isFinite(requestedDuration)
         ? Math.min(maximumDuration, Math.max(minimumDuration, requestedDuration))
         : settingNumber(sfxConfig, "durationSeconds", 1.5);
-      jobId = await beginGeneration({ characterId, kind: "sfx", provider: sfxConfig.provider, model: sfxConfig.model, prompt });
+      jobId = await startGeneration({ characterId, kind: "sfx", provider: sfxConfig.provider, model: sfxConfig.model, prompt });
       const response = await eleven("/sound-generation?output_format=mp3_44100_128", {
         text: prompt,
         duration_seconds: durationSeconds,
@@ -657,7 +705,7 @@ export async function POST(request: Request) {
       requireStage(themeConfig, "Theme");
       const prompt = directedPrompt(themeConfig, text(input, "prompt", 10, 1000));
       const durationSeconds = settingNumber(themeConfig, "durationSeconds", 12);
-      jobId = await beginGeneration({ characterId, kind: "theme", provider: themeConfig.provider, model: themeConfig.model, prompt });
+      jobId = await startGeneration({ characterId, kind: "theme", provider: themeConfig.provider, model: themeConfig.model, prompt });
       const response = await eleven("/music?output_format=mp3_44100_128", {
         prompt,
         music_length_ms: durationSeconds * 1000,
@@ -732,7 +780,7 @@ export async function POST(request: Request) {
       const effectivePrompt = provider === "byteplus"
         ? prompt
         : `${prompt}\n\nEXCLUDE: ${exclusions}`;
-      jobId = await beginGeneration({ characterId, kind: "gallery", provider, model: imageConfig.model, prompt: effectivePrompt });
+      jobId = await startGeneration({ characterId, kind: "gallery", provider, model: imageConfig.model, prompt: effectivePrompt });
       let generated: GeneratedImage;
       if (provider === "openrouter") {
         generated = await generateWithOpenRouter(imageConfig, effectivePrompt, references);
@@ -834,7 +882,7 @@ export async function POST(request: Request) {
         referenceSource: requestedReference ? "production-approved-frame" : canonicalReference?.source ?? null,
       };
       const durationSeconds = settingNumber(videoConfig, "durationSeconds", 5);
-      jobId = await beginGeneration({ characterId, kind: "video", provider: videoConfig.provider, model: videoConfig.model, prompt });
+      jobId = await startGeneration({ characterId, kind: "video", provider: videoConfig.provider, model: videoConfig.model, prompt });
       const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
       if (reference) {
         content.push({ type: "image_url", image_url: { url: await imageInput(reference) } });

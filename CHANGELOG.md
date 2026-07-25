@@ -3,6 +3,32 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## 2026-07-25 - Creative engineering Experiment Ground
+
+- Split Super Admin tooling into Production Controls and a separate Experiment
+  Ground at `/admin/pipeline/experiments`.
+- Added persistent, isolated A/B experiments for writing, voice, SFX, theme, image,
+  and video stages.
+- Every experiment snapshots the active production revision and starts with a
+  Control and Challenger variant.
+- Added shared test input, canonical-character reference selection, editable system
+  prompt, provider, model, and complete provider-settings JSON per variant.
+- Added effective-request inspection before credits are spent.
+- Added real test execution through the selected provider while passing an isolated
+  stage override; the live pipeline configuration is never changed by a test.
+- Added experiment and variant lineage to generation jobs, including output asset,
+  cost, latency, status, error, engineer score, and notes.
+- Added side-by-side image, video, audio, voice-preview, and writing-result review.
+- Experiment media is explicitly blocked from automatic publication to the creator
+  feed.
+- Added a guarded promotion gate: a variant needs a successful result and explicit
+  winner selection before it can become the next active production revision.
+- Preserved the prior production revision in pipeline history during promotion.
+- Added protected experiment APIs, database tables, indexes, RLS, and generation-job
+  linkage; the Supabase migration was applied successfully.
+- Passed production build, TypeScript, targeted ESLint, authenticated API access,
+  authenticated page rendering, and database setup checks.
+
 ## 2026-07-25 - Character Identity OS and node workspace
 
 ### Character system
