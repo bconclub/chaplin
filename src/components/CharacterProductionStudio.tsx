@@ -377,6 +377,7 @@ export default function CharacterProductionStudio({
   const [quickWriting, setQuickWriting] = useState<QuickWriteField | null>(null);
   const [selectingAsset, setSelectingAsset] = useState("");
   const [message, setMessage] = useState("");
+  const [seedanceRetryArmed, setSeedanceRetryArmed] = useState(false);
   const workflowContentRef = useRef<HTMLDivElement | null>(null);
   const quickWriteRevisionRef = useRef(0);
   const identityReferenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
@@ -647,6 +648,7 @@ export default function CharacterProductionStudio({
           : label === "video" && modelArkHasPausedModel(rawError)
             ? "Seedance is paused by BytePlus after this account reached its inference limit. Open ModelArk setup to adjust or turn off Safe Experience Mode, then retry this exact still."
           : rawError;
+      if (label === "video" && modelArkHasPausedModel(rawError)) setSeedanceRetryArmed(false);
       if (label === "voice-build") setVoiceBuildStage(null);
       setMessage(errorMessage);
       if (hasTimeline) {
@@ -854,9 +856,15 @@ export default function CharacterProductionStudio({
       const data = (await jsonAction("video", { prompt: groundedPrompt, referenceImage: videoReferenceImage })) as { url: string };
       setGeneratedVideo(data.url);
       setCharacterVideo(character.id, data.url);
+      setSeedanceRetryArmed(false);
       await refreshHistory();
       setMessage("Five-second Seedance clip generated and attached to the actor profile.");
     });
+  }
+
+  function retrySeedanceAfterActivation() {
+    setSeedanceRetryArmed(true);
+    setMessage("Seedance is unlocked for one retry. Render the selected first frame when you are ready.");
   }
 
   function applyScenePackage(scene: ScenePackage) {
@@ -910,23 +918,27 @@ export default function CharacterProductionStudio({
   const seedanceLimitPaused =
     seedModelsFailed && /seedance|dreamina-seedance/i.test(seedModelsError) &&
       modelArkHasPausedModel(seedModelsError);
+  // Provider health records the last error. Once the creator has restored
+  // their ModelArk account, permit one fresh request instead of leaving a
+  // historical pause permanently blocking the studio.
+  const seedanceAccountPaused = seedanceLimitPaused && !seedanceRetryArmed;
   // Seedream and Seedance share the same credential but are independently
   // paused by ModelArk. Keep the still provider available if only Seedance is
   // paused, and vice versa.
-  const seedModelsReady = seedModelsConfigured && !seedanceLimitPaused;
+  const seedModelsReady = seedModelsConfigured && !seedanceAccountPaused;
   const configuredImageProvider = status?.pipeline?.stages?.image?.provider?.toLowerCase() ?? "byteplus";
   const imageProviderReady = configuredImageProvider === "openrouter"
     ? status?.openRouter ?? false
     : configuredImageProvider === "openai"
       ? status?.openAI ?? false
-      : seedModelsReady;
+      : seedModelsConfigured && !seedreamLimitPaused;
   const imageProviderLabel = configuredImageProvider === "openrouter"
     ? "OpenRouter"
     : configuredImageProvider === "openai"
       ? "GPT Image"
       : "Seedream";
   const gptImageReady = status?.openAI ?? false;
-  const dolaImageReady = seedModelsReady && !seedreamLimitPaused;
+  const dolaImageReady = seedModelsConfigured && !seedreamLimitPaused;
   const imageGenerationReady = gptImageReady || dolaImageReady;
   const imageUnavailableReason = !status
       ? "Checking image providers…"
@@ -939,7 +951,7 @@ export default function CharacterProductionStudio({
           : null;
   const videoUnavailableReason = !status
     ? "Checking the Seedance connection…"
-    : seedanceLimitPaused
+    : seedanceAccountPaused
       ? "Seedance is paused by BytePlus after this account reached its inference limit. Adjust the ModelArk account before retrying."
     : !seedModelsReady
       ? "Seedance is not ready. Check the Video stage in Super Admin, then refresh this page."
@@ -1119,15 +1131,20 @@ export default function CharacterProductionStudio({
             </a>
           </div>
         )}
-        {seedanceLimitPaused && (
+        {seedanceAccountPaused && (
           <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-red-400">Seedance is paused by BytePlus</p>
               <p className="text-xs text-grey mt-1">This account reached the model&apos;s inference limit or has Safe Experience Mode enabled. Your selected still is safe and ready—adjust the ModelArk account, then retry the same frame.</p>
             </div>
-            <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="shrink-0 rounded-full border border-red-400 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10">
-              Open ModelArk setup ↗
-            </a>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="rounded-full border border-red-400 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10">
+                Open ModelArk setup ↗
+              </a>
+              <button type="button" onClick={retrySeedanceAfterActivation} className="rounded-full border border-teal-400 px-4 py-2 text-xs font-semibold text-teal-200 hover:bg-teal-400/10">
+                I&apos;ve reactivated it — try again
+              </button>
+            </div>
           </div>
         )}
         <details className="rounded-md border border-line bg-paper/30" data-production-blueprint>
@@ -1618,7 +1635,7 @@ export default function CharacterProductionStudio({
             )}
             <textarea data-scene-field="video" value={scenePrompt} onChange={(event) => setScenePrompt(event.target.value)} rows={7} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
             <button onClick={generateVideo} disabled={!seedModelsReady || !videoReferenceImage || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
-              {seedanceLimitPaused ? "Seedance paused by BytePlus" : busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
+              {seedanceAccountPaused ? "Seedance paused by BytePlus" : busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
             </button>
             {videoUnavailableReason && (
               <div role="status" className="rounded-sm border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
@@ -1628,10 +1645,15 @@ export default function CharacterProductionStudio({
                     Go to still generation →
                   </button>
                 )}
-                {seedanceLimitPaused && (
-                  <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full border border-amber-300/50 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10">
-                    Open ModelArk setup ↗
-                  </a>
+                {seedanceAccountPaused && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <a href={SEEDANCE_SETUP_URL} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-amber-300/50 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10">
+                      Open ModelArk setup ↗
+                    </a>
+                    <button type="button" onClick={retrySeedanceAfterActivation} className="inline-flex rounded-full border border-teal-300/50 px-3 py-1.5 text-[10px] font-semibold text-teal-100 hover:bg-teal-300/10">
+                      I&apos;ve reactivated it — try again
+                    </button>
+                  </div>
                 )}
               </div>
             )}
