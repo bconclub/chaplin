@@ -343,7 +343,7 @@ export default function CharacterProductionStudio({
   }
 
   useEffect(() => {
-    fetch(`/api/generate?characterId=${encodeURIComponent(character.id)}`)
+    fetch(`/api/generate?characterId=${encodeURIComponent(character.id)}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data: ProviderStatus) => {
         setStatus(data);
@@ -594,6 +594,9 @@ export default function CharacterProductionStudio({
             }
           : current);
       }
+      // Persisted provider health can change during this run (for example a
+      // ModelArk quota pause). Refresh it before the creator tries again.
+      void refreshHistory();
     } finally {
       setBusy("");
     }
@@ -831,7 +834,18 @@ export default function CharacterProductionStudio({
     });
   }
 
-  const seedModelsReady = status?.seedModels ?? false;
+  const seedModelsConfigured = status?.seedModels ?? false;
+  const seedModelsFailed = status?.providers?.seedModels?.status === "failed";
+  const seedModelsError = status?.providers?.seedModels?.error ?? "";
+  const seedModelsNeedActivation =
+    seedModelsFailed && /not activated|activate the model/i.test(seedModelsError);
+  const seedreamLimitPaused =
+    seedModelsFailed && /dola-seedream|seedream/i.test(seedModelsError) &&
+      /inference limit|service has been paused|safe experience mode/i.test(seedModelsError);
+  // Seedream and Seedance use the same ModelArk key, but this specific 429 is
+  // a Dola Seedream model pause—not evidence that the Seedance video model is
+  // unavailable. Keep video available and remove only Dola from image choices.
+  const seedModelsReady = seedModelsConfigured;
   const configuredImageProvider = status?.pipeline?.stages?.image?.provider?.toLowerCase() ?? "byteplus";
   const imageProviderReady = configuredImageProvider === "openrouter"
     ? status?.openRouter ?? false
@@ -844,7 +858,7 @@ export default function CharacterProductionStudio({
       ? "GPT Image"
       : "Seedream";
   const gptImageReady = status?.openAI ?? false;
-  const dolaImageReady = seedModelsReady;
+  const dolaImageReady = seedModelsReady && !seedreamLimitPaused;
   const imageGenerationReady = gptImageReady || dolaImageReady;
   const imageUnavailableReason = !status
       ? "Checking image providers…"
@@ -866,9 +880,6 @@ export default function CharacterProductionStudio({
   const elevenOperational =
     status?.providers?.elevenLabs?.status === "succeeded" ||
     status?.providers?.elevenLabs?.hasSucceeded === true;
-  const seedModelsFailed = status?.providers?.seedModels?.status === "failed";
-  const seedModelsNeedActivation =
-    seedModelsFailed && /not activated|activate the model/i.test(status?.providers?.seedModels?.error ?? "");
   const configuredVideoModel = status?.pipeline?.stages?.video?.model ?? "dreamina-seedance-2-0-260128";
   const configuredSfxCount = Math.min(
     SFX_VARIATIONS.length,
@@ -902,8 +913,8 @@ export default function CharacterProductionStudio({
             <span className={`rounded-full border px-2 py-1 ${elevenOperational ? "border-emerald-500 text-emerald-600" : elevenReady ? "border-amber-400 text-amber-400" : "border-line text-grey"}`}>
               ElevenLabs {elevenOperational ? "operational" : elevenReady ? "configured" : "needs key"}
             </span>
-            <span className={`rounded-full border px-2 py-1 ${seedModelsFailed ? "border-red-500 text-red-500" : seedModelsReady ? "border-amber-400 text-amber-400" : "border-line text-grey"}`}>
-              Seed models {seedModelsNeedActivation ? "activation required" : seedModelsFailed ? "last run failed" : seedModelsReady ? "ModelArk configured" : "needs Seed API key"}
+            <span className={`rounded-full border px-2 py-1 ${seedModelsNeedActivation || seedreamLimitPaused || seedModelsFailed ? "border-red-500 text-red-500" : seedModelsReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
+              {seedModelsNeedActivation ? "Seedance activation required" : seedreamLimitPaused ? "Dola Seedream 5 paused" : seedModelsFailed ? "Seed models last run failed" : seedModelsReady ? "Seedream + Seedance active" : "Seed models need API key"}
             </span>
             <span className={`rounded-full border px-2 py-1 ${imageProviderReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
               Still engine {imageProviderReady ? `${imageProviderLabel} ready` : `${imageProviderLabel} needs key`}
@@ -1017,6 +1028,24 @@ export default function CharacterProductionStudio({
               className="shrink-0 rounded-full border border-amber-500 px-4 py-2 text-xs font-semibold text-amber-500 hover:bg-amber-500/10"
             >
               Open Seedance setup ↗
+            </a>
+          </div>
+        )}
+        {seedreamLimitPaused && (
+          <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-red-400">Dola Seedream 5 Pro is paused by BytePlus</p>
+              <p className="text-xs text-grey mt-1">
+                BytePlus accepted the API key but stopped this image model after the account reached its inference limit. GPT Image remains available for stills; Seedance remains separately available for video.
+              </p>
+            </div>
+            <a
+              href={SEEDANCE_SETUP_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 rounded-full border border-red-400 px-4 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/10"
+            >
+              Open ModelArk setup ↗
             </a>
           </div>
         )}

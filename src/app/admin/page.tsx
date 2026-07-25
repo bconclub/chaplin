@@ -4,6 +4,7 @@ import { getAdminDashboard } from "@/lib/server/supabase-admin";
 import { getServerAuthIdentity } from "@/lib/server/auth";
 import AdminRefreshButton from "@/components/AdminRefreshButton";
 import AdminSectionNav from "@/components/AdminSectionNav";
+import AppearanceToggle from "@/components/AppearanceToggle";
 import { pipelineModelLabel } from "@/lib/pipeline-config";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,7 @@ export default async function AdminPage() {
           <p className="text-sm text-grey mt-2 max-w-2xl">See what exists, what is missing, and which AI actors are ready to earn a position on the homepage.</p>
         </div>
         <div className="flex flex-wrap gap-2 self-start">
+          <AppearanceToggle />
           <AdminRefreshButton />
           <Link href="/characters/new" className="accent-btn rounded-full px-5 py-2.5 text-sm font-semibold">+ Create AI actor</Link>
         </div>

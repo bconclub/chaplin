@@ -35,6 +35,21 @@
   --foreground: var(--ink);
 }
 
+/* The light appearance uses the same semantic tokens as the dark film set.
+   That keeps the dashboard's components, charts, cards, and controls visually
+   consistent instead of introducing a second admin-only design language. */
+:root.theme-light {
+  --ink: #182019;
+  --ink-soft: #415045;
+  --paper: #f7f5ee;
+  --paper-dim: #ebe9df;
+  --line: rgba(24, 32, 25, 0.14);
+  --grey: #667067;
+  --grey-light: #8c968b;
+  --accent-glow: rgba(242, 78, 112, 0.18);
+  --accent-secondary-glow: rgba(7, 150, 135, 0.2);
+}
+
 @theme inline {
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
@@ -80,7 +95,7 @@ html {
 
 *::-webkit-scrollbar-thumb {
   min-height: 36px;
-  border: 2px solid #0f1300;
+  border: 2px solid var(--paper);
   border-radius: 999px;
   background: linear-gradient(180deg, var(--accent), var(--accent-secondary));
 }
@@ -124,6 +139,18 @@ body {
     radial-gradient(700px circle at 50% 100%, rgba(180, 248, 200, 0.05), transparent 60%);
 }
 
+:root.theme-light .ambient-glow {
+  background:
+    radial-gradient(680px circle at 15% 0%, rgba(242, 78, 112, 0.11), transparent 60%),
+    radial-gradient(680px circle at 85% 10%, rgba(7, 210, 190, 0.12), transparent 60%),
+    radial-gradient(700px circle at 50% 100%, rgba(180, 248, 200, 0.16), transparent 60%);
+}
+
+:root.theme-light .grain {
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+}
+
 .marquee-title {
   font-family: var(--font-display), sans-serif;
   font-weight: 900;
@@ -148,6 +175,18 @@ body {
   border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+:root.theme-light .poster-card {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(24, 32, 25, 0.13);
+  box-shadow: 0 12px 32px rgba(28, 37, 28, 0.06);
+}
+
+:root.theme-light .poster-card:hover {
+  border-color: rgba(24, 32, 25, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 40px rgba(28, 37, 28, 0.1);
 }
 
 /* Homepage actor universe: a lighter, data-aware adaptation of the Infinite Menu sphere. */
