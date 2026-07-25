@@ -980,74 +980,34 @@ export default function CharacterProductionStudio({
 
   return (
     <section data-production-workflow className="character-production-room">
-      <div className="studio-production-status p-4 sm:px-5 sm:py-3 border-b border-line bg-black/20">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold mb-1">
-              AI actor production pipeline
-            </p>
-            <h2 className="reel-title text-2xl">Make {character.name} perform</h2>
-            <p className="text-xs text-grey mt-1 max-w-xl">
-              One identity feeds every voice line, signature sound, still, and five-second scene.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wide">
-            <span className={`rounded-full border px-2 py-1 ${elevenOperational ? "border-emerald-500 text-emerald-600" : elevenReady ? "border-amber-400 text-amber-400" : "border-line text-grey"}`}>
-              ElevenLabs {elevenOperational ? "operational" : elevenReady ? "configured" : "needs key"}
-            </span>
-            <span className={`rounded-full border px-2 py-1 ${seedModelsNeedActivation || seedanceLimitPaused || seedreamLimitPaused || seedModelsFailed ? "border-red-500 text-red-500" : seedModelsReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
-              {seedModelsNeedActivation ? "Seedance activation required" : seedanceLimitPaused ? "Seedance paused" : seedreamLimitPaused ? "Dola Seedream 5 paused" : seedModelsFailed ? "Seed models last run failed" : seedModelsReady ? "Seedream + Seedance active" : "Seed models need API key"}
-            </span>
-            <span className={`rounded-full border px-2 py-1 ${imageProviderReady ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
-              Still engine {imageProviderReady ? `${imageProviderLabel} ready` : `${imageProviderLabel} needs key`}
-            </span>
-            <span className={`rounded-full border px-2 py-1 ${status?.database ? "border-emerald-500 text-emerald-600" : "border-line text-grey"}`}>
-              Database {status?.database ? "ready" : "needs Supabase"}
-            </span>
-          </div>
+      <div className="studio-production-status flex h-12 items-center gap-4 border-b border-line bg-black/25 px-4">
+        <div className="hidden shrink-0 items-center gap-2 xl:flex">
+          <span className={`h-2 w-2 rounded-full ${status?.database && imageGenerationReady ? "bg-emerald-400" : "bg-amber-400"}`} />
+          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-grey">Scene tools</span>
         </div>
-        <div className="studio-stage-strip mt-3 flex gap-1 overflow-x-auto pb-0.5" aria-label="Scene production progress">
+        <div className="studio-stage-strip flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Scene production progress">
           {WORKFLOW_STEPS.map((step) => {
             const complete = completedSteps.has(step.id);
             const active = activeStep === step.id;
             return (
-              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`min-w-24 flex-1 border-b-2 px-2 pb-2 text-left text-[9px] font-semibold uppercase tracking-[0.1em] ${active ? "border-accent text-ink" : complete ? "border-emerald-400 text-emerald-300" : "border-white/10 text-grey hover:text-ink"}`}>
-                <span className="mr-1 text-grey">{step.id}.</span>{step.label}{complete && <span className="ml-1 text-emerald-400">✓</span>}
+              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`min-w-20 flex-1 rounded-md px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-[0.08em] ${active ? "bg-accent text-white" : complete ? "bg-emerald-400/10 text-emerald-300" : "text-grey hover:bg-white/[0.04] hover:text-ink"}`}>
+                <span className="mr-1 opacity-60">{step.id}</span>{step.label}{complete && <span className="ml-1">✓</span>}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="studio-production-grid lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_18rem]">
+      <div className="studio-production-grid lg:grid lg:grid-cols-[11.5rem_minmax(0,1fr)_15.5rem]">
       <aside
-        className="studio-production-rail border-b border-line bg-[#0c1208] px-3 py-4 lg:border-b-0 lg:border-r lg:px-4"
+        className="studio-production-rail border-b border-line bg-[#0a0f0c] px-3 py-3 lg:border-b-0 lg:border-r"
         data-production-task-rail
       >
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">
-              Stage {activeStepMeta.id} of {WORKFLOW_STEPS.length}
-            </p>
-            <p className="mt-0.5 truncate text-sm font-semibold">{activeStepMeta.title}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-[9px] uppercase tracking-wide text-grey">
-              {completedSteps.size}/{WORKFLOW_STEPS.length} complete
-            </span>
-            {onExit && (
-              <button
-                type="button"
-                onClick={onExit}
-                className="rounded-full border border-line px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-grey hover:border-accent hover:text-accent"
-                aria-label="Exit production studio"
-              >
-                Exit
-              </button>
-            )}
-          </div>
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">Stages</span>
+          <span className="text-[9px] font-semibold text-accent">{completedSteps.size}/{WORKFLOW_STEPS.length}</span>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-1" aria-label="Production workflow steps">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 lg:grid-cols-1" aria-label="Production workflow steps">
           {WORKFLOW_STEPS.map((step) => {
             const isActive = step.id === activeStep;
             const isComplete = completedSteps.has(step.id);
@@ -1056,48 +1016,48 @@ export default function CharacterProductionStudio({
                 key={step.id}
                 type="button"
                 onClick={() => jumpToStep(step.id)}
-                className={`group min-w-0 rounded-sm border px-2.5 py-2.5 text-left transition-colors ${isActive ? "border-accent bg-accent/10" : "border-transparent hover:border-line hover:bg-white/[0.03]"}`}
+                className={`group flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2.5 text-left transition-colors ${isActive ? "border-accent bg-accent/10" : "border-transparent hover:border-line hover:bg-white/[0.03]"}`}
                 aria-current={isActive ? "step" : undefined}
                 aria-label={`${step.id}. ${step.title}${isComplete ? ", complete" : ""}`}
                 data-production-step-jump={step.stage}
               >
-                <span className={`block h-1 rounded-full transition-colors ${
-                  isActive ? "bg-accent" : isComplete ? "bg-accent-secondary" : "bg-line"
-                }`} />
-                <span className={`mt-2 block truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                  isActive ? "bg-accent text-white" : isComplete ? "bg-emerald-400/15 text-emerald-300" : "bg-white/[0.04] text-grey"
+                }`}>{isComplete && !isActive ? "✓" : step.id}</span>
+                <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${
                   isActive ? "text-ink" : isComplete ? "text-accent-secondary" : "text-grey"
                 }`}>
-                  {isComplete && !isActive ? "✓ " : ""}{step.label}
+                  {step.label}
                 </span>
               </button>
             );
           })}
         </div>
         {activeStep > 1 && (
-          <div className="mt-4 border-t border-line pt-4">
+          <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-line pt-3 lg:grid-cols-1">
             <button
               type="button"
               onClick={() => jumpToStep(Math.max(1, activeStep - 1))}
-              className="w-full rounded-sm border border-line px-3 py-2 text-xs font-semibold text-grey transition-colors hover:border-accent hover:text-ink"
+              className="w-full rounded-md border border-line px-2 py-2 text-[9px] font-semibold text-grey transition-colors hover:border-accent hover:text-ink"
             >
-              ← Previous task
+              ← Back
             </button>
             {activeStep < WORKFLOW_STEPS.length ? (
               <button
                 type="button"
                 onClick={() => jumpToStep(activeStep + 1)}
-                className="mt-2 flex w-full items-center justify-between rounded-sm bg-accent px-3 py-2.5 text-left text-xs font-semibold text-paper transition-colors hover:bg-accent-light"
+                className="flex w-full items-center justify-between rounded-md bg-accent px-2 py-2 text-left text-[9px] font-semibold text-paper transition-colors hover:bg-accent-light"
               >
-                <span>Next: {WORKFLOW_STEPS[activeStep].label}</span>
+                <span>Next</span>
                 <span aria-hidden="true">→</span>
               </button>
             ) : onExit ? (
               <button
                 type="button"
                 onClick={onExit}
-                className="mt-2 flex w-full items-center justify-between rounded-sm bg-accent px-3 py-2.5 text-left text-xs font-semibold text-paper transition-colors hover:bg-accent-light"
+                className="flex w-full items-center justify-between rounded-md bg-accent px-2 py-2 text-left text-[9px] font-semibold text-paper transition-colors hover:bg-accent-light"
               >
-                <span>Finish studio</span>
+                <span>Finish</span>
                 <span aria-hidden="true">→</span>
               </button>
             ) : null}
@@ -1158,13 +1118,10 @@ export default function CharacterProductionStudio({
             </div>
           </div>
         )}
-        <details className="rounded-md border border-line bg-paper/30" data-production-blueprint>
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">Production blueprint</span>
-              <span className="mt-0.5 block truncate text-[11px] text-grey">Actor locks + {sceneBlueprint.sceneName}</span>
-            </span>
-            <span className="shrink-0 rounded-full border border-line px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-grey">Check blueprint</span>
+        <details className="rounded-md border border-line bg-paper/20" data-production-blueprint>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2">
+            <span className="truncate text-[10px] font-semibold text-grey">Scene locks · {sceneBlueprint.sceneName}</span>
+            <span className="text-sm text-accent">＋</span>
           </summary>
           <div className="border-t border-line px-4 py-4">
             <section data-production-bible>
@@ -1209,13 +1166,10 @@ export default function CharacterProductionStudio({
             </section>
           </div>
         </details>
-        {activeStep > 1 && <details className="rounded-md border border-accent/40 bg-accent/5 px-4 py-3" data-magic-scene-assist>
+        {activeStep > 1 && <details className="rounded-md border border-accent/30 bg-accent/[0.03] px-3 py-2" data-magic-scene-assist>
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-            <span>
-              <span className="block text-sm font-semibold">✦ Magic scene assist</span>
-              <span className="mt-0.5 block text-[11px] text-grey">Optional: coordinate every production prompt from one dramatic beat.</span>
-            </span>
-            <span className="shrink-0 rounded-full border border-accent/50 px-3 py-1 text-[10px] font-semibold text-accent">Open</span>
+            <span className="text-[10px] font-semibold">✦ Magic scene</span>
+            <span className="text-sm text-accent">＋</span>
           </summary>
           <div className="mt-3 flex flex-col justify-between gap-3 border-t border-line pt-3 sm:flex-row sm:items-center">
             <div className="min-w-0">
@@ -1245,12 +1199,9 @@ export default function CharacterProductionStudio({
             <GenerationTimeline generationKey="magic-scene" run={generationRun} />
           </div>
         </details>}
-        <div className="flex items-end justify-between gap-4 border-b border-line pb-4">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">Step {activeStepMeta.id} of {WORKFLOW_STEPS.length}</p>
-            <h3 className="reel-title mt-1 text-2xl">{activeStepMeta.title}</h3>
-          </div>
-          <span className="hidden text-right text-[11px] text-grey sm:block">Your actor’s identity remains connected through every stage.</span>
+        <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
+          <h3 className="text-sm font-semibold">{activeStepMeta.label}</h3>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">Step {activeStepMeta.id}/{WORKFLOW_STEPS.length}</span>
         </div>
         <div className="grid gap-5">
           <div data-production-stage="voice" className={`overflow-hidden rounded-md border border-line ${activeStep === 1 ? "" : "hidden"}`}>
