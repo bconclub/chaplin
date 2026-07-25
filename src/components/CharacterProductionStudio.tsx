@@ -1439,27 +1439,7 @@ export default function CharacterProductionStudio({
 
   return (
     <section data-production-workflow className="character-production-room">
-      <div className="studio-production-status flex h-12 items-center gap-4 border-b border-line bg-black/25 px-4">
-        <div className="hidden shrink-0 items-center gap-2 xl:flex">
-          <span className={`h-2 w-2 rounded-full ${status?.database && imageGenerationReady ? "bg-emerald-400" : "bg-amber-400"}`} />
-          <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-grey">Scene tools</span>
-        </div>
-        <div className="studio-stage-strip flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Scene production progress">
-          {WORKFLOW_STEPS.map((step) => {
-            const complete = completedSteps.has(step.id);
-            const active = activeStep === step.id;
-            const processing = processingStep === step.id;
-            return (
-              <button key={step.id} type="button" onClick={() => jumpToStep(step.id)} className={`relative min-w-20 flex-1 overflow-hidden rounded-md px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-[0.08em] ${processing ? "bg-accent text-white shadow-[0_0_24px_rgba(242,78,112,.22)]" : active ? "bg-accent/15 text-accent" : complete ? "bg-emerald-400/10 text-emerald-300" : "text-grey hover:bg-white/[0.04] hover:text-ink"}`}>
-                <span className="mr-1 opacity-60">{step.id}</span>{step.label}{complete && !processing && <span className="ml-1">✓</span>}
-                {processing && <span className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse bg-white/80" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="studio-production-grid lg:grid lg:grid-cols-[11.5rem_minmax(0,1fr)_15.5rem]">
+      <div className="studio-production-grid lg:grid lg:grid-cols-[12rem_minmax(0,1fr)_22rem] xl:grid-cols-[13rem_minmax(0,1fr)_25rem]">
       <aside
         className="studio-production-rail border-b border-line bg-[#0a0f0c] px-3 py-3 lg:border-b-0 lg:border-r"
         data-production-task-rail
@@ -2219,7 +2199,7 @@ export default function CharacterProductionStudio({
           </div>
         </div>
 
-        <details id="generated-scene-log" data-generation-history className="border border-line rounded-md overflow-hidden">
+        <details id="generated-scene-log" data-generation-history className="hidden">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold hover:bg-white/[0.03]">Generated Scene Log · {assetHistory.length} saved assets</summary>
           <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2 bg-white/[0.02]">
             <div>
@@ -2318,32 +2298,130 @@ export default function CharacterProductionStudio({
         {message && <p className={`text-xs rounded-sm px-3 py-2 ${message.toLowerCase().includes("failed") || message.includes("not configured") ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-ink"}`}>{message}</p>}
       </div>
       <aside
-        className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-3 lg:flex lg:flex-col"
+        className="studio-asset-panel hidden border-l border-line bg-[#090d0b] lg:flex lg:flex-col"
+        data-asset-tray
         data-lenis-prevent
         tabIndex={0}
         onWheel={scrollWorkspacePanel}
         onKeyDown={scrollWorkspacePanelWithKeyboard}
       >
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-xs text-accent">✦</span>
-          <div>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-accent">Director</p>
-            <p className="text-[10px] text-grey">Current scene</p>
+        <div className="sticky top-0 z-10 border-b border-line bg-[#090d0b]/95 px-4 py-3 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${activeStepRunning ? "border-accent/70 bg-accent/10 text-accent" : "border-accent-secondary/40 bg-accent-secondary/[0.07] text-accent-secondary"}`}>
+                <span className="text-xs">◫</span>
+                {activeStepRunning && <span className="absolute inset-[-4px] animate-spin rounded-full border border-transparent border-t-accent [animation-duration:1.2s]" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">Asset Canvas</span>
+                <span className="mt-0.5 block truncate text-[11px] font-semibold">{activeStepMeta.label} preview</span>
+              </span>
+            </div>
+            <span className="shrink-0 rounded-full border border-line px-2 py-1 text-[9px] font-semibold text-grey">
+              {assetHistory.length + previews.length + sfxCandidates.length + imageCandidates.length} assets
+            </span>
           </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-grey">
+            New outputs appear here first. The placeholder becomes the finished asset without moving the canvas.
+          </p>
         </div>
-        <div className="mt-4 rounded-md border border-line bg-black/20 p-3">
-          <p className="text-[10px] leading-4 text-ink">One clear emotion. One readable frame.</p>
-        </div>
-        <div className="mt-3 space-y-1.5">
-          {[
-            ["Visual", 5],
-            ["Dialogue", 2],
-            ["Motion", 6],
-          ].map(([label, step]) => (
-            <button key={label} type="button" onClick={() => jumpToStep(step as number)} className="flex w-full items-center justify-between rounded-md border border-line px-3 py-2.5 text-left text-[10px] font-semibold text-grey hover:border-accent hover:text-ink">
-              {label}<span className="text-accent">→</span>
-            </button>
-          ))}
+
+        <div className="space-y-5 p-4">
+          <section data-asset-canvas-live>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">Live stage</p>
+              <span className={`flex items-center gap-1.5 text-[9px] font-semibold ${activeStepRunning ? "text-accent" : activeStepHasOutput ? "text-emerald-300" : "text-grey"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${activeStepRunning ? "animate-pulse bg-accent" : activeStepHasOutput ? "bg-emerald-300" : "bg-grey/40"}`} />
+                {activeStepRunning ? "Generating" : activeStepHasOutput ? "Ready" : "Waiting"}
+              </span>
+            </div>
+            {(activeStepRunning || !activeStepHasOutput) && (
+              <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
+            )}
+            {activeStepHasOutput && (
+              <div className={activeStepRunning ? "mt-3" : ""}>
+                {renderActiveAssetPreview()}
+              </div>
+            )}
+            {activeStep === 5 && Object.keys(imageProviderErrors).length > 0 && (
+              <div className="mt-3 space-y-2">
+                {Object.entries(imageProviderErrors).map(([provider, error]) => error ? (
+                  <div key={provider} className="rounded-sm border border-red-400/35 bg-red-500/[0.05] px-3 py-2">
+                    <p className="text-[10px] font-semibold text-red-300">{imageProviderLabel(provider as ImageProviderKey)} needs attention</p>
+                    <p className="mt-1 text-[9px] leading-relaxed text-grey">{error}</p>
+                  </div>
+                ) : null)}
+              </div>
+            )}
+          </section>
+
+          <section className="border-t border-line pt-4" data-asset-canvas-history>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">Recent outputs</p>
+              <span className="text-[9px] text-grey">{assetHistory.length} saved</span>
+            </div>
+            {assetHistory.length === 0 ? (
+              <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-[10px] leading-relaxed text-grey">
+                Finished dialogue, sound, image, and video assets will collect here.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {assetHistory.slice(0, 8).map((asset) => {
+                  const profileOption: { slot: ProfileSlot; label: string } | null = asset.kind === "dialogue"
+                    ? { slot: "voice", label: "Use as profile voice" }
+                    : asset.kind === "theme"
+                      ? { slot: "theme", label: "Use as profile theme" }
+                      : asset.kind === "video"
+                        ? { slot: "video", label: "Use as hero video" }
+                        : ["gallery", "avatar", "banner"].includes(asset.kind)
+                          ? { slot: "cover", label: "Use as hero cover" }
+                          : null;
+                  const featured = status?.production?.featured;
+                  const selectedAssetId = profileOption?.slot === "voice"
+                    ? featured?.voiceAssetId
+                    : profileOption?.slot === "theme"
+                      ? featured?.themeAssetId
+                      : profileOption?.slot === "video"
+                        ? featured?.videoAssetId
+                        : profileOption?.slot === "cover"
+                          ? featured?.coverAssetId
+                          : null;
+                  const isFeatured = selectedAssetId === asset.id;
+                  return (
+                    <article key={asset.id} className={`overflow-hidden rounded-md border bg-black/15 ${isFeatured ? "border-emerald-400/40" : "border-line"}`} data-asset-canvas-history-item={asset.kind}>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[10px] font-semibold">{assetKindLabel(asset.kind)}</span>
+                          <span className="mt-0.5 block truncate text-[9px] text-grey">{asset.provider}</span>
+                        </span>
+                        <a href={asset.url} target="_blank" rel="noreferrer" className="shrink-0 text-[9px] font-semibold text-accent hover:underline">Open ↗</a>
+                      </div>
+                      <div className="border-t border-line p-2.5">
+                        {asset.kind === "video" ? (
+                          <MediaPlayer src={asset.url} label={assetKindLabel(asset.kind)} kind="video" compact />
+                        ) : ["dialogue", "sfx", "theme"].includes(asset.kind) ? (
+                          <MediaPlayer src={asset.url} label={assetKindLabel(asset.kind)} compact />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element -- generated CDN URLs are dynamic
+                          <img src={asset.url} alt={`${character.name} ${assetKindLabel(asset.kind)}`} loading="lazy" className="aspect-video w-full rounded-sm object-cover" />
+                        )}
+                        {profileOption && (
+                          <button
+                            type="button"
+                            onClick={() => void selectProfileMedia(asset, profileOption.slot)}
+                            disabled={isFeatured || Boolean(selectingAsset)}
+                            className={`mt-2.5 w-full rounded-sm border px-3 py-2 text-[9px] font-semibold disabled:opacity-50 ${isFeatured ? "border-emerald-400/45 text-emerald-300" : "border-accent/55 text-accent hover:bg-accent/10"}`}
+                          >
+                            {selectingAsset === asset.id ? "Selecting…" : isFeatured ? "On profile ✓" : profileOption.label}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
       </aside>
       </div>
