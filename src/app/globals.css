@@ -258,6 +258,11 @@ body {
     display: none;
   }
 
+  body:has([data-character-creation-shell]) > header[data-header-compact] + div,
+  body:has([data-character-studio-shell]) > header[data-header-compact] + div {
+    display: none;
+  }
+
   body:has([data-character-creation-shell]) > main,
   body:has([data-character-studio-shell]) > main {
     min-height: 100dvh;
