@@ -83,9 +83,9 @@ dollar amount, so both are configurable and labeled as estimates in the UI.
   cost. OpenAI logs its returned usage object and uses
   `OPENAI_IMAGE_USD_PER_IMAGE` for the USD estimate when the provider does not
   return a dollar cost.
-- BytePlus ModelArk runs Seedance 1.5 Pro directly using that still as its
-  identity reference and renders a
-  five-second 720p video with synchronized audio.
+- BytePlus ModelArk runs Seedance 2.0 directly using that still as its
+  identity reference and renders a five-second 720p motion plate. Voice, SFX,
+  and music are generated and mixed separately.
 
 Open `/characters/c-selene` to use the first configured pipeline for Meher Qureshi.
 

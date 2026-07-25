@@ -19,6 +19,31 @@ export type PipelineConfig = {
   stages: Record<PipelineStageId, PipelineStageConfig>;
 };
 
+export type PipelineModelOption = {
+  value: string;
+  label: string;
+};
+
+export const BYTEPLUS_IMAGE_MODELS: PipelineModelOption[] = [
+  { value: "dola-seedream-5-0-pro-260628", label: "Dola Seedream 5.0 Pro" },
+  { value: "seedream-5-0-lite-260128", label: "Dola Seedream 5.0 Lite" },
+  { value: "seedream-5-0-260128", label: "Dola Seedream 5.0" },
+  { value: "seedream-4-5-251128", label: "ByteDance Seedream 4.5" },
+  { value: "seedream-4-0-250828", label: "ByteDance Seedream 4.0" },
+];
+
+export const BYTEPLUS_VIDEO_MODELS: PipelineModelOption[] = [
+  { value: "dreamina-seedance-2-0-260128", label: "Dreamina Seedance 2.0" },
+  { value: "dreamina-seedance-2-0-fast-260128", label: "Dreamina Seedance 2.0 Fast" },
+  { value: "dreamina-seedance-2-0-mini-260615", label: "Dreamina Seedance 2.0 Mini" },
+  { value: "seedance-1-5-pro-251215", label: "ByteDance Seedance 1.5 Pro" },
+];
+
+export function pipelineModelLabel(model: string) {
+  return [...BYTEPLUS_IMAGE_MODELS, ...BYTEPLUS_VIDEO_MODELS]
+    .find((option) => option.value === model)?.label ?? model;
+}
+
 export const PIPELINE_STAGE_META: Record<PipelineStageId, {
   label: string;
   owner: string;
@@ -128,7 +153,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
     image: {
       enabled: true,
       provider: "byteplus",
-      model: "seedream-4-5-251128",
+      model: "dola-seedream-5-0-pro-260628",
       promptPrelude: "Use the canonical reference as identity truth. Default to a visually striking live-action cinematic photograph of a real human with natural skin, tactile fabric, optical depth, physically plausible light, and restrained film grain. Change medium only when the user explicitly requests cartoon, anime, illustration, painting, CGI, or another stylized form.",
       temperature: null,
       maxTokens: null,
@@ -146,7 +171,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
     video: {
       enabled: true,
       provider: "byteplus",
-      model: "seedance-1-5-pro-251215",
+      model: "dreamina-seedance-2-0-260128",
       promptPrelude: "Treat the supplied image as the exact first frame. Animate performance and camera only; never redesign identity, wardrobe, set, or lighting.",
       temperature: null,
       maxTokens: null,

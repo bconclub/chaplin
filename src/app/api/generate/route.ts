@@ -729,8 +729,11 @@ export async function POST(request: Request) {
       const exclusions = stylizedOutput
         ? configuredNegativePrompt
         : `${configuredNegativePrompt}, ${REALISM_NEGATIVE}`;
+      const seedreamFive = provider === "byteplus" && /seedream-5-0/i.test(imageConfig.model);
       const effectivePrompt = provider === "byteplus"
-        ? prompt
+        ? seedreamFive
+          ? `${prompt}\n\nEXCLUDE: ${exclusions}`
+          : prompt
         : `${prompt}\n\nEXCLUDE: ${exclusions}`;
       jobId = await beginGeneration({ characterId, kind: "gallery", provider, model: imageConfig.model, prompt: effectivePrompt });
       let generated: GeneratedImage;
@@ -739,15 +742,22 @@ export async function POST(request: Request) {
       } else if (provider === "openai") {
         generated = await generateWithOpenAI(imageConfig, effectivePrompt, references);
       } else {
+        const seedreamFivePro = /dola-seedream-5-0-pro/i.test(imageConfig.model);
         const generationRequest: Record<string, unknown> = {
           model: imageConfig.model,
-          prompt,
-          negative_prompt: exclusions,
+          prompt: effectivePrompt,
           size: settingString(imageConfig, "size", "2560x1440"),
           response_format: "url",
-          sequential_image_generation: settingString(imageConfig, "sequentialImageGeneration", "disabled"),
           watermark: settingBoolean(imageConfig, "watermark", false),
         };
+        if (seedreamFive) {
+          generationRequest.output_format = settingString(imageConfig, "outputFormat", "png");
+        } else {
+          generationRequest.negative_prompt = exclusions;
+        }
+        if (!seedreamFivePro) {
+          generationRequest.sequential_image_generation = settingString(imageConfig, "sequentialImageGeneration", "disabled");
+        }
         if (references.length) {
           const imageReferences = await Promise.all(references.map((value) => imageInput(value)));
           generationRequest.image = imageReferences.length === 1 ? imageReferences[0] : imageReferences;

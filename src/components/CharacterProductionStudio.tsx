@@ -13,6 +13,7 @@ import {
   type ShotBlueprint,
 } from "@/lib/production-prompting";
 import { dialogueForEditor } from "@/lib/dialogue-performance";
+import { pipelineModelLabel } from "@/lib/pipeline-config";
 
 type ProductionAsset = {
   id: string;
@@ -70,6 +71,10 @@ type ProviderStatus = {
         settings?: Record<string, string | number | boolean>;
       };
       image?: {
+        provider?: string;
+        model?: string;
+      };
+      video?: {
         provider?: string;
         model?: string;
       };
@@ -195,8 +200,7 @@ const SFX_VARIATIONS = [
   { label: "Dramatic punctuation", direction: "Focus on a restrained dramatic punctuation with a surprising micro-detail before the clean stop." },
 ] as const;
 
-const SEEDANCE_ACTIVATION_URL =
-  "https://console.byteplus.com/ark/region%3Aark%2Bap-southeast-1/model/detail?Id=seedance-1-5-pro";
+const SEEDANCE_SETUP_URL = "https://docs.byteplus.com/en/docs/ModelArk/2291680";
 async function errorFrom(response: Response) {
   const data = (await response.json().catch(() => null)) as { error?: string } | null;
   return data?.error ?? `Generation failed with status ${response.status}.`;
@@ -870,6 +874,7 @@ export default function CharacterProductionStudio({
   const seedModelsFailed = status?.providers?.seedModels?.status === "failed";
   const seedModelsNeedActivation =
     seedModelsFailed && /not activated|activate the model/i.test(status?.providers?.seedModels?.error ?? "");
+  const configuredVideoModel = status?.pipeline?.stages?.video?.model ?? "dreamina-seedance-2-0-260128";
   const configuredSfxCount = Math.min(
     SFX_VARIATIONS.length,
     Math.max(1, Math.round(Number(status?.pipeline?.stages?.sfx?.settings?.candidateCount ?? 4)))
@@ -974,18 +979,18 @@ export default function CharacterProductionStudio({
         {seedModelsNeedActivation && (
           <div className="rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-amber-500">Seedance 1.5 Pro needs account activation</p>
+              <p className="text-sm font-semibold text-amber-500">{pipelineModelLabel(configuredVideoModel)} needs account activation</p>
               <p className="text-xs text-grey mt-1">
                 The API key is valid, but BytePlus is refusing video jobs until this model is enabled for the account. Image, voice, SFX, and CDN uploads remain operational.
               </p>
             </div>
             <a
-              href={SEEDANCE_ACTIVATION_URL}
+              href={SEEDANCE_SETUP_URL}
               target="_blank"
               rel="noreferrer"
               className="shrink-0 rounded-full border border-amber-500 px-4 py-2 text-xs font-semibold text-amber-500 hover:bg-amber-500/10"
             >
-              Activate Seedance ↗
+              Open Seedance setup ↗
             </a>
           </div>
         )}

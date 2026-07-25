@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import {
+  BYTEPLUS_IMAGE_MODELS,
+  BYTEPLUS_VIDEO_MODELS,
   PIPELINE_STAGE_IDS,
   PIPELINE_STAGE_META,
   type PipelineConfig,
@@ -112,17 +114,25 @@ export default function AdminPipelineLab({
   const [requestPreview, setRequestPreview] = useState("");
   const stage = config.stages[activeStage];
   const meta = PIPELINE_STAGE_META[activeStage];
-  const imageModels = stage.provider === "openrouter"
+  const imageModels: Array<{ value: string; label: string }> = stage.provider === "openrouter"
     ? [
-        "google/gemini-3.1-flash-image",
-        "google/gemini-3-pro-image",
-        "google/gemini-2.5-flash-image",
-        "openai/gpt-image-2",
-        "bytedance-seed/seedream-4.5",
+        { value: "google/gemini-3.1-flash-image", label: "Gemini 3.1 Flash Image" },
+        { value: "google/gemini-3-pro-image", label: "Gemini 3 Pro Image" },
+        { value: "google/gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image" },
+        { value: "openai/gpt-image-2", label: "OpenAI GPT Image 2" },
+        { value: "bytedance-seed/seedream-4.5", label: "ByteDance Seedream 4.5" },
       ]
     : stage.provider === "openai"
-      ? ["gpt-image-2", "gpt-image-1.5"]
-      : ["seedream-4-5-251128"];
+      ? [
+          { value: "gpt-image-2", label: "GPT Image 2" },
+          { value: "gpt-image-1.5", label: "GPT Image 1.5" },
+        ]
+      : BYTEPLUS_IMAGE_MODELS;
+  const modelOptions = activeStage === "image"
+    ? imageModels
+    : activeStage === "video"
+      ? BYTEPLUS_VIDEO_MODELS
+      : [];
   const stageRuns = useMemo(
     () => recentRuns.filter((run) => stageForRun(run.kind) === activeStage).slice(0, 6),
     [activeStage, recentRuns]
@@ -249,7 +259,7 @@ export default function AdminPipelineLab({
                         ? "google/gemini-2.5-flash-image"
                         : provider === "openai"
                           ? "gpt-image-2"
-                          : "seedream-4-5-251128";
+                          : "dola-seedream-5-0-pro-260628";
                       replaceStage({ ...stage, provider, model });
                     }}
                   >
@@ -276,13 +286,18 @@ export default function AdminPipelineLab({
               <input
                 className="field mt-2 w-full"
                 value={stage.model}
-                list={activeStage === "image" ? "chaplin-image-models" : undefined}
+                list={modelOptions.length ? "chaplin-stage-models" : undefined}
                 onChange={(event) => replaceStage({ ...stage, model: event.target.value })}
               />
-              {activeStage === "image" && (
-                <datalist id="chaplin-image-models">
-                  {imageModels.map((model) => <option key={model} value={model} />)}
+              {modelOptions.length > 0 && (
+                <datalist id="chaplin-stage-models">
+                  {modelOptions.map((model) => <option key={model.value} value={model.value} label={model.label} />)}
                 </datalist>
+              )}
+              {activeStage === "video" && (
+                <span className="mt-1 block text-[10px] text-grey">
+                  Choose Seedance 2.0, Fast, Mini, 1.5 Pro, or enter another ModelArk model ID.
+                </span>
               )}
             </label>
             <label className="block md:col-span-2">
