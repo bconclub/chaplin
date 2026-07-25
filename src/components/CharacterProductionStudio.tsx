@@ -1208,11 +1208,8 @@ export default function CharacterProductionStudio({
             <div className="relative border-b border-line bg-[radial-gradient(circle_at_top_right,rgba(53,210,190,0.12),transparent_42%),linear-gradient(145deg,rgba(244,72,112,0.08),transparent_55%)] p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Voice identity</p>
-                  <h3 className="reel-title mt-1 text-2xl">Build {character.name}&apos;s voice</h3>
-                  <p className="mt-1 max-w-md text-xs leading-relaxed text-grey">
-                    Chaplin reads the complete actor, writes the direction and audition, then creates three voices in one go.
-                  </p>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">Voice identity</p>
+                  <h3 className="mt-1 text-base font-semibold">{character.name}&apos;s voice</h3>
                 </div>
                 {lockedVoiceId && (
                   <span className="shrink-0 rounded-full border border-emerald-600/50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-600">
@@ -1228,10 +1225,7 @@ export default function CharacterProductionStudio({
                   disabled={!elevenReady || Boolean(busy)}
                   className="mt-5 flex w-full items-center justify-between rounded-md bg-accent px-4 py-3 text-left text-paper shadow-[0_12px_28px_rgba(244,72,112,0.2)] transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40"
                 >
-                  <span>
-                    <span className="block text-sm font-semibold">✦ Build the complete voice</span>
-                    <span className="mt-0.5 block text-[10px] opacity-75">One tap · three original takes</span>
-                  </span>
+                  <span className="block text-sm font-semibold">✦ Generate three voice takes</span>
                   <span className="text-lg" aria-hidden="true">→</span>
                 </button>
               )}
@@ -1382,7 +1376,6 @@ export default function CharacterProductionStudio({
                 onClick={() => void quickWrite("dialogue", speechText, setSpeechText)}
               />
             </div>
-            <p className="text-[11px] leading-relaxed text-grey">Write the exact words {character.name} says aloud to someone. Keep character description, narration, and actions out of this field.</p>
             <textarea aria-label={`${character.name} spoken dialogue`} data-scene-field="dialogue" value={speechText} onChange={(event) => setSpeechText(event.target.value)} rows={5} className="bg-paper border border-line rounded-sm p-3 text-xs resize-none focus:outline-none focus:border-accent" />
             <button onClick={generateSpeech} disabled={!elevenReady || Boolean(busy) || !lockedVoiceId} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "speech" ? "Performing line..." : "Generate dialogue"}
@@ -1393,7 +1386,7 @@ export default function CharacterProductionStudio({
                 Locked voice · {lockedVoiceId.slice(-6)} · continuity mode
               </p>
             )}
-            {speechUrl ? <MediaPlayer src={speechUrl} label={`${character.name} dialogue`} compact /> : <p className="text-xs text-grey">Lock one voice once; reuse it across every story and language.</p>}
+            {speechUrl && <MediaPlayer src={speechUrl} label={`${character.name} dialogue`} compact />}
           </div>
         </div>
 
@@ -1416,7 +1409,6 @@ export default function CharacterProductionStudio({
             </button>
             <span className="text-[10px] uppercase tracking-[0.14em] text-grey">{configuredSfxDuration}s each</span>
           </div>
-          <p className="text-[11px] leading-relaxed text-grey">Creating takes saves them to this actor’s library only. It does not replace the character’s signature SFX until you choose <span className="font-semibold text-ink">Use this take</span>.</p>
           <GenerationTimeline generationKey="sfx" run={generationRun} />
           {sfxCandidates.length > 0 ? (
             <div className="grid gap-2 sm:grid-cols-2" data-sfx-candidates>
@@ -1442,9 +1434,7 @@ export default function CharacterProductionStudio({
             </div>
           ) : sfxUrl ? (
             <MediaPlayer src={sfxUrl} label={`${character.name} signature SFX`} compact />
-          ) : (
-            <p className="text-xs text-grey">Generate distinct short candidates, then attach the one that best identifies the actor.</p>
-          )}
+          ) : null}
         </div>
 
         <div data-production-stage="theme" className={`border border-line rounded-md p-4 flex flex-col gap-3 ${activeStep === 4 ? "" : "hidden"}`}>
@@ -1499,18 +1489,13 @@ export default function CharacterProductionStudio({
                 <span className="block text-[10px] opacity-75">What happens next</span>
               </button>
             </div>
-            <p className="text-[11px] leading-relaxed text-grey">
-              {imagePurpose === "identity"
-                ? `Create a neutral feed-ready identity seed: a specific repeatable face, hair, silhouette, and wardrobe on a clean casting backdrop. No story location, dramatic scene, or action is created at this stage.${identityReferenceImage ? " The locked seed below remains the basis for the person." : " This first accepted image becomes the actor's visual seed."}`
-                : `Create a story frame from the selected identity reference${referenceImage ? " shown in the video panel" : "—choose or upload an identity image first"}. The face and wardrobe stay locked while only the dramatic moment changes.`}
-            </p>
             {identityReferenceImage && (
               <div className="flex items-center gap-3 rounded-sm border border-accent/50 bg-accent/5 p-2" data-identity-reference>
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
                 <img src={identityReferenceImage} alt={`${character.name} canonical identity seed`} className="h-14 w-20 shrink-0 rounded-sm object-cover" />
                 <span className="min-w-0">
                   <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Feed seed locked</span>
-                  <span className="mt-1 block text-[10px] leading-snug text-grey">This neutral reference establishes the face, age, hair, proportions, and signature wardrobe before any scene is made.</span>
+                  <span className="mt-1 block text-[10px] text-grey">Used as the actor&apos;s visual identity.</span>
                 </span>
               </div>
             )}
@@ -1522,7 +1507,6 @@ export default function CharacterProductionStudio({
                   ? gptImageReady && dolaImageReady ? "Generate feed seed candidates" : "Generate feed seed"
                   : gptImageReady && dolaImageReady ? "Generate scene candidates" : "Generate scene still"}
             </button>
-            <p className="text-[11px] leading-relaxed text-grey">Each available image provider creates a candidate. Every result stays in the actor library until you explicitly choose the identity or first frame to use.</p>
             {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
             <GenerationTimeline
               generationKey="image"
@@ -1621,7 +1605,6 @@ export default function CharacterProductionStudio({
               </div>
             )}
             <GenerationTimeline generationKey="video" run={generationRun} />
-            <p className="text-[11px] text-grey">Seedance uses the selected still as the exact first frame. This prompt controls only performance, camera, light continuity, environmental motion, and the final frame; locked voice, SFX, and music stay separate.</p>
             {(generatedVideo || character.videoUrl) && <MediaPlayer src={generatedVideo || character.videoUrl || ""} label={`${character.name} scene`} kind="video" />}
           </div>
         </div>
