@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 const SECTIONS = [
   { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/scene-map", label: "Scene map", exact: false },
-  { href: "/admin/pipeline", label: "Pipeline lab", exact: false },
+  { href: "/admin/pipeline", label: "Pipeline lab", exact: true },
+  { href: "/admin/pipeline/experiments", label: "Experiment ground", exact: false },
   { href: "/admin/logs", label: "Generation logs", exact: false },
 ];
 

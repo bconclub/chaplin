@@ -686,6 +686,8 @@ export async function beginGeneration(input: {
   provider: string;
   model: string;
   prompt?: string;
+  experimentId?: string;
+  experimentVariantId?: string;
 }) {
   const supabase = adminClient();
   const { data, error } = await supabase
@@ -696,6 +698,10 @@ export async function beginGeneration(input: {
       provider: input.provider,
       model: input.model,
       prompt: input.prompt ?? null,
+      ...(input.experimentId && input.experimentVariantId ? {
+        pipeline_experiment_id: input.experimentId,
+        pipeline_experiment_variant_id: input.experimentVariantId,
+      } : {}),
       status: "running",
       started_at: new Date().toISOString(),
     })
@@ -703,6 +709,21 @@ export async function beginGeneration(input: {
     .single();
   assert(error, "Start generation job");
   if (!data) throw new Error("Start generation job returned no record.");
+  if (input.experimentId && input.experimentVariantId) {
+    const result = await supabase.from("pipeline_experiment_results").insert({
+      experiment_id: input.experimentId,
+      variant_id: input.experimentVariantId,
+      generation_job_id: data.id,
+      status: "running",
+      provider: input.provider,
+      model: input.model,
+    });
+    assert(result.error, "Start pipeline experiment result");
+    await supabase.from("pipeline_experiments").update({
+      status: "testing",
+      updated_at: new Date().toISOString(),
+    }).eq("id", input.experimentId);
+  }
   return data.id as string;
 }
 
@@ -727,13 +748,14 @@ function generationFeedCopy(kind: string, characterName: string, prompt: string 
 async function publishGenerationToFeed(jobId: string, assetId: string) {
   const supabase = adminClient();
   const [jobResult, assetResult] = await Promise.all([
-    supabase.from("generation_jobs").select("character_id,kind").eq("id", jobId).maybeSingle(),
+    supabase.from("generation_jobs").select("character_id,kind,pipeline_experiment_id").eq("id", jobId).maybeSingle(),
     supabase.from("media_assets").select("id,kind,url,prompt,created_at").eq("id", assetId).maybeSingle(),
   ]);
   assert(jobResult.error, "Load feed generation");
   assert(assetResult.error, "Load feed asset");
   const job = jobResult.data;
   const asset = assetResult.data;
+  if (job?.pipeline_experiment_id) return;
   if (!job?.character_id || !asset?.url) return;
 
   const characterResult = await supabase
@@ -803,6 +825,28 @@ export async function completeGeneration(
     ).error,
     "Complete generation job"
   );
+  const experimentJob = await supabase
+    .from("generation_jobs")
+    .select("pipeline_experiment_id,started_at")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!experimentJob.error && experimentJob.data?.pipeline_experiment_id) {
+    const startedAt = experimentJob.data.started_at ? new Date(experimentJob.data.started_at).getTime() : Date.now();
+    await supabase.from("pipeline_experiment_results").update({
+      status: "succeeded",
+      output_asset_id: assetId ?? null,
+      output_text: metadata && "outputText" in metadata && typeof metadata.outputText === "string"
+        ? metadata.outputText
+        : null,
+      cost_usd: billing?.costUsd ?? null,
+      latency_ms: Math.max(0, Date.now() - startedAt),
+      completed_at: new Date().toISOString(),
+    }).eq("generation_job_id", jobId);
+    await supabase.from("pipeline_experiments").update({
+      status: "review",
+      updated_at: new Date().toISOString(),
+    }).eq("id", experimentJob.data.pipeline_experiment_id);
+  }
   if (assetId) {
     try {
       await publishGenerationToFeed(jobId, assetId);
@@ -824,6 +868,24 @@ export async function failGeneration(jobId: string, message: string) {
       completed_at: new Date().toISOString(),
     })
     .eq("id", jobId);
+  const experimentJob = await supabase
+    .from("generation_jobs")
+    .select("pipeline_experiment_id,started_at")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!experimentJob.error && experimentJob.data?.pipeline_experiment_id) {
+    const startedAt = experimentJob.data.started_at ? new Date(experimentJob.data.started_at).getTime() : Date.now();
+    await supabase.from("pipeline_experiment_results").update({
+      status: "failed",
+      error_message: message.slice(0, 1000),
+      latency_ms: Math.max(0, Date.now() - startedAt),
+      completed_at: new Date().toISOString(),
+    }).eq("generation_job_id", jobId);
+    await supabase.from("pipeline_experiments").update({
+      status: "review",
+      updated_at: new Date().toISOString(),
+    }).eq("id", experimentJob.data.pipeline_experiment_id);
+  }
 }
 
 export async function saveCharacterVoice(input: {

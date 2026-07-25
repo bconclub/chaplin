@@ -154,3 +154,16 @@ Magic Scene asks Claude for a structured director blueprint first, then the app
 renders separate provider-ready prompts from that blueprint. If Claude is
 unavailable, the same pipeline uses production-directed local blueprints rather
 than reverting to a shared biography prompt.
+
+## Creative engineering Experiment Ground
+
+Super Admins can open `/admin/pipeline/experiments` to fork any live stage into
+isolated Control and Challenger variants. Both variants use the same actor,
+canonical reference, and creative input; engineers can then compare real output,
+latency, cost, errors, and a five-point review score.
+
+Experiment jobs remain in the normal generation ledger but never publish to the
+creator feed. A tested winner must be explicitly selected before it can be
+promoted through the versioned production-settings path. See
+[`docs/PIPELINE_EXPERIMENTS.md`](docs/PIPELINE_EXPERIMENTS.md) for the safety
+boundary, workflow, data model, and API.
