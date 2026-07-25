@@ -35,6 +35,9 @@ export default function HeroGridCard({
 
   const videoSource = broll?.videoUrl ?? character.videoUrl ?? null;
   const artworkSource = character.imageUrl ?? character.bannerUrl ?? character.galleryUrls?.[0] ?? null;
+  const castingRate = character.royaltyRate > 0
+    ? `$${character.royaltyRate} / cast`
+    : "Open cast";
 
   function activateInPlace() {
     onActivate?.();
@@ -119,6 +122,13 @@ export default function HeroGridCard({
           )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+        <span
+          className={`absolute left-1.5 top-1.5 rounded-full border border-white/15 bg-black/55 font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm ${
+            active ? "px-2 py-1 text-[9px] sm:text-[10px]" : "px-1.5 py-0.5 text-[6px] sm:text-[7px]"
+          }`}
+        >
+          {castingRate}
+        </span>
         <div className={`absolute bottom-0 left-0 right-0 ${active ? "p-3" : "p-1.5 sm:p-2"}`}>
           <p className={`marquee-title line-clamp-2 uppercase leading-[1.15] tracking-tight text-ink ${active ? "text-sm sm:text-base" : "text-[7.5px] sm:text-[9px]"}`}>
             {character.name}
