@@ -1707,28 +1707,27 @@ export default function CharacterProductionStudio({
 
         {message && <p className={`text-xs rounded-sm px-3 py-2 ${message.toLowerCase().includes("failed") || message.includes("not configured") ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-ink"}`}>{message}</p>}
       </div>
-      <aside className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-4 lg:flex lg:flex-col">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-accent">AI director</p>
-        <h3 className="reel-title mt-2 text-xl">Scene guidance</h3>
-        <p className="mt-3 text-xs leading-5 text-grey">{sceneBlueprint.dramaticBeat}</p>
-        <div className="mt-5 rounded-md border border-line bg-black/20 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400">Current note</p>
-          <p className="mt-2 text-xs leading-5 text-ink">Keep the visual identity locked, then make one clear emotional decision readable in the frame.</p>
+      <aside className="studio-director-panel hidden border-l border-line bg-[#0b0f0d] p-3 lg:flex lg:flex-col">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-xs text-accent">✦</span>
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-accent">Director</p>
+            <p className="text-[10px] text-grey">Current scene</p>
+          </div>
         </div>
-        <div className="mt-5 space-y-2">
+        <div className="mt-4 rounded-md border border-line bg-black/20 p-3">
+          <p className="text-[10px] leading-4 text-ink">One clear emotion. One readable frame.</p>
+        </div>
+        <div className="mt-3 space-y-1.5">
           {[
-            ["Strengthen visual beat", 5],
-            ["Refine the dialogue", 2],
-            ["Tighten motion", 6],
+            ["Visual", 5],
+            ["Dialogue", 2],
+            ["Motion", 6],
           ].map(([label, step]) => (
-            <button key={label} type="button" onClick={() => jumpToStep(step as number)} className="flex w-full items-center justify-between rounded-md border border-line px-3 py-3 text-left text-[11px] font-semibold text-grey hover:border-accent hover:text-ink">
+            <button key={label} type="button" onClick={() => jumpToStep(step as number)} className="flex w-full items-center justify-between rounded-md border border-line px-3 py-2.5 text-left text-[10px] font-semibold text-grey hover:border-accent hover:text-ink">
               {label}<span className="text-accent">→</span>
             </button>
           ))}
-        </div>
-        <div className="mt-auto border-t border-line pt-4 text-[10px] leading-4 text-grey">
-          <p className="font-semibold uppercase tracking-wide text-ink">Scene locks</p>
-          <p className="mt-2">{productionBible.visual.recognitionLocks?.slice(0, 2).join(" · ")}</p>
         </div>
       </aside>
       </div>
