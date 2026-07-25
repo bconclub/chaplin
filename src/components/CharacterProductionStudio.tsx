@@ -1835,44 +1835,11 @@ export default function CharacterProductionStudio({
               </details>
 
               {previews.length > 0 && (
-                <div className="flex items-start justify-between gap-2 pt-1">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">Choose the voice that feels true</p>
-                    <p className="text-[11px] text-grey">This is the only decision—everything else is already built.</p>
-                  </div>
-                  <span className="shrink-0 rounded-full border border-line px-2 py-1 text-[9px] uppercase tracking-wide text-grey">≤7s each</span>
+                <div className="rounded-sm border border-accent-secondary/35 bg-accent-secondary/[0.05] px-3 py-2.5">
+                  <p className="text-xs font-semibold">Three voice takes are ready on the Asset Canvas.</p>
+                  <p className="mt-1 text-[10px] text-grey">Listen and choose from the right panel.</p>
                 </div>
               )}
-            {previews.map((preview, index) => (
-              <div
-                key={preview.generated_voice_id}
-                data-voice-preview-card
-                className="flex flex-col gap-2.5 rounded-sm border border-line bg-black/10 p-3 sm:flex-row sm:items-center sm:gap-2 sm:p-2"
-              >
-                <div className="flex items-center justify-between gap-3 sm:contents">
-                  <span className="text-[10px] font-semibold text-grey sm:w-12">Take {index + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => lockVoice(preview)}
-                    disabled={Boolean(busy)}
-                    className="rounded-full border border-accent/50 px-3 py-1.5 text-xs font-semibold text-accent disabled:opacity-40 sm:hidden"
-                  >
-                    {busy === "voice-save" ? "Choosing..." : "Choose"}
-                  </button>
-                </div>
-                <div className="min-w-0 w-full sm:flex-1">
-                  <MediaPlayer
-                    src={`data:${preview.media_type ?? "audio/mpeg"};base64,${preview.audio_base_64}`}
-                    label={`Voice candidate ${index + 1}`}
-                    compact
-                    playbackLimitSeconds={7}
-                  />
-                </div>
-                <button type="button" onClick={() => lockVoice(preview)} disabled={Boolean(busy)} className="hidden rounded-full border border-accent/50 px-3 py-1.5 text-xs font-semibold text-accent disabled:opacity-40 sm:block">
-                  {busy === "voice-save" ? "Choosing..." : "Choose"}
-                </button>
-              </div>
-            ))}
               {lockedVoiceId && (
                 <div className="mt-1 rounded-md border border-accent/50 bg-accent/10 p-4" data-voice-ready>
                   <div className="flex items-start gap-3">
@@ -1927,7 +1894,7 @@ export default function CharacterProductionStudio({
                 Locked voice · {lockedVoiceId.slice(-6)} · continuity mode
               </p>
             )}
-            {speechUrl && <MediaPlayer src={speechUrl} label={`${character.name} dialogue`} compact />}
+            {speechUrl && <p className="text-[10px] text-emerald-300">Dialogue take ready on the Asset Canvas.</p>}
           </div>
         </div>
 
@@ -1959,31 +1926,7 @@ export default function CharacterProductionStudio({
             </span>
           </div>
           <GenerationTimeline generationKey="sfx" run={generationRun} />
-          {sfxCandidates.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2" data-sfx-candidates>
-              {sfxCandidates.map((candidate, index) => {
-                const selected = sfxUrl === candidate.url;
-                return (
-                  <div key={candidate.url} className={`rounded-sm border p-3 ${selected ? "border-accent bg-accent/5" : "border-line"}`} data-sfx-candidate={index + 1}>
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold">Take {index + 1} · {candidate.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => selectSfxCandidate(candidate)}
-                        disabled={Boolean(busy)}
-                        className={`text-[10px] font-semibold ${selected ? "text-emerald-500" : "text-accent hover:underline"}`}
-                      >
-                        {busy === "sfx-select" && !selected ? "Selecting..." : selected ? "Selected ✓" : "Use this take"}
-                      </button>
-                    </div>
-                    <MediaPlayer src={candidate.url} label={`${character.name} SFX take ${index + 1}`} compact />
-                  </div>
-                );
-              })}
-            </div>
-          ) : sfxUrl ? (
-            <MediaPlayer src={sfxUrl} label={`${character.name} signature SFX`} compact />
-          ) : null}
+          {(sfxCandidates.length > 0 || sfxUrl) && <p className="text-[10px] text-emerald-300">Signature sound ready on the Asset Canvas.</p>}
         </div>
 
         <div data-production-stage="theme" className={`border border-line rounded-md p-4 flex flex-col gap-3 ${activeStep === 4 ? "" : "hidden"}`}>
@@ -2019,7 +1962,6 @@ export default function CharacterProductionStudio({
                   ? "Regenerate with v2 grammar"
                   : `Generate ${themeDurationSeconds}-second theme`}
             </button>
-            {themeUrl && <div className="flex-1 min-w-64"><MediaPlayer src={themeUrl} label={`${character.name} theme`} compact /></div>}
           </div>
           {themeUrl && (
             <p className="text-[10px] leading-4 text-grey">
@@ -2087,7 +2029,7 @@ export default function CharacterProductionStudio({
               previewUrl={identityReferenceImage || undefined}
             />
             {(imageCandidates.length > 0 || Object.keys(imageProviderErrors).length > 0) && (
-              <section data-image-comparison>
+              <section className="hidden" data-image-comparison>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-semibold">Same prompt, {readyImageProviderLabels.length} image {readyImageProviderLabels.length === 1 ? "model" : "models"}</p>
                   <p className="text-[10px] uppercase tracking-[0.12em] text-grey">Compare, then choose one</p>
@@ -2146,10 +2088,7 @@ export default function CharacterProductionStudio({
               />
             </label>
             <GenerationTimeline generationKey="upload" run={generationRun} />
-            {generatedImage && (
-              // eslint-disable-next-line @next/next/no-img-element -- provider URLs are dynamic and short-lived
-              <img src={generatedImage} alt={`Generated ${character.name} scene`} className="w-full rounded-sm aspect-video object-cover" />
-            )}
+            {generatedImage && <p className="text-[10px] text-emerald-300">Selected image ready on the Asset Canvas.</p>}
           </div>
 
           <div data-production-stage="video" className={`border border-line rounded-md p-4 flex flex-col gap-3 ${activeStep === 6 ? "" : "hidden"}`}>
@@ -2195,7 +2134,7 @@ export default function CharacterProductionStudio({
               </div>
             )}
             <GenerationTimeline generationKey="video" run={generationRun} />
-            {(generatedVideo || character.videoUrl) && <MediaPlayer src={generatedVideo || character.videoUrl || ""} label={`${character.name} scene`} kind="video" />}
+            {(generatedVideo || character.videoUrl) && <p className="text-[10px] text-emerald-300">Video ready on the Asset Canvas.</p>}
           </div>
         </div>
 

@@ -364,14 +364,37 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   assert(characters.error, "Load characters");
   assert(voices.error, "Load voices");
   assert(assets.error, "Load media");
-  assert(jobs.error, "Load generation jobs");
   assert(homeSlots.error, "Load homepage slots");
+
+  let jobRows: AdminJobRow[];
+  if (
+    jobs.error
+    && /column generation_jobs\.(?:product_id|video_brief_id|video_type) does not exist/i.test(jobs.error.message)
+  ) {
+    // Admin access must survive a rolling deployment where application code
+    // reaches an environment shortly before the additive product-video
+    // migration. Product reporting remains blank until the migration lands.
+    const legacyJobs = await supabase
+      .from("generation_jobs")
+      .select("id,character_id,kind,provider,model,status,prompt,provider_request_id,output_asset_id,error_message,usage,provider_credits,normalized_tokens,cost_usd,usd_to_inr_rate,cost_inr,cost_method,pricing_note,metadata,started_at,completed_at,created_at")
+      .order("created_at", { ascending: false });
+    assert(legacyJobs.error, "Load generation jobs");
+    jobRows = (legacyJobs.data ?? []).map((job) => ({
+      ...job,
+      product_id: null,
+      video_brief_id: null,
+      video_type: null,
+    })) as AdminJobRow[];
+  } else {
+    assert(jobs.error, "Load generation jobs");
+    jobRows = (jobs.data ?? []) as AdminJobRow[];
+  }
 
   return {
     characters: (characters.data ?? []) as AdminCharacterRow[],
     voices: (voices.data ?? []) as AdminVoiceRow[],
     assets: (assets.data ?? []) as AdminAssetRow[],
-    jobs: (jobs.data ?? []) as AdminJobRow[],
+    jobs: jobRows,
     homeSlots: (homeSlots.data ?? []) as AdminHomeSlotRow[],
   };
 }

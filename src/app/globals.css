@@ -297,10 +297,6 @@ body {
     overflow: hidden;
   }
 
-  .studio-production-status {
-    flex: 0 0 auto;
-  }
-
   .studio-production-grid {
     min-height: 0;
     flex: 1 1 auto;
@@ -310,7 +306,7 @@ body {
 
   .studio-production-rail,
   .studio-production-content,
-  .studio-director-panel {
+  .studio-asset-panel {
     height: 100%;
     min-height: 0;
     overflow-y: auto;
@@ -324,9 +320,6 @@ body {
     padding-bottom: max(2rem, env(safe-area-inset-bottom));
   }
 
-  .studio-stage-strip::-webkit-scrollbar {
-    height: 0;
-  }
 }
 
 @keyframes studio-queued-sweep {
@@ -345,6 +338,42 @@ body {
 
 .studio-queued-timeline {
   animation: studio-queued-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes asset-canvas-shimmer {
+  0% {
+    transform: translateX(-145%) skewX(-14deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-14deg);
+  }
+}
+
+.asset-canvas-shimmer {
+  position: relative;
+  isolation: isolate;
+}
+
+.asset-canvas-shimmer::after {
+  position: absolute;
+  inset: 0 auto 0 -38%;
+  z-index: 2;
+  width: 34%;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.085), transparent);
+  animation: asset-canvas-shimmer 2.1s ease-in-out infinite;
+}
+
+.asset-canvas-skeleton[data-asset-skeleton="voice"] .asset-canvas-shimmer:nth-child(2)::after {
+  animation-delay: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-canvas-shimmer::after,
+  .studio-queued-timeline {
+    animation: none;
+  }
 }
 
 /* Homepage actor universe: a lighter, data-aware adaptation of the Infinite Menu sphere. */
