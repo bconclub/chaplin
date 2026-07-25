@@ -564,6 +564,8 @@ export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
 export function composeCharacterMasterPrompt(character: Character) {
   const bible = buildProductionBible(character);
   const source = bible.creationInputs;
+  const card = readCharacterCardV2(character.cardV2);
+  const system = bible.system ?? buildCharacterSystem(character, bible);
   const originalInputs = source
     ? [
         `Creator brief: ${source.characterBrief || "Not supplied."}`,
@@ -642,12 +644,46 @@ export function composeCharacterMasterPrompt(character: Character) {
     `Payoff: ${bible.story.payoffPattern}`,
     `Recurring motifs: ${bible.story.recurringMotifs.join(", ")}`,
     `Avoid: ${bible.story.avoid.join("; ")}`,
+    "",
+    "## Conversation and memory runtime",
+    `First-person self-concept: ${system.interaction.firstPersonSelfConcept}`,
+    `Conversation goal: ${system.interaction.conversationGoal}`,
+    `Response rules: ${system.interaction.responseRules.join(" | ")}`,
+    `Emotional boundaries: ${system.interaction.emotionalBoundaries.join(" | ")}`,
+    `Voice continuity: ${system.interaction.voiceContinuity}`,
+    `Immutable canon: ${system.memory.immutableCanon.join(" | ")}`,
+    `Writable memory types: ${system.memory.writableMemoryTypes.join(", ")}`,
+    `Forbidden memory writes: ${system.memory.forbiddenMemoryWrites.join(" | ")}`,
+    "",
+    "## Derived production audio",
+    "### Modern theme prompt",
+    composeThemePrompt(character),
+    "",
+    "### Layered signature SFX plan",
+    ...composeCharacterSignatureSfxEvents(character).map((event, index) =>
+      `${index + 1}. ${event.label} @ ${event.start_ms}ms, ${event.gain_db}dB, ${event.duration_seconds}s — ${event.prompt}`
+    ),
+    "",
+    "## Exact saved Magic Write production bible",
+    "```json",
+    JSON.stringify(character.productionBible ?? bible, null, 2),
+    "```",
+    ...(card
+      ? [
+          "",
+          "## Exact saved CharacterCardV2",
+          "```json",
+          JSON.stringify(card, null, 2),
+          "```",
+        ]
+      : []),
   ].join("\n");
 }
 
 export function composeSfxPrompt(character: CharacterIdentityInput, sceneTexture?: string) {
   const source = character.sfxDesc || "one tactile signature action";
-  return `A 1-2 second non-musical signature sound for ${character.name}: ${source}. ${sceneTexture ? `Let the material character subtly reflect ${sceneTexture}.` : "One immediate physical attack, one distinctive material detail, then a clean stop."} Dry close foreground, realistic texture, instantly recognizable at low volume. No sequence, ambience bed, speech, voice, melody, riser, or trailer braam.`;
+  if (/^Premium cinematic Foley one-shot\b/i.test(source.trim())) return source.trim();
+  return `Premium cinematic Foley one-shot for ${character.name}: ${source}. ${sceneTexture ? `The acoustic material subtly reflects ${sceneTexture}.` : "One immediate physical action with a precise attack, weighty material body, and short controlled room tail."} Blend close and room-mic detail into one coherent event; full-spectrum, high dynamic range, polished, center-safe, and recognizable at low volume. No repeated variations, sequence, ambience bed, speech, melody, generic whoosh, riser, or trailer braam.`;
 }
 
 export function signatureSfxPromptIssues(prompt: string) {
@@ -669,9 +705,221 @@ export function assertSignatureSfxPrompt(prompt: string) {
 
 /** Builds one provider request. Timeline and other events are deliberately absent. */
 export function composeSignatureSfxEventPrompt(event: SignatureSfxEvent) {
-  const prompt = `${event.prompt.replace(/\s+/g, " ").trim()}. Single concrete physical event only, realistic material response in the named space, close and dry, clean stop. No sequence, ambience bed, music, or speech.`;
+  const prompt = `${event.prompt.replace(/\s+/g, " ").trim()}. Premium cinematic Foley, single concrete physical event only. Capture a crisp transient, weighty material body, microscopic texture, and short controlled natural tail as one coherent high-resolution sound. Blend close and room-mic perspective; polished, full-spectrum, clean stop. No repeated variation, sequence, ambience bed, music, speech, generic whoosh, or trailer braam.`;
   assertSignatureSfxPrompt(prompt);
   return prompt;
+}
+
+type AudioIdentityFamily =
+  | "cyber"
+  | "horror"
+  | "villain"
+  | "rebel"
+  | "comic"
+  | "romance"
+  | "drama"
+  | "hero"
+  | "grounded";
+
+type ModernThemePalette = {
+  family: AudioIdentityFamily;
+  genres: string;
+  instruments: [string, string, string, string];
+  groove: string;
+  production: string;
+  sfxLayers: [
+    { label: string; prompt: string },
+    { label: string; prompt: string },
+  ];
+};
+
+const MODERN_THEME_PALETTES: Record<AudioIdentityFamily, ModernThemePalette> = {
+  cyber: {
+    family: "cyber",
+    genres: "2020s future garage, cyber-industrial bass, and cinematic electronica",
+    instruments: ["granular metallic percussion", "modular synth arpeggio", "reese sub-bass", "processed low brass"],
+    groove: "a syncopated half-time garage pulse with detailed micro-glitches and a decisive mechanical lift",
+    production: "precision-cut transients, deep controlled sub, transformer-like mechanical texture, wide granular atmosphere, and a bold three-note identity motif",
+    sfxLayers: [
+      { label: "Servo weight", prompt: "one heavy precision servo lock engages inside a large alloy chassis, close mechanical detail, controlled metal resonance" },
+      { label: "Energy seal", prompt: "one electromagnetic power core seals with a compact sub-frequency pulse and crystalline electrical edge, dry futuristic chamber" },
+    ],
+  },
+  horror: {
+    family: "horror",
+    genres: "contemporary dark ambient, post-industrial tension design, and ritual bass",
+    instruments: ["bowed metal", "granular string harmonics", "distorted sub pulse", "prepared piano"],
+    groove: "an unstable negative-space pulse with asymmetrical impacts and no predictable loop",
+    production: "microscopic room detail, corroded texture, controlled infrasonic weight, narrow-to-wide spatial movement, and one unforgettable dissonant motif",
+    sfxLayers: [
+      { label: "Structural dread", prompt: "one stressed timber joint twists under hidden weight, intimate splinter detail, dark empty interior, short natural decay" },
+      { label: "Cold mechanism", prompt: "one corroded concealed mechanism judders into place, close iron friction, restrained low-frequency weight, dry dead room" },
+    ],
+  },
+  villain: {
+    family: "villain",
+    genres: "deconstructed club, industrial techno, and dark cinematic bass",
+    instruments: ["muted modular bass", "prepared low strings", "granular metal clicks", "distorted frame drum"],
+    groove: "a restrained broken-club pulse that withholds the downbeat before one controlled impact",
+    production: "luxurious dark low end, surgical silence, tactile close detail, asymmetric stereo pressure, and a cold minimal motif with real development",
+    sfxLayers: [
+      { label: "Control mechanism", prompt: "one precision latch closes under deliberate pressure, dense machined metal body, intimate close mic, short expensive room tail" },
+      { label: "Authority mark", prompt: "one weighted object contacts polished stone with a compact low resonance, controlled transient, private interior" },
+    ],
+  },
+  rebel: {
+    family: "rebel",
+    genres: "electro-punk breakbeat, grime-inflected bass, and cinematic industrial electronica",
+    instruments: ["distorted electric sarod", "modular bass", "broken acoustic drums", "contact-mic metal"],
+    groove: "a clipped breakbeat that kicks against the grid and surges forward at the turn",
+    production: "raw-edged transients, saturated midrange, tight sub pressure, live material noise, and a defiant hook that lands rather than loops",
+    sfxLayers: [
+      { label: "Pressure release", prompt: "one taut industrial cable snaps free from a metal catch, sharp tension release, close exterior recording, controlled decay" },
+      { label: "Defiant impact", prompt: "one boot heel strikes a hollow steel platform with decisive weight, close contact detail, short open-air reflection" },
+    ],
+  },
+  comic: {
+    family: "comic",
+    genres: "wonky UK garage, nu-disco percussion, and playful leftfield electronica",
+    instruments: ["rubbery synth bass", "chopped hand percussion", "muted brass stab", "prepared toy piano"],
+    groove: "a nimble two-step pocket with one deliberate rhythmic fake-out and a clean payoff",
+    production: "punchy dry drums, elastic bass, bright transient detail, quick stereo gestures, and a witty motif that never becomes novelty music",
+    sfxLayers: [
+      { label: "Tactile mistake", prompt: "one small metal object skitters into an unexpectedly perfect stop, crisp close Foley, lively material detail, dry room" },
+      { label: "Comic lock", prompt: "one compact spring mechanism releases with a precise elastic clack, close mic, bright transient, clean stop" },
+    ],
+  },
+  romance: {
+    family: "romance",
+    genres: "alternative R&B ambience, future-soul minimalism, and cinematic downtempo",
+    instruments: ["felt piano", "warm analog sub-bass", "processed sarangi", "brushed electronic percussion"],
+    groove: "a breathing off-grid pulse with intimate syncopation and one suspended emotional turn",
+    production: "close tactile detail, warm low-mid depth, soft-edged transients, luminous stereo air, and a memorable motif that feels private rather than sentimental",
+    sfxLayers: [
+      { label: "Private detail", prompt: "one small personal clasp opens under a careful thumb, intimate metal and fabric detail, close mic, quiet warm room" },
+      { label: "Held breath object", prompt: "one fingertip traces across textured glass and stops, delicate friction detail, intimate dry interior, controlled tail" },
+    ],
+  },
+  drama: {
+    family: "drama",
+    genres: "ambient neoclassical, organic electronica, and modern cinematic minimalism",
+    instruments: ["felt piano", "processed cello", "granular tape texture", "low electronic pulse"],
+    groove: "a human, imperfect pulse that gathers emotional weight without becoming a repetitive ostinato",
+    production: "detailed acoustic intimacy, restrained sub depth, evolving harmonic color, natural room perspective, and a clear motif with a meaningful turn",
+    sfxLayers: [
+      { label: "Human object", prompt: "one worn personal object settles onto a wooden surface, intimate contact texture, close mic, natural quiet room" },
+      { label: "Threshold detail", prompt: "one old door latch shifts under gentle hand pressure, precise metal and wood friction, short realistic interior decay" },
+    ],
+  },
+  hero: {
+    family: "hero",
+    genres: "cinematic future garage, hybrid breakbeat, and modern orchestral electronica",
+    instruments: ["processed low strings", "modular arpeggio", "taiko ensemble", "synth brass"],
+    groove: "a muscular syncopated pulse that builds through layered rhythm rather than a stock trailer march",
+    production: "punchy transient architecture, controlled cinematic sub, detailed hybrid acoustics, wide but focused imaging, and an original ascending identity motif",
+    sfxLayers: [
+      { label: "Readiness", prompt: "one reinforced garment fastening pulls tight under a deliberate hand, dense fabric and metal detail, close exterior mic" },
+      { label: "Resolve", prompt: "one controlled weighted impact lands on a solid composite surface, compact sub body, crisp transient, short open-space reflection" },
+    ],
+  },
+  grounded: {
+    family: "grounded",
+    genres: "organic electronica, contemporary cinematic folk, and broken-beat minimalism",
+    instruments: ["prepared acoustic strings", "hand percussion", "warm synth bass", "granular field texture"],
+    groove: "a tactile broken pulse shaped by the character's movement and one restrained rhythmic turn",
+    production: "natural material detail, modern low-end control, layered acoustic depth, subtle stereo movement, and a concise identity motif with no filler",
+    sfxLayers: [
+      { label: "Material signature", prompt: "one practical handheld object clicks firmly into place, precise material texture, close mic, believable small room" },
+      { label: "Movement signature", prompt: "one weighted fabric movement cuts through still air, detailed fibers, intimate Foley stage, short controlled tail" },
+    ],
+  },
+};
+
+function audioIdentityText(character: CharacterIdentityInput) {
+  const bible = buildProductionBible(character);
+  return [
+    character.name,
+    character.archetype,
+    character.tagline,
+    character.personality,
+    character.themeDesc,
+    character.sfxDesc,
+    character.appearanceBrief,
+    character.worldBrief,
+    bible.dramatic.contradiction,
+    bible.cinematography.worldTexture,
+    bible.story.recurringMotifs.join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+export function resolveModernThemePalette(character: CharacterIdentityInput): ModernThemePalette {
+  const text = audioIdentityText(character);
+  if (/\b(?:transformer|autobot|robot|android|mech|cyber|synthetic|machine|exosuit|powered armor|powered armour|artificial intelligence|future tech|energy core)\b/i.test(text)) {
+    return MODERN_THEME_PALETTES.cyber;
+  }
+  if (character.archetype === "horror" || /\b(?:horror|haunt|ghost|occult|dread|nightmare|possess|undead|spectral)\b/i.test(text)) {
+    return MODERN_THEME_PALETTES.horror;
+  }
+  if (character.archetype === "villain") return MODERN_THEME_PALETTES.villain;
+  if (character.archetype === "rebel") return MODERN_THEME_PALETTES.rebel;
+  if (character.archetype === "comic-relief" || /\b(?:comic|comedy|funny|playful|mischief)\b/i.test(text)) return MODERN_THEME_PALETTES.comic;
+  if (character.archetype === "love-interest" || /\b(?:romance|romantic|intimacy|tender|longing|love)\b/i.test(text)) return MODERN_THEME_PALETTES.romance;
+  if (/\b(?:drama|dramatic|grief|family|memory|loss|regret|melancholy|domestic)\b/i.test(text)) return MODERN_THEME_PALETTES.drama;
+  if (character.archetype === "hero" || character.archetype === "superhero") return MODERN_THEME_PALETTES.hero;
+  return MODERN_THEME_PALETTES.grounded;
+}
+
+function atomicSfxSource(value: string | undefined) {
+  const fallback = "one distinctive practical object makes a precise tactile contact";
+  if (!value?.trim()) return fallback;
+  const unwrapped = value
+    .replace(/^.*?signature sound for [^:]+:\s*/i, "")
+    .replace(/^.*?signature sfx for [^:]+:\s*/i, "")
+    .trim();
+  const atomic = unwrapped
+    .split(/\bthen\b|\bfollowed by\b|\bafter (?:that|it)\b|[.;\n]/i)[0]
+    ?.replace(/\b(?:five|5|1-2)[- ]second\b/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/[,:;\s]+$/, "")
+    .trim();
+  return atomic && atomic.length >= 10 ? atomic.slice(0, 220) : fallback;
+}
+
+/**
+ * All characters receive a complete layered five-second signature. Authored
+ * CharacterCardV2 events remain authoritative; older characters get a
+ * deterministic three-event plan derived from their full canon.
+ */
+export function composeCharacterSignatureSfxEvents(character: CharacterIdentityInput): SignatureSfxEvent[] {
+  const authored = readCharacterCardV2(character.cardV2)?.signature_sfx_events;
+  if (authored?.length) return authored;
+  const palette = resolveModernThemePalette(character);
+  return [
+    {
+      id: "canonical-material",
+      label: "Canonical material",
+      prompt: atomicSfxSource(character.sfxDesc),
+      duration_seconds: 1.6,
+      start_ms: 0,
+      gain_db: 0,
+    },
+    {
+      id: `${palette.family}-body`,
+      label: palette.sfxLayers[0].label,
+      prompt: palette.sfxLayers[0].prompt,
+      duration_seconds: 1.5,
+      start_ms: 1450,
+      gain_db: -3,
+    },
+    {
+      id: `${palette.family}-resolve`,
+      label: palette.sfxLayers[1].label,
+      prompt: palette.sfxLayers[1].prompt,
+      duration_seconds: 1.5,
+      start_ms: 3000,
+      gain_db: -1,
+    },
+  ];
 }
 
 export const THEME_DURATION_PRESETS = [5, 8, 15] as const;
@@ -748,21 +996,45 @@ export function composeThemePrompt(
   if (!isThemeDurationPreset(durationSeconds)) {
     throw new Error(`Theme duration must be one of ${THEME_DURATION_PRESETS.join(", ")} seconds.`);
   }
+  const existingTheme = character.themeDesc?.trim();
+  if (
+    existingTheme
+    && /^Original 2020s\b/i.test(existingTheme)
+    && /\bFully arranged and mastered\b/i.test(existingTheme)
+  ) {
+    const prompt = withThemeDurationDirection(existingTheme, durationSeconds);
+    if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+    return prompt;
+  }
   const card = readCharacterCardV2(character.cardV2);
   const bible = buildProductionBible(character);
   const profile = card?.theme_profile;
+  const modern = resolveModernThemePalette(character);
   const turn = themeClause(dramaticBeat) || profile?.emotional_turn || themeClause(bible.story.payoffPattern);
-  const productionBrief = profile
-    ? [
-        `${sentenceStart(themeClause(profile.style_anchor))}, ${themeClause(profile.mood)}.`,
-        `Built around ${naturalList(profile.instruments.map((instrument) => themeClause(instrument)))}.`,
-        `${sentenceStart(themeClause(profile.opening))}, ${themeClause(profile.build)}, ${themeClause(turn)}, and ${themeClause(profile.ending)}.`,
-      ].join(" ")
-    : [
-        `${themeClause(character.themeDesc) || "Intimate cinematic character theme"}, emotionally specific and fully produced.`,
-        "Piano, low strings, and restrained hand percussion.",
-        `A concise melodic gesture opens, a low pulse and contrasting texture build underneath, ${turn || "one tense accent marks the emotional turn"}, and the cue ends on a clean unresolved accent.`,
-      ].join(" ");
+  const legacyColor = themeClause(profile?.style_anchor) || themeClause(character.themeDesc);
+  const profileInstruments = profile?.instruments
+    .map((instrument) => themeClause(instrument))
+    .filter(Boolean) ?? [];
+  const instruments = [...new Set([...profileInstruments, ...modern.instruments])].slice(0, 4);
+  const opening = themeClause(profile?.opening)
+    || `the ${instruments[0]} states a concise, recognizable motif immediately`;
+  const build = themeClause(profile?.build)
+    || `${modern.groove} arrives underneath while ${instruments[1]} answers the motif`;
+  const emotionalTurn = themeClause(turn)
+    || `the harmony and sound design tighten into one emotionally legible turn`;
+  const ending = themeClause(profile?.ending)
+    || `the full arrangement resolves on one edit-ready final identity hit`;
+  const mood = themeClause(profile?.mood)
+    || themeClause(bible.dramatic.contradiction)
+    || "emotionally specific, dimensional, and alert";
+  const productionBrief = [
+    `Original ${modern.genres} character theme for ${character.name}; ${mood}.`,
+    legacyColor ? `Retain this character-specific cultural or acoustic color inside the contemporary production: ${legacyColor}.` : "",
+    `Core palette: ${naturalList(instruments)}.`,
+    `Arrangement: ${sentenceStart(opening)}. ${sentenceStart(build)}. ${sentenceStart(emotionalTurn)}. ${sentenceStart(ending)}.`,
+    `Production and mix: ${modern.production}. Fully arranged and mastered with foreground motif, supporting rhythm, bass movement, harmonic development, layered depth, polished transients, and a complete beginning-middle-end arc.`,
+    "Avoid sparse single-chord noodling, isolated solo demo playing, a stock orchestral trailer bed, generic corporate music, repetitive placeholder loops, muddy low end, thin percussion, or an empty intro.",
+  ].filter(Boolean).join(" ");
   const prompt = withThemeDurationDirection(
     `${productionBrief} No imitation of an existing composition. Instrumental only, no vocals.`,
     durationSeconds,

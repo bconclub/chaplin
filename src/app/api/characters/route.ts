@@ -69,7 +69,7 @@ function parseCharacter(value: unknown): Character {
     voiceDesc: requiredString(input.voiceDesc, "voiceDesc", 1000),
     voiceId: typeof input.voiceId === "string" ? input.voiceId : undefined,
     sfxDesc: requiredString(input.sfxDesc, "sfxDesc", 1000),
-    themeDesc: requiredString(input.themeDesc, "themeDesc", 1000),
+    themeDesc: requiredString(input.themeDesc, "themeDesc", 3000),
     productionBible: input.productionBible && typeof input.productionBible === "object"
       ? input.productionBible as CharacterProductionBible
       : undefined,

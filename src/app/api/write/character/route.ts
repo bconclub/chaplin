@@ -60,6 +60,26 @@ function enforceVoiceCoherence(suggestion: CharacterSuggestion, characterBrief: 
     voiceDescription: alignVoiceDescription(suggestion.voiceDescription, voiceGender),
   };
 }
+
+function enforceModernAudioDirection(
+  suggestion: CharacterSuggestion,
+  input: Parameters<typeof localSuggestion>[0],
+) {
+  const character = {
+    ...input,
+    ...suggestion,
+    voiceDesc: suggestion.voiceDescription,
+    sfxDesc: suggestion.signatureSfx,
+    themeDesc: suggestion.themeScore,
+    productionBible: suggestion.productionBible,
+  };
+  return {
+    ...suggestion,
+    signatureSfx: composeSfxPrompt(character),
+    themeScore: composeThemePrompt(character),
+  };
+}
+
 const STYLE_MEDIUM = /\b(manga|anime|illustration|illustrated|cel[- ]?shad(?:ed|ing)|screentone|ink(?:ed|work)?|graphic novel|comic(?: book)?|watercolou?r|gouache|oil painting|stop[- ]motion|claymation|pixel art|2d animation|3d animation)\b/i;
 
 function enforceVisualIdentity(suggestion: CharacterSuggestion, appearanceBrief: string, worldBrief: string) {
@@ -280,7 +300,7 @@ export async function POST(request: Request) {
         model,
         max_tokens: Math.max(4000, writingConfig.maxTokens ?? 8000),
         thinking: { type: "disabled" },
-        system: `${writingConfig.promptPrelude} You are Chaplin's casting director, performance director, cinematographer, and story editor. Build an original production-ready fictional actor, not a biography. Every value must be playable, visible, recordable, or usable as a continuity rule. When the maker has not supplied a name, suggest one original, plausible, culturally grounded character name that fits the brief; when they have supplied a name, preserve it exactly. Never use a celebrity, public figure, or copyrighted character name. The visual identity is the highest-priority output: infer a face, hair, body presence, signature wardrobe, material texture, palette, setting, camera, and motivated light that express the personality without reducing the actor to an archetype costume. perceivedAge must be an actual narrow visible age range. Each of the three faceAnchors must name concrete repeatable anatomy or surface detail—brow shape or spacing, eye shape or set, nose structure, mouth, jaw, skin texture, scar, mole, or asymmetry—not generic phrases such as 'distinct face' or 'preserve exactly.' Hair must specify length, texture, part or hairline, finish, and grooming. Wardrobe must specify exact garments, cut, materials, colors, wear, and no logos. Silhouette must describe visible proportions, stance, and one recognizable shape. Camera and lighting must be chosen to reveal those anchors and the central personality contradiction. If appearance or world direction is supplied, preserve it exactly; otherwise invent one coherent, culturally grounded, non-celebrity identity. Also create a dramatic want/need contradiction, precise pressure behavior and micro-expression, motivated story engine, visual hook, situation-changing cliffhanger, payoff, motifs, and explicit cliches to avoid. Never imitate a celebrity or copyrighted character. Voice coherence is mandatory: explicit pronouns and gender words in characterBrief override an unlocked UI default, and voiceGender plus voiceDescription must agree with each other. The voice prompt must follow ElevenLabs Voice Design order and contain no FX language. SFX must be a concise physical five-second one-shot. Theme must be a natural-language production brief for an approximately eight-second instrumental identity cue, naming the style and era, mood, two to four instruments, opening, build, emotional turn, and ending. Never use BPM/key/time-signature slots. Do not repeat biography across fields and do not use generic adjectives without observable evidence.`,
+        system: `${writingConfig.promptPrelude} You are Chaplin's casting director, performance director, cinematographer, story editor, music supervisor, and sound designer. Build an original production-ready fictional actor, not a biography. Every value must be playable, visible, recordable, or usable as a continuity rule. When the maker has not supplied a name, suggest one original, plausible, culturally grounded character name that fits the brief; when they have supplied a name, preserve it exactly. Never use a celebrity, public figure, or copyrighted character name. The visual identity is the highest-priority output: infer a face, hair, body presence, signature wardrobe, material texture, palette, setting, camera, and motivated light that express the personality without reducing the actor to an archetype costume. perceivedAge must be an actual narrow visible age range. Each of the three faceAnchors must name concrete repeatable anatomy or surface detail—brow shape or spacing, eye shape or set, nose structure, mouth, jaw, skin texture, scar, mole, or asymmetry—not generic phrases such as 'distinct face' or 'preserve exactly.' Hair must specify length, texture, part or hairline, finish, and grooming. Wardrobe must specify exact garments, cut, materials, colors, wear, and no logos. Silhouette must describe visible proportions, stance, and one recognizable shape. Camera and lighting must be chosen to reveal those anchors and the central personality contradiction. If appearance or world direction is supplied, preserve it exactly; otherwise invent one coherent, culturally grounded, non-celebrity identity. Also create a dramatic want/need contradiction, precise pressure behavior and micro-expression, motivated story engine, visual hook, situation-changing cliffhanger, payoff, motifs, and explicit cliches to avoid. Never imitate a celebrity or copyrighted character. Voice coherence is mandatory: explicit pronouns and gender words in characterBrief override an unlocked UI default, and voiceGender plus voiceDescription must agree with each other. The voice prompt must follow ElevenLabs Voice Design order and contain no FX language. SFX must identify concrete physical materials and enough distinct sonic details to build a layered five-second identity from separate high-resolution Foley events. Theme must be a natural-language brief for a complete, polished instrumental identity cue using a current 2020s hybrid genre appropriate to this exact character—for example future garage and cyber-industrial bass for a cyber-mechanical guardian, dark ambient and post-industrial tension design for horror, alternative R&B ambience and future-soul for intimate drama, or deconstructed club and industrial techno for a controlled villain. Name the mood, two to four specific instruments, foreground motif, rhythm, bass movement, opening, build, emotional turn, ending, spatial design, and mix finish. Demand a fully arranged beginning-middle-end cue; reject sparse single-chord noodling, stock trailer music, generic corporate beds, and placeholder loops. Never use BPM/key/time-signature slots or imitate an existing composition. Do not repeat biography across fields and do not use generic adjectives without observable evidence.`,
         messages: [{
           role: "user",
           content: JSON.stringify({
@@ -316,10 +336,13 @@ export async function POST(request: Request) {
       throw new Error("Claude's output was cut off mid-write. Try again.");
     }
     return Response.json({
-      suggestion: enforceVisualIdentity(
-        { ...enforceVoiceCoherence(parsed, input.characterBrief), name: suggestedName({ ...input, name: name || clean(parsed.name, 120) }) },
-        input.appearanceBrief,
-        input.worldBrief,
+      suggestion: enforceModernAudioDirection(
+        enforceVisualIdentity(
+          { ...enforceVoiceCoherence(parsed, input.characterBrief), name: suggestedName({ ...input, name: name || clean(parsed.name, 120) }) },
+          input.appearanceBrief,
+          input.worldBrief,
+        ),
+        input,
       ),
       provider: "anthropic",
       model,

@@ -8,7 +8,10 @@ import {
   composeCharacterInteractionPrompt,
   composeCharacterSheetPrompt,
 } from "@/lib/character-system";
-import { buildProductionBible } from "@/lib/production-prompting";
+import {
+  buildProductionBible,
+  composeCharacterMasterPrompt,
+} from "@/lib/production-prompting";
 import { useChaplinStore } from "@/lib/store";
 import type { Character, CharacterAgeStateId, CharacterSheetViewId } from "@/lib/types";
 
@@ -295,7 +298,12 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
     [ageId, bible, character, expression, viewId, wardrobe],
   );
   const masterPrompt = useMemo(
-    () => composeCharacterInteractionPrompt(character, bible),
+    () => [
+      composeCharacterMasterPrompt(character),
+      "",
+      "## Exact runtime conversation system prompt",
+      composeCharacterInteractionPrompt(character, bible),
+    ].join("\n"),
     [bible, character],
   );
   const mediaCount = (character.galleryUrls?.length ?? 0) + (character.imageUrl ? 1 : 0) + (character.videoUrl ? 1 : 0);
@@ -447,7 +455,7 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Super Admin only</p>
                 <h2 id="master-prompt-title" className="mt-1 text-lg font-semibold">{character.name} · master character prompt</h2>
-                <p className="mt-1 text-[10px] text-grey">This is the runtime identity sent to the character conversation agent. Makers, brands, and casters are redirected before this page renders.</p>
+                <p className="mt-1 text-[10px] text-grey">Complete Magic Write canon, production bible, CharacterCardV2, derived audio direction, and runtime conversation prompt. Makers, brands, and casters are redirected before this page renders.</p>
               </div>
               <button type="button" onClick={() => setMasterPromptOpen(false)} className="rounded-full border border-white/10 px-3 py-2 text-[10px] font-semibold text-grey hover:text-ink">
                 Close

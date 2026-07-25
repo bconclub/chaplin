@@ -52,9 +52,8 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
     { key: "durationSeconds", label: "Default seconds", type: "number", min: 0.5, max: 5, step: 0.1, note: "Target duration sent to ElevenLabs." },
     { key: "minimumDurationSeconds", label: "Minimum seconds", type: "number", min: 0.5, max: 5, step: 0.1, note: "Lower clamp for editor requests." },
     { key: "maximumDurationSeconds", label: "Maximum seconds", type: "number", min: 0.5, max: 8, step: 0.1, note: "Upper clamp for editor requests." },
-    { key: "promptInfluence", label: "Prompt influence", type: "number", min: 0, max: 1, step: 0.01, note: "Higher values follow the written material and acoustic direction more tightly." },
+    { key: "promptInfluence", label: "Prompt influence", type: "number", min: 0, max: 1, step: 0.01, note: "Defaults to 0.55 for a precise event while retaining enough variation for rich material detail." },
     { key: "loop", label: "Seamless loop", type: "boolean", note: "Native ElevenLabs v2 control. Keep off for atomic signature events with a clean stop." },
-    { key: "candidateCount", label: "Candidate takes", type: "number", min: 1, max: 6, step: 1, note: "Variations offered to the sound engineer." },
   ],
   theme: [
     {
@@ -66,7 +65,7 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
         { value: 8, label: "8 seconds · default ident" },
         { value: 15, label: "15 seconds · extended cue" },
       ],
-      note: "Chaplin sends this as ElevenLabs music_length_ms. Studio choices are intentionally limited to edit-ready presets.",
+      note: "Sent to Eleven Music v2 as music_length_ms with a 48 kHz, 192 kbps delivery target. Studio choices remain edit-ready presets.",
     },
     { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Blocks generated vocals and lyrics." },
     { key: "signWithC2pa", label: "C2PA provenance", type: "boolean", note: "Requests provider provenance signing when available." },

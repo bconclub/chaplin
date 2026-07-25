@@ -65,13 +65,13 @@ export const PIPELINE_STAGE_META: Record<PipelineStageId, {
   sfx: {
     label: "Signature SFX",
     owner: "Sound engineer",
-    purpose: "Short, repeatable physical sonic logos and their candidate variations.",
+    purpose: "Layered, high-resolution cinematic Foley identities assembled from distinct physical events.",
     temperatureSupported: false,
   },
   theme: {
     label: "Theme score",
     owner: "Music supervisor",
-    purpose: "Instrumental character idents with a controlled motif, arc, and ending.",
+    purpose: "Contemporary, fully arranged instrumental character themes with modern genre intelligence, a controlled motif, and an edit-ready ending.",
     temperatureSupported: false,
   },
   image: {
@@ -126,14 +126,14 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
       enabled: true,
       provider: "elevenlabs",
       model: "eleven_text_to_sound_v2",
-      promptPrelude: "One short non-musical physical sound with an immediate attack, distinctive material detail, and clean stop.",
+      promptPrelude: "Premium high-resolution cinematic Foley. Render one physical event with a crisp transient, weighty material body, microscopic texture, blended close and room perspective, full-spectrum polish, and a clean controlled tail.",
       temperature: null,
       maxTokens: null,
       settings: {
         durationSeconds: 1.5,
         minimumDurationSeconds: 0.5,
         maximumDurationSeconds: 3,
-        promptInfluence: 0.35,
+        promptInfluence: 0.55,
         loop: false,
         candidateCount: 4,
       },
@@ -141,8 +141,8 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
     theme: {
       enabled: true,
       provider: "elevenlabs",
-      model: "music_v1",
-      promptPrelude: "Instrumental character ident with a foreground motif, controlled low end, and edit-ready ending.",
+      model: "music_v2",
+      promptPrelude: "Studio-grade contemporary character theme: fully arranged, richly layered, dynamically shaped, and mastered. Use a memorable foreground motif, developed rhythm, moving bass, harmonic progression, detailed transients, controlled sub, dimensional stereo depth, and an edit-ready ending. Never return sparse single-chord noodling or a placeholder demo loop.",
       temperature: null,
       maxTokens: null,
       settings: {
@@ -218,13 +218,22 @@ export function normalizePipelineConfig(input: unknown, metadata?: {
       settings.durationSeconds = [5, 8, 15].includes(duration) ? duration : 8;
     }
     if (id === "sfx") {
-      settings.promptInfluence = finiteNumber(settings.promptInfluence, 0.35, 0, 1);
+      const influence = finiteNumber(settings.promptInfluence, 0.55, 0, 1);
+      // Upgrade the previous thin-sounding default while preserving every
+      // deliberately customized value.
+      settings.promptInfluence = influence === 0.35 ? 0.55 : influence;
       settings.loop = typeof settings.loop === "boolean" ? settings.loop : false;
     }
+    const requestedModel = typeof raw.model === "string" && raw.model.trim()
+      ? raw.model.trim().slice(0, 120)
+      : defaults.model;
+    const model = id === "theme" && requestedModel === "music_v1"
+      ? "music_v2"
+      : requestedModel;
     stages[id] = {
       enabled: typeof raw.enabled === "boolean" ? raw.enabled : defaults.enabled,
       provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider.trim().slice(0, 80) : defaults.provider,
-      model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim().slice(0, 120) : defaults.model,
+      model,
       promptPrelude: typeof raw.promptPrelude === "string" ? raw.promptPrelude.trim().slice(0, 4000) : defaults.promptPrelude,
       temperature: PIPELINE_STAGE_META[id].temperatureSupported
         ? finiteNumber(raw.temperature, defaults.temperature ?? 0.65, 0, 1)

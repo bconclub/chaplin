@@ -3,11 +3,14 @@ import test from "node:test";
 import {
   assertSignatureSfxPrompt,
   assertThemePromptV2,
+  composeCharacterMasterPrompt,
+  composeCharacterSignatureSfxEvents,
   composeProductImagePrompt,
   composeProductVideoPrompt,
   composeSignatureSfxEventPrompt,
   composeThemePrompt,
   productDialogueAllowlist,
+  resolveModernThemePalette,
   withThemeDurationDirection,
   type CharacterIdentityInput,
   type ShotBlueprint,
@@ -16,6 +19,8 @@ import { ProductCardSchema } from "@/lib/product-card";
 import { VideoType } from "@/lib/video-brief";
 import { AGNI_MAYA_CARD_V2 } from "@/lib/character-card-fixtures";
 import { buildSignatureSfxFilterGraph } from "@/lib/signature-sfx";
+import { CHARACTERS } from "@/data/seed";
+import { DEFAULT_PIPELINE_CONFIG, normalizePipelineConfig } from "@/lib/pipeline-config";
 
 const product = ProductCardSchema.parse({
   brand_name: "Northstar",
@@ -138,4 +143,87 @@ test("theme duration direction replaces prior timing and the guard rejects theor
   assert.match(prompt, /About 15 seconds, ends cleanly, no fade-out\./);
   assert.match(prompt, /Instrumental only, no vocals\.$/);
   assert.throws(() => assertThemePromptV2("A cue in 4/4 at 90 BPM."), /forbidden/);
+});
+
+test("cyber-mechanical characters receive a current, fully produced genre palette", () => {
+  const cyberGuardian: CharacterIdentityInput = {
+    name: "Atlas Prime",
+    archetype: "superhero",
+    tagline: "A transforming machine guardian protects the last human city.",
+    personality: "An ancient cybernetic defender with disciplined compassion and immense mechanical weight.",
+    voiceGender: "androgynous",
+    themeDesc: "heroic mechanical identity music",
+    sfxDesc: "one armored chest mechanism locks into place",
+  };
+  assert.equal(resolveModernThemePalette(cyberGuardian).family, "cyber");
+  const prompt = composeThemePrompt(cyberGuardian);
+  assert.match(prompt, /future garage/i);
+  assert.match(prompt, /cyber-industrial bass/i);
+  assert.match(prompt, /fully arranged and mastered/i);
+  assert.match(prompt, /bass movement/i);
+  assert.match(prompt, /avoid sparse single-chord noodling/i);
+  assert.doesNotMatch(prompt, /Transformers|Autobots/i);
+  assert.equal(composeThemePrompt({ ...cyberGuardian, themeDesc: prompt }), prompt);
+});
+
+test("modern theme routing covers horror and intimate drama without collapsing to one palette", () => {
+  const horrorPrompt = composeThemePrompt({
+    ...actor,
+    name: "The Quiet Tenant",
+    archetype: "horror",
+    personality: "A patient haunting that answers through damaged machinery.",
+  });
+  const dramaPrompt = composeThemePrompt({
+    ...actor,
+    name: "Meera",
+    archetype: "mentor",
+    personality: "A restrained family drama about grief, memory, and an unfinished promise.",
+  });
+  assert.match(horrorPrompt, /dark ambient/i);
+  assert.match(horrorPrompt, /post-industrial tension design/i);
+  assert.match(dramaPrompt, /ambient neoclassical/i);
+  assert.match(dramaPrompt, /organic electronica/i);
+  assert.notEqual(horrorPrompt, dramaPrompt);
+});
+
+test("legacy characters receive a layered five-second SFX plan", () => {
+  const events = composeCharacterSignatureSfxEvents({
+    ...actor,
+    sfxDesc: "A reinforced glove pulls tight, then a heavy shield locks.",
+  });
+  assert.equal(events.length, 3);
+  assert.deepEqual(events.map((event) => event.start_ms), [0, 1450, 3000]);
+  assert.doesNotMatch(events[0].prompt, /\bthen\b/i);
+  for (const event of events) {
+    const prompt = composeSignatureSfxEventPrompt(event);
+    assert.match(prompt, /high-resolution sound/i);
+    assert.match(prompt, /full-spectrum/i);
+  }
+});
+
+test("super-admin master prompt contains the complete Magic Write canon and derived audio", () => {
+  const character = CHARACTERS[0];
+  const prompt = composeCharacterMasterPrompt(character);
+  assert.match(prompt, /## Core character/);
+  assert.ok(prompt.includes(character.personality));
+  assert.ok(prompt.includes(character.voiceDesc));
+  assert.ok(prompt.includes(character.sfxDesc));
+  assert.ok(prompt.includes(character.themeDesc));
+  assert.match(prompt, /## Exact saved Magic Write production bible/);
+  assert.match(prompt, /## Derived production audio/);
+  assert.match(prompt, /### Modern theme prompt/);
+  assert.match(prompt, /### Layered signature SFX plan/);
+});
+
+test("pipeline defaults and legacy settings resolve to Music v2 and richer SFX adherence", () => {
+  assert.equal(DEFAULT_PIPELINE_CONFIG.stages.theme.model, "music_v2");
+  assert.equal(DEFAULT_PIPELINE_CONFIG.stages.sfx.settings.promptInfluence, 0.55);
+  const upgraded = normalizePipelineConfig({
+    stages: {
+      theme: { model: "music_v1" },
+      sfx: { settings: { promptInfluence: 0.35 } },
+    },
+  });
+  assert.equal(upgraded.stages.theme.model, "music_v2");
+  assert.equal(upgraded.stages.sfx.settings.promptInfluence, 0.55);
 });

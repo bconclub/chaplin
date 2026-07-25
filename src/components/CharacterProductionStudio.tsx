@@ -269,13 +269,6 @@ function estimatedGenerationProgress(run: GenerationRun) {
   return Math.min(94, Math.max(6, Math.round(6 + (run.elapsedSeconds / timeline.expectedSeconds) * 86)));
 }
 
-const SFX_VARIATIONS = [
-  { label: "Raw material", direction: "Use one close, dry physical action only. Prioritize the initial contact and material grain; no tonal ring, musical contour, reverb, or second beat." },
-  { label: "Resonant detail", direction: "Use the same signature source but reveal a clearly different material resonance: one unusual texture, a short natural decay, and no repeated attack." },
-  { label: "Kinetic release", direction: "Make this a fast pressure-release or compact movement version of the source: a sharper transient, controlled air movement, and an immediate stop." },
-  { label: "Two-part reveal", direction: "Create a deliberately distinct two-part punctuation: a small preparatory micro-detail followed by one decisive physical hit, then silence. Keep it non-musical." },
-] as const;
-
 const THEME_DURATION_PRESETS = [5, 8, 15] as const;
 type ThemeDurationPreset = typeof THEME_DURATION_PRESETS[number];
 
@@ -287,9 +280,9 @@ function themeDurationPreset(value: unknown): ThemeDurationPreset {
 }
 
 function characterSignatureSfxEventCount(character: Character) {
-  if (!character.cardV2 || typeof character.cardV2 !== "object") return 0;
+  if (!character.cardV2 || typeof character.cardV2 !== "object") return 3;
   const events = (character.cardV2 as unknown as Record<string, unknown>).signature_sfx_events;
-  return Array.isArray(events) ? Math.min(4, events.length) : 0;
+  return Array.isArray(events) ? Math.min(4, Math.max(2, events.length)) : 3;
 }
 
 const SEEDANCE_SETUP_URL = "https://docs.byteplus.com/en/docs/ModelArk/2291680";
@@ -845,20 +838,6 @@ export default function CharacterProductionStudio({
     return persistentUrl ?? URL.createObjectURL(await response.blob());
   }
 
-  async function generateSfxTake(prompt: string, durationSeconds: number) {
-    await ensureCharacterIsSaved();
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "sfx", characterId: character.id, character, prompt, durationSeconds }),
-    });
-    if (!response.ok) throw new Error(await errorFrom(response));
-    const url = response.headers.get("X-Asset-Url") ?? URL.createObjectURL(await response.blob());
-    const assetId = response.headers.get("X-Asset-Id");
-    if (!assetId) throw new Error("The generated SFX take was not attached to the actor.");
-    return { assetId, url };
-  }
-
   async function run(label: string, task: () => Promise<void>) {
     const hasTimeline = label in GENERATION_TIMELINES;
     const taskStep = label === "magic-scene" ? activeStep : PRODUCTION_TASK_TO_STEP[label];
@@ -972,33 +951,18 @@ export default function CharacterProductionStudio({
     void run("sfx", async () => {
       setSfxCandidates([]);
       const eventCount = characterSignatureSfxEventCount(character);
-      if (eventCount > 0) {
-        const signature = await jsonAction("signature-sfx", {}) as {
-          url?: string;
-          assetId?: string;
-          events?: unknown[];
-        };
-        if (!signature.url) throw new Error("The assembled signature SFX returned no playable audio.");
-        setSfxUrl(signature.url);
-        await refreshHistory();
-        setMessage(
-          `${signature.events?.length ?? eventCount} atomic SFX events were generated, preserved as separate assets, and assembled into the actor’s five-second signature.`
-        );
-        advanceAfterCompletion(4);
-        return;
-      }
-      const candidates: SfxCandidate[] = [];
-      const requestedCount = Number(status?.pipeline?.stages?.sfx?.settings?.candidateCount ?? 4);
-      const candidateCount = Math.min(SFX_VARIATIONS.length, Math.max(1, Math.round(requestedCount)));
-      const durationSeconds = Number(status?.pipeline?.stages?.sfx?.settings?.durationSeconds ?? 1.5);
-      for (const variation of SFX_VARIATIONS.slice(0, candidateCount)) {
-        const candidatePrompt = `${sfxPrompt} ${variation.direction} Total duration ${durationSeconds} seconds.`;
-        const generated = await generateSfxTake(candidatePrompt, durationSeconds);
-        candidates.push({ ...variation, ...generated });
-        setSfxCandidates([...candidates]);
-      }
+      const signature = await jsonAction("signature-sfx", {}) as {
+        url?: string;
+        assetId?: string;
+        events?: unknown[];
+      };
+      if (!signature.url) throw new Error("The assembled signature SFX returned no playable audio.");
+      setSfxUrl(signature.url);
       await refreshHistory();
-      setMessage(`${candidateCount} distinct SFX ${candidateCount === 1 ? "candidate is" : "candidates are"} saved to the actor library. Preview them, then explicitly attach one as the reusable signature.`);
+      setMessage(
+        `${signature.events?.length ?? eventCount} high-resolution Foley events were generated separately and mixed into a polished five-second signature.`
+      );
+      advanceAfterCompletion(4);
     });
   }
 
@@ -1018,13 +982,13 @@ export default function CharacterProductionStudio({
       setThemeUrl(await audioAction("theme", {
         prompt: themePrompt,
         durationSeconds: themeDurationSeconds,
-        grammarVersion: "v2",
+        grammarVersion: "v3",
       }));
       await refreshHistory();
       setMessage(
         themeUrl
-          ? "A new theme was generated with the v2 production brief. The earlier theme remains in the asset history."
-          : "The actor theme was generated with the v2 production brief, archived to the CDN, and added to the public Sound Profile."
+          ? "A new theme was generated with the modern v3 production brief and Eleven Music v2. The earlier theme remains in the asset history."
+          : "The actor theme was generated with the modern v3 production brief and Eleven Music v2, archived to the CDN, and added to the public Sound Profile."
       );
       advanceAfterCompletion(5);
     });
@@ -1268,11 +1232,6 @@ export default function CharacterProductionStudio({
         ? "Choose and lock one voice take before generating dialogue."
         : null;
   const configuredVideoModel = status?.pipeline?.stages?.video?.model ?? "dreamina-seedance-2-0-260128";
-  const configuredSfxCount = Math.min(
-    SFX_VARIATIONS.length,
-    Math.max(1, Math.round(Number(status?.pipeline?.stages?.sfx?.settings?.candidateCount ?? 4)))
-  );
-  const configuredSfxDuration = Number(status?.pipeline?.stages?.sfx?.settings?.durationSeconds ?? 1.5);
   const signatureSfxEventCount = characterSignatureSfxEventCount(character);
   const activeStepMeta = WORKFLOW_STEPS.find((step) => step.id === activeStep) ?? WORKFLOW_STEPS[0];
   const completedSteps = new Set<number>([
@@ -1912,17 +1871,11 @@ export default function CharacterProductionStudio({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button onClick={generateSfx} disabled={!elevenReady || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "sfx"
-                ? signatureSfxEventCount
-                  ? `Building ${signatureSfxEventCount}-event signature...`
-                  : `Creating take ${Math.min(sfxCandidates.length + 1, configuredSfxCount)} of ${configuredSfxCount}...`
-                : signatureSfxEventCount
-                  ? "Build 5-second signature"
-                  : `Generate ${configuredSfxCount} short SFX ${configuredSfxCount === 1 ? "take" : "takes"}`}
+                ? `Building ${signatureSfxEventCount}-layer signature...`
+                : `Build polished ${signatureSfxEventCount}-layer signature`}
             </button>
             <span className="text-[10px] uppercase tracking-[0.14em] text-grey">
-              {signatureSfxEventCount
-                ? `${signatureSfxEventCount} atomic events · mixed after`
-                : `${configuredSfxDuration}s each`}
+              {signatureSfxEventCount} high-resolution Foley events · 5s mastered mix
             </span>
           </div>
           <GenerationTimeline generationKey="sfx" run={generationRun} />

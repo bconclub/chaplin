@@ -31,6 +31,7 @@ import { assertPromptConsistency, readCharacterCardV2 } from "@/lib/character-ca
 import {
   assertSignatureSfxPrompt,
   assertThemePromptV2,
+  composeCharacterSignatureSfxEvents,
   composeSignatureSfxEventPrompt,
   isThemeDurationPreset,
   withThemeDurationDirection,
@@ -732,10 +733,10 @@ export async function POST(request: Request) {
         ? Math.min(maximumDuration, Math.max(minimumDuration, requestedDuration))
         : settingNumber(sfxConfig, "durationSeconds", 1.5);
       jobId = await startGeneration({ characterId, kind: "sfx", provider: sfxConfig.provider, model: sfxConfig.model, prompt });
-      const response = await eleven("/sound-generation?output_format=mp3_44100_128", {
+      const response = await eleven("/sound-generation?output_format=mp3_44100_192", {
         text: prompt,
         duration_seconds: durationSeconds,
-        prompt_influence: settingNumber(sfxConfig, "promptInfluence", 0.35),
+        prompt_influence: settingNumber(sfxConfig, "promptInfluence", 0.55),
         loop: settingBoolean(sfxConfig, "loop", false),
         model_id: sfxConfig.model,
       });
@@ -761,14 +762,14 @@ export async function POST(request: Request) {
     if (action === "signature-sfx") {
       const sfxConfig = pipeline.stages.sfx;
       requireStage(sfxConfig, "SFX");
-      const card = readCharacterCardV2(requestCharacter?.cardV2);
-      const events = card?.signature_sfx_events;
-      if (!events?.length) {
-        throw new RequestValidationError("This actor does not have structured signature SFX events. Use the legacy SFX take flow.");
+      if (!requestCharacter) {
+        throw new RequestValidationError("A complete actor identity is required to build the layered signature SFX.");
       }
+      const card = readCharacterCardV2(requestCharacter.cardV2);
+      const events = composeCharacterSignatureSfxEvents(requestCharacter);
       const minimumDuration = Math.max(1, settingNumber(sfxConfig, "minimumDurationSeconds", 1));
       const maximumDuration = Math.min(3, Math.max(minimumDuration, settingNumber(sfxConfig, "maximumDurationSeconds", 3)));
-      const promptInfluence = settingNumber(sfxConfig, "promptInfluence", 0.35);
+      const promptInfluence = settingNumber(sfxConfig, "promptInfluence", 0.55);
       const loop = settingBoolean(sfxConfig, "loop", false);
       const generatedEvents: Array<{
         id: string;
@@ -797,13 +798,15 @@ export async function POST(request: Request) {
           prompt,
           metadata: {
             signatureSfxRole: "event",
+            grammarVersion: "v3",
+            eventSource: card?.signature_sfx_events?.length ? "character-card-v2" : "derived-modern-palette",
             eventId: event.id,
             startMs: event.start_ms,
             gainDb: event.gain_db,
             providerSettings,
           },
         });
-        const response = await eleven("/sound-generation?output_format=mp3_44100_128", {
+        const response = await eleven("/sound-generation?output_format=mp3_44100_192", {
           text: prompt,
           ...providerSettings,
           model_id: sfxConfig.model,
@@ -811,6 +814,9 @@ export async function POST(request: Request) {
         const bytes = await response.arrayBuffer();
         const eventMetadata = {
           signatureSfxRole: "event",
+          grammarVersion: "v3",
+          eventSource: card?.signature_sfx_events?.length ? "character-card-v2" : "derived-modern-palette",
+          providerOutputFormat: "mp3_44100_192",
           eventId: event.id,
           eventLabel: event.label,
           startMs: event.start_ms,
@@ -881,15 +887,18 @@ export async function POST(request: Request) {
       }
       const durationSeconds = requestedDuration;
       const prompt = withThemeDurationDirection(
-        directedPrompt(themeConfig, text(input, "prompt", 10, 1000)),
+        directedPrompt(themeConfig, text(input, "prompt", 10, 3000)),
         durationSeconds,
       );
       if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+      const outputFormat = themeConfig.model === "music_v2" ? "mp3_48000_192" : "mp3_44100_128";
       const generationMetadata = {
-        grammarVersion: "v2",
+        grammarVersion: "v3",
         requestedDurationSeconds: durationSeconds,
         providerDurationParameter: "music_length_ms",
         providerDurationMilliseconds: durationSeconds * 1000,
+        providerOutputFormat: outputFormat,
+        productionLevel: "full-arrangement",
       };
       jobId = await startGeneration({
         characterId,
@@ -899,7 +908,7 @@ export async function POST(request: Request) {
         prompt,
         metadata: generationMetadata,
       });
-      const response = await eleven("/music?output_format=mp3_44100_128", {
+      const response = await eleven(`/music?output_format=${outputFormat}`, {
         prompt,
         music_length_ms: durationSeconds * 1000,
         model_id: themeConfig.model,
