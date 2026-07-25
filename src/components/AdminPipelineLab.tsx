@@ -260,7 +260,10 @@ export default function AdminPipelineLab({
                         : provider === "openai"
                           ? "gpt-image-2"
                           : "dola-seedream-5-0-pro-260628";
-                      replaceStage({ ...stage, provider, model });
+                      const settings = provider === "openai"
+                        ? { ...stage.settings, size: "1536x1024", quality: "medium", outputFormat: "png" }
+                        : stage.settings;
+                      replaceStage({ ...stage, provider, model, settings });
                     }}
                   >
                     <option value="byteplus" disabled={!imageProviderReadiness.byteplus}>

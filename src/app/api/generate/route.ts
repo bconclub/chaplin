@@ -401,7 +401,12 @@ async function generateWithOpenAI(
 ): Promise<GeneratedImage> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not configured.");
-  const size = settingString(stage, "size", "2560x1440");
+  const requestedSize = settingString(stage, "size", "1536x1024");
+  // GPT Image accepts its own supported sizes; retain a safe landscape default
+  // when this stage was previously configured for Seedream's 2560×1440 output.
+  const size = ["1024x1024", "1024x1536", "1536x1024", "auto"].includes(requestedSize)
+    ? requestedSize
+    : "1536x1024";
   const quality = settingString(stage, "quality", "medium");
   const outputFormat = settingString(stage, "outputFormat", "png");
   let response: Response;

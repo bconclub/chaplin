@@ -1,33 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import Avatar from "@/components/Avatar";
 import { buildCharacterSystem, composeCharacterSheetPrompt } from "@/lib/character-system";
 import { buildProductionBible } from "@/lib/production-prompting";
+import { useChaplinStore } from "@/lib/store";
 import type { Character, CharacterAgeStateId, CharacterSheetViewId } from "@/lib/types";
 
 type NodeId = "canon" | "bible" | "sheet" | "output" | "sound" | "memory" | "performance" | "media";
 type Point = { x: number; y: number };
 type NodePositions = Record<NodeId, Point>;
+type Camera = { x: number; y: number; scale: number };
 
-const CANVAS = { width: 1580, height: 900 };
+const WORLD = { width: 3600, height: 2400 };
+const LAYOUT_BOUNDS = { width: 1780, height: 1140 };
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 1.6;
 const DEFAULT_POSITIONS: NodePositions = {
-  canon: { x: 50, y: 250 },
-  bible: { x: 370, y: 72 },
-  sheet: { x: 705, y: 72 },
-  output: { x: 1110, y: 72 },
-  sound: { x: 390, y: 560 },
-  memory: { x: 735, y: 570 },
-  performance: { x: 1110, y: 550 },
-  media: { x: 1320, y: 350 },
+  canon: { x: 50, y: 310 },
+  bible: { x: 370, y: 74 },
+  sheet: { x: 705, y: 60 },
+  output: { x: 1140, y: 60 },
+  sound: { x: 380, y: 610 },
+  memory: { x: 715, y: 760 },
+  performance: { x: 1115, y: 710 },
+  media: { x: 1545, y: 310 },
 };
 
 const NODE_SIZES: Record<NodeId, { width: number; height: number }> = {
   canon: { width: 280, height: 345 },
   bible: { width: 300, height: 390 },
-  sheet: { width: 365, height: 440 },
-  output: { width: 350, height: 410 },
+  sheet: { width: 400, height: 650 },
+  output: { width: 385, height: 620 },
   sound: { width: 300, height: 250 },
   memory: { width: 330, height: 270 },
   performance: { width: 310, height: 270 },
@@ -112,7 +117,21 @@ function TinyStatus({ children, active = false }: { children: React.ReactNode; a
   );
 }
 
+type SheetAsset = { url: string; assetId?: string };
+type SheetAssets = Record<string, SheetAsset>;
+
+function sheetSlotKey(viewId: CharacterSheetViewId, ageId: CharacterAgeStateId) {
+  return `${viewId}:${ageId}`;
+}
+
+async function responseError(response: Response) {
+  const data = await response.json().catch(() => null) as { error?: string } | null;
+  return data?.error ?? `Request failed with status ${response.status}.`;
+}
+
 export default function CharacterNodeWorkspace({ character }: { character: Character }) {
+  const addCharacterImage = useChaplinStore((state) => state.addCharacterImage);
+  const mergePersistedCharacters = useChaplinStore((state) => state.mergePersistedCharacters);
   const bible = useMemo(() => buildProductionBible(character), [character]);
   const system = useMemo(
     () => bible.system ?? buildCharacterSystem(character, bible),
@@ -120,6 +139,7 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
   );
   const storageKey = `chaplin:character-system-layout:${character.id}`;
   const [positions, setPositions] = useState<NodePositions>(DEFAULT_POSITIONS);
+  const [camera, setCamera] = useState<Camera>({ x: 42, y: 36, scale: 0.7 });
   useEffect(() => {
     let savedPositions: NodePositions | null = null;
     try {
@@ -132,71 +152,146 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
     const frame = window.requestAnimationFrame(() => setPositions(savedPositions));
     return () => window.cancelAnimationFrame(frame);
   }, [storageKey]);
+  const sheetStorageKey = `chaplin:character-sheet-assets:${character.id}`;
   const [viewId, setViewId] = useState<CharacterSheetViewId>(system.sheet.canonicalViewId);
   const [ageId, setAgeId] = useState<CharacterAgeStateId>(system.sheet.canonicalAgeStateId);
+  const [expression, setExpression] = useState("");
+  const [wardrobe, setWardrobe] = useState("");
+  const [sheetAssets, setSheetAssets] = useState<SheetAssets>({});
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetMessage, setSheetMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     id: NodeId;
     offsetX: number;
     offsetY: number;
-    canvasLeft: number;
-    canvasTop: number;
   } | null>(null);
+  const panRef = useRef<{ pointerId: number; startX: number; startY: number; cameraX: number; cameraY: number } | null>(null);
 
   useEffect(() => {
-    const move = (event: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag || window.innerWidth < 768) return;
-      const nextX = Math.max(10, Math.min(
-        CANVAS.width - NODE_SIZES[drag.id].width - 10,
-        event.clientX - drag.offsetX - drag.canvasLeft,
-      ));
-      const nextY = Math.max(10, Math.min(
-        CANVAS.height - NODE_SIZES[drag.id].height - 10,
-        event.clientY - drag.offsetY - drag.canvasTop,
-      ));
+    let savedAssets: SheetAssets | null = null;
+    try {
+      const saved = window.localStorage.getItem(sheetStorageKey);
+      if (saved) savedAssets = JSON.parse(saved) as SheetAssets;
+    } catch {
+      // The generated assets still live in the gallery if this local slot map is unavailable.
+    }
+    if (!savedAssets) return;
+    const frame = window.requestAnimationFrame(() => setSheetAssets(savedAssets));
+    return () => window.cancelAnimationFrame(frame);
+  }, [sheetStorageKey]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => focusSheet());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  function fitLayout() {
+    const viewport = viewportRef.current;
+    if (!viewport || window.innerWidth < 768) return;
+    const rect = viewport.getBoundingClientRect();
+    const scale = Math.max(MIN_ZOOM, Math.min(0.92, Math.min((rect.width - 96) / LAYOUT_BOUNDS.width, (rect.height - 96) / LAYOUT_BOUNDS.height)));
+    setCamera({
+      scale,
+      x: Math.max(24, (rect.width - LAYOUT_BOUNDS.width * scale) / 2 - 48),
+      y: Math.max(42, (rect.height - LAYOUT_BOUNDS.height * scale) / 2 - 38),
+    });
+  }
+
+  function focusSheet() {
+    const viewport = viewportRef.current;
+    if (!viewport || window.innerWidth < 768) return;
+    const rect = viewport.getBoundingClientRect();
+    const sheetBounds = { x: 680, y: 35, width: 870, height: 730 };
+    const scale = Math.max(
+      MIN_ZOOM,
+      Math.min(0.72, (rect.width - 80) / sheetBounds.width, (rect.height - 72) / sheetBounds.height),
+    );
+    setCamera({
+      scale,
+      x: (rect.width - sheetBounds.width * scale) / 2 - sheetBounds.x * scale,
+      y: Math.max(26, (rect.height - sheetBounds.height * scale) / 2 - sheetBounds.y * scale),
+    });
+  }
+
+  function beginDrag(event: ReactPointerEvent<HTMLDivElement>, id: NodeId) {
+    if (window.innerWidth < 768) return;
+    const node = event.currentTarget.closest<HTMLElement>("[data-node-id]");
+    const viewport = viewportRef.current;
+    if (!node || !viewport) return;
+    const rect = node.getBoundingClientRect();
+    dragRef.current = {
+      id,
+      offsetX: (event.clientX - rect.left) / camera.scale,
+      offsetY: (event.clientY - rect.top) / camera.scale,
+    };
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function beginPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (window.innerWidth < 768 || (event.target as HTMLElement).closest("[data-node-id]")) return;
+    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, cameraX: camera.x, cameraY: camera.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function movePointer(event: ReactPointerEvent<HTMLDivElement>) {
+    const viewport = viewportRef.current;
+    const drag = dragRef.current;
+    if (drag && viewport && window.innerWidth >= 768) {
+      const rect = viewport.getBoundingClientRect();
+      const nextX = Math.max(10, Math.min(WORLD.width - NODE_SIZES[drag.id].width - 10, (event.clientX - rect.left - camera.x) / camera.scale - drag.offsetX));
+      const nextY = Math.max(10, Math.min(WORLD.height - NODE_SIZES[drag.id].height - 10, (event.clientY - rect.top - camera.y) / camera.scale - drag.offsetY));
       setPositions((current) => {
         const next = { ...current, [drag.id]: { x: nextX, y: nextY } };
         window.localStorage.setItem(storageKey, JSON.stringify(next));
         return next;
       });
-    };
-    const stop = () => {
-      dragRef.current = null;
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-    };
-  }, [storageKey]);
+      return;
+    }
+    const pan = panRef.current;
+    if (pan && pan.pointerId === event.pointerId) {
+      setCamera((current) => ({ ...current, x: pan.cameraX + event.clientX - pan.startX, y: pan.cameraY + event.clientY - pan.startY }));
+    }
+  }
 
-  function beginDrag(event: ReactPointerEvent<HTMLDivElement>, id: NodeId) {
+  function stopPointer() {
+    dragRef.current = null;
+    panRef.current = null;
+  }
+
+  function zoomTo(nextScale: number, clientX?: number, clientY?: number) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextScale));
+    const screenX = clientX ?? rect.left + rect.width / 2;
+    const screenY = clientY ?? rect.top + rect.height / 2;
+    const worldX = (screenX - rect.left - camera.x) / camera.scale;
+    const worldY = (screenY - rect.top - camera.y) / camera.scale;
+    setCamera({ scale, x: screenX - rect.left - worldX * scale, y: screenY - rect.top - worldY * scale });
+  }
+
+  function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
     if (window.innerWidth < 768) return;
-    const node = event.currentTarget.closest<HTMLElement>("[data-node-id]");
-    const canvas = event.currentTarget.closest<HTMLElement>(".character-system-canvas");
-    if (!node || !canvas) return;
-    const rect = node.getBoundingClientRect();
-    const canvasRect = canvas.getBoundingClientRect();
-    dragRef.current = {
-      id,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      canvasLeft: canvasRect.left,
-      canvasTop: canvasRect.top,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    zoomTo(camera.scale * (event.deltaY > 0 ? 0.9 : 1.1), event.clientX, event.clientY);
   }
 
   const sheetPrompt = useMemo(
-    () => composeCharacterSheetPrompt(character, bible, { viewId, ageStateId: ageId }),
-    [ageId, bible, character, viewId],
+    () => composeCharacterSheetPrompt(character, bible, {
+      viewId,
+      ageStateId: ageId,
+      expression,
+      wardrobeOverride: wardrobe,
+    }),
+    [ageId, bible, character, expression, viewId, wardrobe],
   );
   const mediaCount = (character.galleryUrls?.length ?? 0) + (character.imageUrl ? 1 : 0) + (character.videoUrl ? 1 : 0);
   const canonicalImage = character.imageUrl ?? character.bannerUrl;
+  const activeSlotKey = sheetSlotKey(viewId, ageId);
+  const activeSheetAsset = sheetAssets[activeSlotKey];
 
   async function copyPrompt() {
     await navigator.clipboard.writeText(sheetPrompt);
@@ -207,10 +302,84 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
   function resetLayout() {
     setPositions(DEFAULT_POSITIONS);
     window.localStorage.setItem(storageKey, JSON.stringify(DEFAULT_POSITIONS));
+    fitLayout();
+  }
+
+  function saveSheetAsset(slotKey: string, asset: SheetAsset) {
+    setSheetAssets((current) => {
+      const next = { ...current, [slotKey]: asset };
+      window.localStorage.setItem(sheetStorageKey, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  async function ensureCharacterIsSaved() {
+    const response = await fetch("/api/characters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ character, ensureOnly: true }),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+  }
+
+  async function generateSheetImage() {
+    setSheetBusy(true);
+    setSheetMessage("");
+    try {
+      await ensureCharacterIsSaved();
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "image",
+          characterId: character.id,
+          character,
+          imagePurpose: "identity",
+          prompt: sheetPrompt,
+          referenceImage: canonicalImage ?? "",
+        }),
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      const data = await response.json() as { url?: string; assetId?: string };
+      if (!data.url) throw new Error("The image provider did not return a reference frame.");
+      saveSheetAsset(activeSlotKey, { url: data.url, assetId: data.assetId });
+      addCharacterImage(character.id, data.url);
+      window.dispatchEvent(new CustomEvent("chaplin:media-updated", { detail: { characterId: character.id } }));
+      setSheetMessage(`Generated ${system.sheet.views.find((view) => view.id === viewId)?.label.toLowerCase()} · ${system.sheet.ageStates.find((age) => age.id === ageId)?.label.toLowerCase()}. Review it before promoting it.`);
+    } catch (error) {
+      setSheetMessage(error instanceof Error ? error.message : "The reference frame could not be generated.");
+    } finally {
+      setSheetBusy(false);
+    }
+  }
+
+  async function promoteSheetImage() {
+    if (!activeSheetAsset?.assetId) return;
+    setSheetBusy(true);
+    setSheetMessage("");
+    try {
+      const response = await fetch("/api/characters/profile-media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterId: character.id, assetId: activeSheetAsset.assetId, slot: "cover" }),
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      const catalogueResponse = await fetch("/api/characters", { cache: "no-store" });
+      if (catalogueResponse.ok) {
+        const catalogue = await catalogueResponse.json() as { characters?: Character[] };
+        if (Array.isArray(catalogue.characters)) mergePersistedCharacters(catalogue.characters);
+      }
+      window.dispatchEvent(new CustomEvent("chaplin:media-updated", { detail: { characterId: character.id } }));
+      setSheetMessage("Promoted to canonical reference. New stills and motion will now use this approved frame.");
+    } catch (error) {
+      setSheetMessage(error instanceof Error ? error.message : "The reference frame could not be promoted.");
+    } finally {
+      setSheetBusy(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#080d05] text-ink">
+    <div className="character-system-workspace min-h-[calc(100dvh-5rem)] bg-[#080d05] text-ink">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#080d05]/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -225,10 +394,22 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
           </div>
           <div className="flex items-center gap-2">
             <TinyStatus active>Canon connected</TinyStatus>
+            <div className="hidden items-center rounded-full border border-white/10 bg-black/20 sm:flex">
+              <button type="button" onClick={() => zoomTo(camera.scale / 1.18)} className="px-2.5 py-2 text-sm text-grey hover:text-ink" aria-label="Zoom out">−</button>
+              <button type="button" onClick={fitLayout} className="min-w-12 border-x border-white/10 px-2 py-2 text-[9px] font-semibold text-grey hover:text-ink" aria-label="Fit all notes">{Math.round(camera.scale * 100)}%</button>
+              <button type="button" onClick={() => zoomTo(camera.scale * 1.18)} className="px-2.5 py-2 text-sm text-grey hover:text-ink" aria-label="Zoom in">+</button>
+            </div>
+            <button
+              type="button"
+              onClick={focusSheet}
+              className="hidden rounded-full border border-white/10 px-3 py-2 text-[9px] font-semibold text-grey hover:text-ink sm:block"
+            >
+              Focus sheet
+            </button>
             <button
               type="button"
               onClick={resetLayout}
-              className="hidden rounded-full border border-white/10 px-3 py-2 text-[9px] font-semibold text-grey hover:text-ink sm:block"
+              className="hidden rounded-full border border-white/10 px-3 py-2 text-[9px] font-semibold text-grey hover:text-ink lg:block"
             >
               Reset layout
             </button>
@@ -236,22 +417,21 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
         </div>
       </header>
 
-      <div className="border-b border-white/8 px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-[1680px] flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-accent">Identity operating system</p>
-            <h1 className="mt-1 font-serif text-2xl sm:text-3xl">Every output returns to one actor.</h1>
-          </div>
-          <p className="max-w-xl text-xs leading-5 text-grey">
-            Drag the graph to inspect how canon becomes reference sheets, voice, memory, performances, and reusable media.
-          </p>
+      <div
+        ref={viewportRef}
+        className="character-system-viewport relative h-[calc(100dvh-8.2rem)] min-h-[560px] overflow-hidden touch-none"
+        onPointerDown={beginPan}
+        onPointerMove={movePointer}
+        onPointerUp={stopPointer}
+        onPointerCancel={stopPointer}
+        onWheel={handleWheel}
+      >
+        <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-full border border-white/10 bg-[#080d05]/75 px-3 py-2 text-[9px] text-grey backdrop-blur-md sm:left-6 sm:top-6">
+          Drag the background to move · scroll to zoom · drag a note by its header
         </div>
-      </div>
-
-      <div className="character-system-scroll overflow-auto">
         <div
-          className="character-system-canvas relative"
-          style={{ width: CANVAS.width, minHeight: CANVAS.height }}
+          className="character-system-world relative"
+          style={{ width: WORLD.width, height: WORLD.height, transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})` }}
         >
           <svg className="character-system-connections pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
             <defs>
@@ -321,36 +501,56 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
                 </select>
               </label>
             </div>
-            <pre className="character-system-prompt mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-white/8 bg-black/25 p-3 font-sans text-[9px] leading-4 text-grey">
-              {sheetPrompt}
-            </pre>
+            <label className="mt-3 block text-[9px] font-bold uppercase tracking-wider text-grey">
+              Expression <span className="normal-case font-normal tracking-normal text-grey/70">(optional override)</span>
+              <input value={expression} onChange={(event) => setExpression(event.target.value)} placeholder={bible.performance.restingExpression} className="mt-1 w-full rounded-lg border border-white/10 bg-[#080d05] px-2 py-2 text-[10px] font-normal normal-case tracking-normal text-ink placeholder:text-grey/55" />
+            </label>
+            <label className="mt-2 block text-[9px] font-bold uppercase tracking-wider text-grey">
+              Wardrobe <span className="normal-case font-normal tracking-normal text-grey/70">(optional override)</span>
+              <input value={wardrobe} onChange={(event) => setWardrobe(event.target.value)} placeholder={bible.visual.wardrobe} className="mt-1 w-full rounded-lg border border-white/10 bg-[#080d05] px-2 py-2 text-[10px] font-normal normal-case tracking-normal text-ink placeholder:text-grey/55" />
+            </label>
+            <details className="mt-3 rounded-xl border border-white/8 bg-black/25">
+              <summary className="cursor-pointer px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-grey">Provider prompt</summary>
+              <pre className="character-system-prompt max-h-40 overflow-auto whitespace-pre-wrap border-t border-white/8 p-3 font-sans text-[9px] leading-4 text-grey">
+                {sheetPrompt}
+              </pre>
+            </details>
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={copyPrompt} className="flex-1 rounded-full bg-accent px-3 py-2 text-[10px] font-bold text-[#090b08]">
                 {copied ? "Copied" : "Copy provider prompt"}
               </button>
-              <Link href={`/characters/${character.id}#production-studio`} className="rounded-full border border-white/15 px-3 py-2 text-[10px] font-semibold">
-                Generate
-              </Link>
+              <button type="button" onClick={() => void generateSheetImage()} disabled={sheetBusy} className="rounded-full border border-[#07d2be]/50 bg-[#07d2be]/10 px-3 py-2 text-[10px] font-bold text-[#36e0cd] disabled:opacity-50">
+                {sheetBusy ? "Creating…" : "Create image"}
+              </button>
             </div>
+            <p className="mt-3 text-[9px] leading-4 text-grey">Each frame is generated from the locked canonical image, then stays a draft until you promote it.</p>
+            {sheetMessage && <p aria-live="polite" className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[9px] leading-4 text-grey">{sheetMessage}</p>}
           </NodeCard>
 
           <NodeCard id="output" title="Character sheet" eyebrow="8 views × 3 ages" positions={positions} onPointerDown={beginDrag}>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-black/20 p-2.5">
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-[#36e0cd]">Canonical source</p>
+                <p className="mt-1 text-[9px] leading-4 text-grey">Every draft starts from this approved identity.</p>
+              </div>
+              {canonicalImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={canonicalImage} alt={`${character.name} canonical reference`} className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+              ) : <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-dashed border-white/15 text-[8px] text-grey">None</span>}
+            </div>
             <div className="grid grid-cols-3 gap-2">
-              {system.sheet.views.map((view, index) => {
-                const image = character.galleryUrls?.[index] ?? canonicalImage;
+              {system.sheet.views.map((view) => {
+                const asset = sheetAssets[sheetSlotKey(view.id, ageId)];
                 return (
-                  <button key={view.id} type="button" onClick={() => setViewId(view.id)} className={`relative aspect-square overflow-hidden rounded-lg border text-left ${viewId === view.id ? "border-accent" : "border-white/8"}`}>
-                    {image ? (
+                  <button key={view.id} type="button" onClick={() => setViewId(view.id)} className={`relative aspect-square overflow-hidden rounded-lg border text-left ${viewId === view.id ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,.25)]" : "border-white/8"}`}>
+                    {asset ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={image} alt="" className={`h-full w-full object-cover ${index > (character.galleryUrls?.length ?? 0) ? "opacity-25" : ""}`} />
-                    ) : <span className="grid h-full place-items-center text-grey">+</span>}
+                      <img src={asset.url} alt={`${view.label} reference`} className="h-full w-full object-cover" />
+                    ) : <span className="grid h-full place-items-center text-lg text-grey/60">+</span>}
                     <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1 text-[7px] font-bold uppercase">{view.label}</span>
                   </button>
                 );
               })}
-              <div className="grid aspect-square place-items-center rounded-lg border border-dashed border-white/12 text-center text-[8px] uppercase tracking-wider text-grey">
-                Wardrobe<br />breakdown
-              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {system.sheet.ageStates.map((age) => (
@@ -359,9 +559,15 @@ export default function CharacterNodeWorkspace({ character }: { character: Chara
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-[10px] leading-4 text-grey">
-              Existing outputs fill these slots. Empty views remain generation targets tied to the same identity seed.
-            </p>
+            <div className="mt-3 rounded-xl border border-white/8 bg-black/20 p-3">
+              <div className="flex items-center justify-between gap-2"><p className="text-[10px] font-semibold">Selected frame</p><TinyStatus active={Boolean(activeSheetAsset)}>{activeSheetAsset ? "Draft ready" : "Empty slot"}</TinyStatus></div>
+              <p className="mt-1 text-[9px] leading-4 text-grey">{system.sheet.views.find((view) => view.id === viewId)?.label} · {system.sheet.ageStates.find((age) => age.id === ageId)?.label}</p>
+              {activeSheetAsset ? (
+                <button type="button" onClick={() => void promoteSheetImage()} disabled={sheetBusy || !activeSheetAsset.assetId} className="mt-3 w-full rounded-full border border-[#f7d94c]/45 bg-[#f7d94c]/10 px-3 py-2 text-[9px] font-bold text-[#f7d94c] disabled:opacity-45">
+                  Promote as canonical reference
+                </button>
+              ) : <p className="mt-3 text-[9px] leading-4 text-grey">Choose a view, set the age, and create a frame. Empty slots deliberately do not borrow unrelated gallery stills.</p>}
+            </div>
           </NodeCard>
 
           <NodeCard id="sound" title="Voice & sound identity" eyebrow="Locked performance" positions={positions} onPointerDown={beginDrag}>

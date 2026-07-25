@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120; // json_schema output on this bible runs 35-55s; give real headroom over the wall clock
 
 type CharacterSuggestion = {
+  name: string;
   tagline: string;
   personality: string;
   voiceGender: VoiceGender;
@@ -26,6 +27,28 @@ type SuggestionTarget = typeof TARGETS[number];
 
 function clean(value: unknown, max = 2000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function suggestedName(input: { name: string; archetype: Archetype; characterBrief?: string }) {
+  if (input.name.trim()) return input.name.trim();
+  const firstNames: Record<Archetype, string[]> = {
+    villain: ["Aarav", "Naina", "Zoya", "Rohan"],
+    mentor: ["Ishaan", "Leela", "Mira", "Kabir"],
+    "love-interest": ["Aanya", "Rayan", "Meher", "Zayn"],
+    "comic-relief": ["Tara", "Nikhil", "Pia", "Arjun"],
+    hero: ["Anaya", "Veer", "Ira", "Dev"],
+    superhero: ["Astra", "Kiran", "Naveen", "Sana"],
+    horror: ["Rhea", "Samar", "Noor", "Ilyas"],
+    rebel: ["Aditi", "Rafi", "Kavya", "Yuvan"],
+    sidekick: ["Pip", "Juno", "Aman", "Maya"],
+    outsider: ["Selene", "Vesper", "Asha", "Rumi"],
+  };
+  const surnames = ["Qureshi", "Malhotra", "Dutta", "Kapoor", "Rao", "Bose", "Mirza", "Iyer"];
+  const seed = `${input.characterBrief ?? ""}${input.archetype}`
+    .split("")
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+  const givenNames = firstNames[input.archetype] ?? firstNames.hero;
+  return `${givenNames[seed % givenNames.length]} ${surnames[(seed * 7) % surnames.length]}`;
 }
 
 function enforceVoiceCoherence(suggestion: CharacterSuggestion, characterBrief: string) {
@@ -92,7 +115,7 @@ function localSuggestion(input: {
   appearanceBrief?: string;
   worldBrief?: string;
 }): CharacterSuggestion {
-  const name = input.name || "This actor";
+  const name = suggestedName(input);
   const resolvedVoiceGender = explicitVoiceGender(`${input.characterBrief ?? ""} ${input.personality}`) ?? input.voiceGender;
   const identity: Record<string, { hook: string; want: string; edge: string; sound: string; score: string }> = {
     villain: { hook: "makes every threat sound like an invitation", want: "control the room before anyone notices the trap", edge: "polite until resistance becomes interesting", sound: "a signet ring tapping once against cut glass", score: "low sarangi tension over a restrained ticking pulse" },
@@ -137,6 +160,7 @@ function localSuggestion(input: {
   });
   const character = { ...input, name, ...suggestion, productionBible, voiceDesc: suggestion.voiceDescription, sfxDesc: suggestion.signatureSfx, themeDesc: suggestion.themeScore };
   return {
+    name,
     ...suggestion,
     voiceDescription: composeVoiceDesignPrompt(character),
     signatureSfx: composeSfxPrompt(character),
@@ -184,8 +208,9 @@ const PRODUCTION_BIBLE_SCHEMA = {
 const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["tagline", "personality", "voiceGender", "voiceDescription", "signatureSfx", "themeScore", "productionBible"],
+  required: ["name", "tagline", "personality", "voiceGender", "voiceDescription", "signatureSfx", "themeScore", "productionBible"],
   properties: {
+    name: STRING,
     tagline: { type: "string" },
     personality: { type: "string" },
     voiceGender: { type: "string", enum: ["feminine", "masculine", "androgynous"] },
@@ -203,7 +228,7 @@ export async function POST(request: Request) {
     const targetValue = clean(body.target, 30) as SuggestionTarget;
     const target = TARGETS.includes(targetValue) ? targetValue : "all";
     const name = clean(body.name, 120);
-    if (!name) return Response.json({ error: "Name the AI actor first." }, { status: 400 });
+    if (!name && target !== "all") return Response.json({ error: "Name the AI actor first." }, { status: 400 });
     if (target === "all" && clean(body.characterBrief, 1500).length < 20) {
       return Response.json(
         { error: "Write at least a line or two about who this actor is — the brief drives the whole identity. (If you don't see the brief box, refresh the page.)" },
@@ -220,7 +245,7 @@ export async function POST(request: Request) {
     const requestedVoiceGender = clean(body.voiceGender, 30) as VoiceGender;
     const input = {
       name,
-      archetype: (clean(body.archetype, 40) as Archetype) || archetypeMix[0],
+      archetype: (clean(body.archetype, 40) as Archetype) || archetypeMix[0] || "hero",
       archetypeMix,
       characterBrief,
       voiceGender: explicitVoiceGender(characterBrief) ??
@@ -250,7 +275,7 @@ export async function POST(request: Request) {
         model,
         max_tokens: Math.max(4000, writingConfig.maxTokens ?? 8000),
         thinking: { type: "disabled" },
-        system: `${writingConfig.promptPrelude} You are Chaplin's casting director, performance director, cinematographer, and story editor. Build an original production-ready fictional actor, not a biography. Every value must be playable, visible, recordable, or usable as a continuity rule. The visual identity is the highest-priority output: infer a face, hair, body presence, signature wardrobe, material texture, palette, setting, camera, and motivated light that express the personality without reducing the actor to an archetype costume. perceivedAge must be an actual narrow visible age range. Each of the three faceAnchors must name concrete repeatable anatomy or surface detail—brow shape or spacing, eye shape or set, nose structure, mouth, jaw, skin texture, scar, mole, or asymmetry—not generic phrases such as 'distinct face' or 'preserve exactly.' Hair must specify length, texture, part or hairline, finish, and grooming. Wardrobe must specify exact garments, cut, materials, colors, wear, and no logos. Silhouette must describe visible proportions, stance, and one recognizable shape. Camera and lighting must be chosen to reveal those anchors and the central personality contradiction. If appearance or world direction is supplied, preserve it exactly; otherwise invent one coherent, culturally grounded, non-celebrity identity. Also create a dramatic want/need contradiction, precise pressure behavior and micro-expression, motivated story engine, visual hook, situation-changing cliffhanger, payoff, motifs, and explicit cliches to avoid. Never imitate a celebrity or copyrighted character. Voice coherence is mandatory: explicit pronouns and gender words in characterBrief override an unlocked UI default, and voiceGender plus voiceDescription must agree with each other. The voice prompt must follow ElevenLabs Voice Design order and contain no FX language. SFX must be a concise physical five-second one-shot. Theme must be a 12-second instrumental identity cue. Do not repeat biography across fields and do not use generic adjectives without observable evidence.`,
+        system: `${writingConfig.promptPrelude} You are Chaplin's casting director, performance director, cinematographer, and story editor. Build an original production-ready fictional actor, not a biography. Every value must be playable, visible, recordable, or usable as a continuity rule. When the maker has not supplied a name, suggest one original, plausible, culturally grounded character name that fits the brief; when they have supplied a name, preserve it exactly. Never use a celebrity, public figure, or copyrighted character name. The visual identity is the highest-priority output: infer a face, hair, body presence, signature wardrobe, material texture, palette, setting, camera, and motivated light that express the personality without reducing the actor to an archetype costume. perceivedAge must be an actual narrow visible age range. Each of the three faceAnchors must name concrete repeatable anatomy or surface detail—brow shape or spacing, eye shape or set, nose structure, mouth, jaw, skin texture, scar, mole, or asymmetry—not generic phrases such as 'distinct face' or 'preserve exactly.' Hair must specify length, texture, part or hairline, finish, and grooming. Wardrobe must specify exact garments, cut, materials, colors, wear, and no logos. Silhouette must describe visible proportions, stance, and one recognizable shape. Camera and lighting must be chosen to reveal those anchors and the central personality contradiction. If appearance or world direction is supplied, preserve it exactly; otherwise invent one coherent, culturally grounded, non-celebrity identity. Also create a dramatic want/need contradiction, precise pressure behavior and micro-expression, motivated story engine, visual hook, situation-changing cliffhanger, payoff, motifs, and explicit cliches to avoid. Never imitate a celebrity or copyrighted character. Voice coherence is mandatory: explicit pronouns and gender words in characterBrief override an unlocked UI default, and voiceGender plus voiceDescription must agree with each other. The voice prompt must follow ElevenLabs Voice Design order and contain no FX language. SFX must be a concise physical five-second one-shot. Theme must be a 12-second instrumental identity cue. Do not repeat biography across fields and do not use generic adjectives without observable evidence.`,
         messages: [{
           role: "user",
           content: JSON.stringify({
@@ -287,7 +312,7 @@ export async function POST(request: Request) {
     }
     return Response.json({
       suggestion: enforceVisualIdentity(
-        enforceVoiceCoherence(parsed, input.characterBrief),
+        { ...enforceVoiceCoherence(parsed, input.characterBrief), name: suggestedName({ ...input, name: name || clean(parsed.name, 120) }) },
         input.appearanceBrief,
         input.worldBrief,
       ),

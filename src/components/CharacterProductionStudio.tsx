@@ -386,7 +386,10 @@ export default function CharacterProductionStudio({
   const quickWriteRevisionRef = useRef(0);
   const identityReferenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
   const referenceImage = identityReferenceImage;
-  const videoReferenceImage = generatedImage;
+  // A newly composed scene frame takes priority, but an actor with an approved
+  // canonical image is already ready for image-to-video. Requiring another
+  // still here left the video action disabled for otherwise complete actors.
+  const videoReferenceImage = generatedImage || identityReferenceImage;
   const lockedVoiceId = character.voiceId || status?.production?.voiceId || "";
 
   function jumpToStep(stepId: number) {
@@ -806,7 +809,7 @@ export default function CharacterProductionStudio({
   function generateVideo() {
     void run("video", async () => {
       if (!videoReferenceImage) {
-        throw new Error("Create the scene frame first. Chaplin will animate that exact image.");
+        throw new Error("Add or lock a reference image first. Chaplin will animate that exact image.");
       }
       const grounded = await writeField("video", scenePrompt, videoReferenceImage);
       const groundedPrompt = grounded.text ?? scenePrompt;
@@ -867,6 +870,18 @@ export default function CharacterProductionStudio({
     : configuredImageProvider === "openai"
       ? "GPT Image"
       : "Seedream";
+  const imageUnavailableReason = !status
+    ? "Checking the active image provider…"
+    : !imageProviderReady
+      ? `${imageProviderLabel} is not ready. Check the Image stage in Super Admin, then refresh this page.`
+      : null;
+  const videoUnavailableReason = !status
+    ? "Checking the Seedance connection…"
+    : !seedModelsReady
+      ? "Seedance is not ready. Check the Video stage in Super Admin, then refresh this page."
+      : !videoReferenceImage
+        ? "Choose or generate a still first. Seedance needs an exact first frame before it can animate the actor."
+        : null;
   const elevenReady = status?.elevenLabs ?? false;
   const elevenOperational =
     status?.providers?.elevenLabs?.status === "succeeded" ||
@@ -1400,6 +1415,7 @@ export default function CharacterProductionStudio({
             <button onClick={generateImage} disabled={!imageProviderReady || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "image" ? `${imageProviderLabel} is creating...` : imagePurpose === "identity" ? "Generate identity hero" : "Generate scene frame"}
             </button>
+            {imageUnavailableReason && <p role="status" className="text-[11px] leading-relaxed text-amber-300">{imageUnavailableReason}</p>}
             <GenerationTimeline generationKey="image" run={generationRun} />
             <div className="flex items-center gap-2">
               <span className="h-px bg-line flex-1" />
@@ -1448,6 +1464,16 @@ export default function CharacterProductionStudio({
             <button onClick={generateVideo} disabled={!seedModelsReady || !videoReferenceImage || Boolean(busy)} className="bg-accent text-paper rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "video" ? "Seedance is rendering..." : "Generate 5-second video"}
             </button>
+            {videoUnavailableReason && (
+              <div role="status" className="rounded-sm border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+                <p>{videoUnavailableReason}</p>
+                {!videoReferenceImage && (
+                  <button type="button" onClick={() => jumpToStep(5)} className="mt-2 rounded-full border border-amber-300/50 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/10">
+                    Go to still generation →
+                  </button>
+                )}
+              </div>
+            )}
             <GenerationTimeline generationKey="video" run={generationRun} />
             <p className="text-[11px] text-grey">Seedance uses the selected still as the exact first frame. This prompt controls only performance, camera, light continuity, environmental motion, and the final frame; locked voice, SFX, and music stay separate.</p>
             {(generatedVideo || character.videoUrl) && <MediaPlayer src={generatedVideo || character.videoUrl || ""} label={`${character.name} scene`} kind="video" />}

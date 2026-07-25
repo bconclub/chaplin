@@ -823,35 +823,37 @@ button:hover .frost-chip,
   }
 }
 
-/* Character System: a persistent, draggable identity graph on desktop and
-   a readable connected stack on small screens. */
-.character-system-canvas {
-  background-color: #0a1007;
+/* Character System: a pannable desktop workspace and a readable phone stack. */
+.character-system-viewport {
   background-image:
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.09) 1px, transparent 0),
     radial-gradient(circle at 35% 20%, rgba(242, 78, 112, 0.08), transparent 30%),
     radial-gradient(circle at 75% 65%, rgba(7, 210, 190, 0.07), transparent 34%);
   background-size: 24px 24px, 100% 100%, 100% 100%;
+  cursor: grab;
 }
 
-.character-system-scroll {
-  height: calc(100vh - 143px);
-  scrollbar-width: thin;
-  scrollbar-color: #f24e70 #11190d;
+.character-system-viewport:active {
+  cursor: grabbing;
 }
 
-.character-system-scroll::-webkit-scrollbar,
+.character-system-world {
+  background:
+    radial-gradient(circle at 35% 20%, rgba(242, 78, 112, 0.08), transparent 24%),
+    radial-gradient(circle at 75% 65%, rgba(7, 210, 190, 0.07), transparent 27%);
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
 .character-system-prompt::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.character-system-scroll::-webkit-scrollbar-track,
 .character-system-prompt::-webkit-scrollbar-track {
   background: #11190d;
 }
 
-.character-system-scroll::-webkit-scrollbar-thumb,
 .character-system-prompt::-webkit-scrollbar-thumb {
   border: 2px solid #11190d;
   border-radius: 999px;
@@ -859,17 +861,26 @@ button:hover .frost-chip,
 }
 
 @media (max-width: 767px) {
-  .character-system-scroll {
-    height: auto;
-    overflow: visible;
+  .character-system-workspace {
+    min-height: auto;
   }
 
-  .character-system-canvas {
+  .character-system-viewport {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    touch-action: auto;
+    cursor: default;
+  }
+
+  .character-system-world {
     display: grid;
+    position: relative;
     width: 100% !important;
-    min-height: 0 !important;
+    height: auto !important;
     gap: 12px;
     padding: 14px 14px 120px;
+    transform: none !important;
   }
 
   .character-system-node {

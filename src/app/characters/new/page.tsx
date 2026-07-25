@@ -51,6 +51,7 @@ const HUE_SWATCHES = [340, 30, 205, 45, 150, 265, 18, 300, 220, 95];
 
 type SuggestionTarget = "all" | "tagline" | "personality" | "voice" | "sfx" | "theme";
 type CharacterSuggestion = {
+  name: string;
   tagline: string;
   personality: string;
   voiceGender: VoiceGender;
@@ -397,7 +398,7 @@ export default function NewCharacterPage() {
     const effectiveName = overrides?.name ?? name;
     const effectiveBrief = overrides?.characterBrief ?? characterBrief;
     const effectiveArchetypes = overrides?.archetypes ?? archetypes;
-    if (!effectiveName.trim()) {
+    if (target !== "all" && !effectiveName.trim()) {
       setError("Name the AI actor first, then Magic Character can build the identity.");
       return;
     }
@@ -437,6 +438,8 @@ export default function NewCharacterPage() {
       };
       if (!response.ok || !data.suggestion) throw new Error(data.error || "Character suggestions failed.");
       const suggestion = data.suggestion;
+      const suggestedName = effectiveName.trim() || suggestion.name.trim();
+      if (!suggestedName) throw new Error("Magic Character did not return a character name. Please try again.");
       const generatedAppearanceBrief = appearanceBrief.trim() ||
         appearanceDirectionFromBible(suggestion.productionBible);
       const generatedWorldBrief = worldBrief.trim() ||
@@ -455,7 +458,7 @@ export default function NewCharacterPage() {
         const recoveredDraft: CharacterBuilderDraft = {
           version: 1,
           updatedAt: new Date().toISOString(),
-          name: effectiveName,
+          name: suggestedName,
           archetypes: effectiveArchetypes,
           characterBrief: effectiveBrief,
           tagline: suggestion.tagline,
@@ -479,6 +482,7 @@ export default function NewCharacterPage() {
         // Magic Create fills the form field by field, so you watch the actor
         // assemble instead of everything appearing in one blink.
         const reveal: Array<[string, () => void]> = [
+          ["name", () => setName(suggestedName)],
           ["tagline", () => setTagline(suggestion.tagline)],
           ["personality", () => setPersonality(suggestion.personality)],
           ["look", () => {
@@ -510,8 +514,8 @@ export default function NewCharacterPage() {
                 setRevealingField("");
                 setSuggestionMessage(
                   data.warning || (data.provider === "anthropic"
-                    ? "Claude expanded the character. Every suggestion is editable."
-                    : "Character suggestions are ready. Every field remains editable.")
+                    ? "Claude named and expanded the character. Every suggestion is editable."
+                    : "Character name and suggestions are ready. Every field remains editable.")
                 );
               }, 700);
             }
@@ -607,7 +611,7 @@ export default function NewCharacterPage() {
       <div className="mb-5 mt-4">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">New actor</p>
         <h1 className="reel-title text-3xl sm:text-4xl">Create an AI actor</h1>
-        <p className="mt-1 text-sm text-grey">Name them. Describe the vibe. Chaplin builds the rest.</p>
+        <p className="mt-1 text-sm text-grey">Start with a brief. Chaplin can suggest the name and build the rest.</p>
       </div>
 
       <section
@@ -653,12 +657,12 @@ export default function NewCharacterPage() {
         </div>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Name</span>
+          <span className="font-medium">Name <span className="font-normal text-grey">(or let Magic suggest one)</span></span>
           <input
             data-character-field="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Ferra Voss"
+            placeholder="Optional — Magic will suggest one from your brief"
             className="border border-line rounded-sm px-3 py-2 focus:outline-none focus:border-accent"
           />
         </label>
@@ -682,13 +686,13 @@ export default function NewCharacterPage() {
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 hover:bg-accent/[0.05]">
             <span>
               <span className="block text-sm font-semibold">✦ Magic build</span>
-              <span className="mt-0.5 block text-[11px] text-grey">One sentence → full identity</span>
+              <span className="mt-0.5 block text-[11px] text-grey">One sentence → a name and full identity</span>
             </span>
             <span className="shrink-0 rounded-full border border-accent/50 px-3 py-1 text-[10px] font-semibold text-accent">Open</span>
           </summary>
           <div className="border-t border-line p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-grey">Describe the actor in one or two lines.</p>
+              <p className="text-xs text-grey">Describe the actor in one or two lines. We&apos;ll name them if you leave the name blank.</p>
               <div className="shrink-0">
                 <SuggestButton
                   target="all"
