@@ -25,6 +25,11 @@ export type ShotPromptInput = {
   continuityNote?: string;
 };
 
+export type ShotSequenceValidation = {
+  valid: boolean;
+  error?: string;
+};
+
 export const SHOT_KNOWLEDGE_BASE = {
   foundation: [
     "Lock cast, product, hero props, location, runtime, and shot count before generation.",
@@ -110,6 +115,45 @@ export function cameraPlanForShot(input: ShotPromptInput): CameraPlan {
   });
 }
 
+function normalizedSceneSignature(scene: ShotSceneInput) {
+  return [scene.setting, scene.objective, scene.action]
+    .map((value) => value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "")
+    .join("|");
+}
+
+export function validateShotSequence(
+  scenes: ShotSceneInput[],
+  expectedCount: number,
+): ShotSequenceValidation {
+  if (scenes.length !== expectedCount) {
+    return {
+      valid: false,
+      error: `This production needs exactly ${expectedCount} authored scenes. It currently has ${scenes.length}.`,
+    };
+  }
+
+  const incompleteIndex = scenes.findIndex((scene) => !scene.objective?.trim() || !scene.action?.trim());
+  if (incompleteIndex >= 0) {
+    return {
+      valid: false,
+      error: `Scene ${incompleteIndex + 1} needs both a visible objective and a four-second action before rendering.`,
+    };
+  }
+
+  const signatures = scenes.map(normalizedSceneSignature);
+  const repeatedIndex = signatures.findIndex((signature, index) => (
+    signature.length > 2 && signatures.indexOf(signature) !== index
+  ));
+  if (repeatedIndex >= 0) {
+    return {
+      valid: false,
+      error: `Scene ${repeatedIndex + 1} repeats another scene. Give every shot its own setting, objective, or visible action.`,
+    };
+  }
+
+  return { valid: true };
+}
+
 export function buildShotImagePrompt(input: ShotPromptInput): string {
   const camera = cameraPlanForShot(input);
   const risks = auditShotScene(input.scene);
@@ -120,10 +164,12 @@ export function buildShotImagePrompt(input: ShotPromptInput): string {
     `SETTING: ${input.scene.setting || "A specific location grounded in the locked production."}`,
     `DRAMATIC OBJECTIVE: ${input.scene.objective || "Create one visible situation change."}`,
     `FIRST-FRAME ACTION: Compose the instant immediately before ${input.scene.action || `${input.actorName} begins one concise, camera-readable action.`}`,
+    "DISTINCT SHOT RULE: Represent only this scene's authored setting, objective, and starting action. Do not copy the pose, staging, camera angle, or background of another scene in the sequence.",
+    "SINGLE-FRAME RULE: Return one full-bleed camera view only. No split screen, tiled variants, storyboard, contact sheet, diptych, triptych, or collage.",
     `ACTOR LOCK: ${input.actorName}. Match the supplied identity reference exactly. ${input.actorIdentity ?? ""}`.trim(),
     ...(input.hasProductReference
       ? [`PRODUCT LOCK: The supplied ${input.productName || "product"} reference is binding. Preserve exact silhouette, packaging, label placement, proportions, colors, cap, and materials. Keep it readable at its real scale.`]
-      : [`OFFERING LOCK: Show the actual goods, service, or result promised by "${input.productionLogline || input.scene.objective || "the production"}" in the environment and actor action. Never return an empty portrait-only frame.`]),
+      : ["STORY EVIDENCE: Show only the physical evidence required by this scene's action and objective. Do not invent a product, storefront, service demonstration, or advertising setup that is absent from the script. Never return an empty portrait-only frame."]),
     `CAMERA: ${camera.angle}; ${camera.lens}. Compose enough space for ${camera.movementName}: ${camera.movementPrompt}`,
     "COMPOSITION: Show the actor's face, hands, important object or product, and environment in one coherent depth structure. Keep foreground occlusion intentional and preserve a clean direction of travel.",
     "LIGHT: Use motivated cinematic light from visible or plausible sources. Natural skin, tactile materials, controlled contrast, and no bright studio-light contamination unless the scene explicitly requires a studio.",
@@ -138,22 +184,24 @@ export function buildShotVideoPrompt(input: ShotPromptInput): string {
   const camera = cameraPlanForShot(input);
   const risks = auditShotScene(input.scene);
   return [
-    `Animate scene ${input.sceneIndex + 1} of ${input.sceneCount} for "${input.productionTitle}" as one continuous four-second silent shot.`,
+    `Animate scene ${input.sceneIndex + 1} of ${input.sceneCount} for "${input.productionTitle}" as one continuous five-second silent source clip whose usable action lands by four seconds.`,
     `STORY PROMISE: ${input.productionLogline || input.scene.objective || "One visible action creates one visible change."}`,
     "SOURCE FRAME: The supplied image is the exact first frame and complete art direction. Do not redesign, recompose, or invent a second angle.",
+    `SCENE BEAT: ${input.scene.setting || "The established location"}; ${input.scene.objective || "one visible situation change"}.`,
     `0.0-0.8s — ESTABLISH: Hold long enough to read the actor, location, important object or product, and the starting body position.`,
     `0.8-3.2s — PERFORM: ${input.scene.action || `${input.actorName} completes one concise, physically plausible action.`}`,
     `3.2-4.0s — LAND: Finish the action, settle body and camera motion, and hold a clean final frame that expresses ${input.scene.objective || "the changed situation"}.`,
     `CAMERA PATH — ${camera.movementName}: ${camera.movementPrompt}`,
     `CAMERA LOCK: Preserve ${camera.angle}, ${camera.lens}, the source-image axis, horizon, lens character, subject scale, and established screen direction. No second move and no cut.`,
+    "EDIT HANDLE: After the action lands at four seconds, hold the same pose and composition through five seconds with only natural breath and environmental inertia. The master edit uses the first four seconds.",
     `IDENTITY ANCHOR: Keep ${input.actorName}'s exact face, apparent age, hair, body proportions, skin detail, wardrobe, and distinguishing asymmetry from the supplied image.`,
     ...(input.hasProductReference
       ? [`PRODUCT ANCHOR: Keep the visible ${input.productName || "product"} continuously present, correctly shaped, correctly labeled, stable in scale, and physically connected to the stated surface or hand.`]
-      : ["OFFERING ANCHOR: Keep the established goods, service evidence, storefront, or before-and-after proof visible and stable. Do not collapse the shot into an actor-only portrait."]),
+      : ["STORY ANCHOR: Preserve only the people, objects, and environmental evidence visible in this scene's supplied first frame. Do not invent an advertising setup or borrow objects from another scene."]),
     "PHYSICS: Natural blink, breath, grounded weight, cloth inertia, plausible hand contact, and restrained environmental motion. Every moving object must have an explicit owner, support, or contact point.",
     `CONTINUITY: ${input.continuityNote || "Do not reverse travel direction, swap positions, rebuild the background, add people, or change object count."}`,
     ...(risks.length ? [`SIMPLIFY BEFORE RENDER: ${risks.map((risk) => risk.message).join(" ")}`] : []),
     `NEGATIVE: ${SHOT_KNOWLEDGE_BASE.negative.join(" ")}`,
-    "AUDIO: Silent visual plate only. No lip-sync, speech, effects, ambience, or music; audio is generated and mixed separately. --duration 4 --camerafixed false",
+    "AUDIO: Silent visual plate only. No lip-sync, speech, effects, ambience, or music; audio is generated and mixed separately. --duration 5 --camerafixed false",
   ].join("\n");
 }

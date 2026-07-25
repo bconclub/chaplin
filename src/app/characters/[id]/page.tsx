@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useChaplinStore } from "@/lib/store";
 import { getCharacter, getUser, resumeForCharacter, ledgerForCharacter } from "@/lib/selectors";
-import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
 import CharacterSoundProfile from "@/components/CharacterSoundProfile";
 import CharacterPersonalityCard from "@/components/CharacterPersonalityCard";
@@ -167,61 +166,18 @@ export default function CharacterProfilePage() {
         </button>
       )}
 
-      {/* Casting card header */}
-      {character.bannerUrl ? (
-        <div className="poster-card overflow-hidden rounded-xl">
-          <div className="relative aspect-video w-full bg-black">
-            <CharacterBroll character={character} />
-            <div className="absolute inset-0 flex max-w-[78%] flex-col justify-end gap-1 p-4 pb-4 sm:max-w-[52%] sm:gap-2 sm:p-8 lg:p-10">
-              <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <h1 className="reel-title text-xl leading-none text-ink sm:text-4xl sm:leading-tight">
-                  {character.name}
-                </h1>
-                {maker && (
-                  <span className="text-[9px] text-ink/65 sm:text-xs">
-                    made by{" "}
-                    <Link href="/studio" className="text-accent hover:underline">
-                      {maker.name}
-                    </Link>
-                  </span>
-                )}
-              </div>
-              <p data-broll-punchline className="line-clamp-2 text-xs italic leading-snug text-ink/75 sm:line-clamp-none sm:text-base sm:text-ink/80">
-                &ldquo;{character.tagline}&rdquo;
-              </p>
-              <div className="mt-0.5 flex flex-wrap gap-1 sm:mt-1 sm:gap-1.5">
-                <Chip compact label={ARCHETYPE_LABEL[character.archetype]} hue={ARCHETYPE_HUE[character.archetype]} />
-                <Chip compact label={LICENSE_LABEL[character.licenseType]} hue={LICENSE_HUE[character.licenseType]} />
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
-            <div className="p-2.5 text-center sm:p-4">
-              <p className="text-base font-semibold sm:text-xl">{character.stats.castings}</p>
-              <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Castings</p>
-            </div>
-            <div className="p-2.5 text-center sm:p-4">
-              <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.fans)}</p>
-              <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Fans</p>
-            </div>
-            <div className="p-2.5 text-center sm:p-4">
-              <p className="text-base font-semibold text-accent sm:text-xl">{money(character.stats.earnings)}</p>
-              <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Lifetime earnings</p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="poster-card rounded-md p-6 flex flex-col md:flex-row gap-6 relative overflow-hidden min-h-72">
+      {/* Every actor gets the same 16:9 casting stage. The video fills this
+          frame edge-to-edge, so profile cards never change size by media. */}
+      <div className="poster-card overflow-hidden rounded-xl" data-character-profile-hero>
+        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16 / 9" }}>
           <CharacterBroll character={character} />
-          <span className="accent-ring shrink-0 self-start relative z-10 mt-auto">
-            <Avatar hue={character.avatarHue} label={character.name} src={character.imageUrl} size={96} />
-          </span>
-
-          <div className="flex-1 min-w-0 relative z-10 mt-auto">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="reel-title text-3xl">{character.name}</h1>
+          <div className="absolute inset-0 flex max-w-[78%] flex-col justify-end gap-1 p-4 pb-4 sm:max-w-[52%] sm:gap-2 sm:p-8 lg:p-10">
+            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <h1 className="reel-title text-xl leading-none text-ink sm:text-4xl sm:leading-tight">
+                {character.name}
+              </h1>
               {maker && (
-                <span className="text-xs text-grey">
+                <span className="text-[9px] text-ink/65 sm:text-xs">
                   made by{" "}
                   <Link href="/studio" className="text-accent hover:underline">
                     {maker.name}
@@ -229,31 +185,30 @@ export default function CharacterProfilePage() {
                 </span>
               )}
             </div>
-            <p data-broll-punchline className="italic text-grey mb-3">&ldquo;{character.tagline}&rdquo;</p>
-
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              <Chip label={ARCHETYPE_LABEL[character.archetype]} hue={ARCHETYPE_HUE[character.archetype]} />
-              <Chip label={LICENSE_LABEL[character.licenseType]} hue={LICENSE_HUE[character.licenseType]} />
-            </div>
-
-          </div>
-
-          <div className="flex md:flex-col gap-4 md:gap-2 md:text-right shrink-0 md:w-40 relative z-10 mt-auto">
-            <div>
-              <p className="text-xl font-semibold">{character.stats.castings}</p>
-              <p className="text-[11px] text-grey uppercase tracking-wide">Castings</p>
-            </div>
-            <div>
-              <p className="text-xl font-semibold">{compactNumber(character.stats.fans)}</p>
-              <p className="text-[11px] text-grey uppercase tracking-wide">Fans</p>
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-accent">{money(character.stats.earnings)}</p>
-              <p className="text-[11px] text-grey uppercase tracking-wide">Lifetime earnings</p>
+            <p data-broll-punchline className="line-clamp-2 text-xs italic leading-snug text-ink/75 sm:line-clamp-none sm:text-base sm:text-ink/80">
+              &ldquo;{character.tagline}&rdquo;
+            </p>
+            <div className="mt-0.5 flex flex-wrap gap-1 sm:mt-1 sm:gap-1.5">
+              <Chip compact label={ARCHETYPE_LABEL[character.archetype]} hue={ARCHETYPE_HUE[character.archetype]} />
+              <Chip compact label={LICENSE_LABEL[character.licenseType]} hue={LICENSE_HUE[character.licenseType]} />
             </div>
           </div>
         </div>
-      )}
+        <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold sm:text-xl">{character.stats.castings}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Castings</p>
+          </div>
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.fans)}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Fans</p>
+          </div>
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold text-accent sm:text-xl">{money(character.stats.earnings)}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Lifetime earnings</p>
+          </div>
+        </div>
+      </div>
 
       <div className="mt-6">
         <CharacterConversationPanel character={character} />
@@ -289,16 +244,18 @@ export default function CharacterProfilePage() {
             ) : availableVideos.length ? (
               <div className="max-h-[34rem] space-y-3 overflow-y-auto p-3 scrollbar-thin">
                 {availableVideos.map((video, index) => (
-                  <article key={video.id} className="overflow-hidden rounded-lg border border-line bg-black/30">
-                    <video
-                      src={video.url}
-                      controls
-                      playsInline
-                      preload="metadata"
-                      poster={character.imageUrl ?? character.bannerUrl}
-                      className="aspect-video w-full bg-black object-cover"
-                      aria-label={`${video.label} for ${character.name}`}
-                    />
+                  <article key={video.id} className="overflow-hidden rounded-lg border border-line bg-black/30" data-character-video-card>
+                    <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16 / 9" }}>
+                      <video
+                        src={video.url}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        poster={character.imageUrl ?? character.bannerUrl}
+                        className="absolute inset-0 h-full w-full object-cover object-center"
+                        aria-label={`${video.label} for ${character.name}`}
+                      />
+                    </div>
                     <div className="flex items-center justify-between gap-2 px-3 py-2">
                       <div className="min-w-0">
                         <p className="truncate text-[10px] font-semibold">{video.label}</p>

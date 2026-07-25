@@ -4,7 +4,7 @@ import { createClient, type Session, type User } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
-import { userAvatarUrl } from "@/lib/user-avatars";
+import { CHAPLIN_BRAND_AVATAR, userAvatarUrl } from "@/lib/user-avatars";
 
 export type AccountRole = "creator" | "admin";
 
@@ -44,16 +44,20 @@ export async function ensureAuthProfile(user: User): Promise<AuthIdentity> {
   if (!user.email) throw new Error("The authenticated account has no email address.");
   const admin = getSupabaseAdminClient();
   const role = requestedRole(user);
-  const name = String(user.user_metadata?.display_name ?? user.email.split("@")[0] ?? "Chaplin Creator").trim().slice(0, 80);
+  const name = role === "admin"
+    ? "Chaplin"
+    : String(user.user_metadata?.display_name ?? user.email.split("@")[0] ?? "Chaplin Creator").trim().slice(0, 80);
   const handleBase = user.email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "creator";
-  const handle = `@${handleBase}_${user.id.slice(0, 4)}`;
+  const handle = role === "admin" ? "@chaplin" : `@${handleBase}_${user.id.slice(0, 4)}`;
   const existingUser = await admin
     .from("users")
     .select("image_url")
     .eq("id", user.id)
     .maybeSingle();
   if (existingUser.error) throw new Error(`Load creator avatar: ${existingUser.error.message}`);
-  const imageUrl = existingUser.data?.image_url || userAvatarUrl(user.id);
+  const imageUrl = role === "admin"
+    ? CHAPLIN_BRAND_AVATAR
+    : existingUser.data?.image_url || userAvatarUrl(user.id);
 
   const profileResult = await admin.from("user_profiles").upsert({
     user_id: user.id,

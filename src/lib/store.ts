@@ -117,7 +117,9 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
       const authenticatedUser = {
         id: profile.id,
         name: profile.name,
-        handle: existing?.handle ?? `@${profile.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "creator"}`,
+        handle: profile.role === "admin"
+          ? "@chaplin"
+          : existing?.handle ?? `@${profile.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "creator"}`,
         roleBadges,
         avatarInitial: profile.name.slice(0, 1).toUpperCase(),
         avatarHue: existing?.avatarHue ?? (profile.role === "admin" ? 165 : 202),

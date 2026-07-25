@@ -9,6 +9,7 @@ import {
   composeProductVideoPrompt,
   composeSignatureSfxEventPrompt,
   composeThemePrompt,
+  composeVoiceDesignPrompt,
   productDialogueAllowlist,
   resolveModernThemePalette,
   withThemeDurationDirection,
@@ -62,6 +63,39 @@ const shot: ShotBlueprint = {
   dialogue: "",
   negative: "no duplicate hands",
 };
+
+test("legacy Indian-English defaults are replaced by the actor's Russian language canon", () => {
+  const prompt = composeVoiceDesignPrompt({
+    ...actor,
+    name: "Irina Volkov",
+    personality: "A native Russian rescue pilot from Moscow; clipped under pressure and unexpectedly tender with her crew.",
+    voiceDesc: "Native Indian English with warm Hindi and Urdu inflection; adult feminine, low and steady with restrained authority.",
+  });
+  assert.match(prompt, /Primary spoken language: Russian/i);
+  assert.match(prompt, /Use English only when the script or creator explicitly requests it/i);
+  assert.doesNotMatch(prompt, /Indian English|Hindi|Urdu/i);
+  assert.match(prompt, /low and steady with restrained authority/i);
+});
+
+test("an explicitly Indian actor keeps the language named in their own canon", () => {
+  const prompt = composeVoiceDesignPrompt({
+    ...actor,
+    personality: "A Lucknow journalist who speaks Indian English and naturally moves between Hindi and Urdu with family.",
+    voiceDesc: "Native Indian English with natural Hindi and Urdu pronunciation; clear mid-register resonance.",
+  });
+  assert.match(prompt, /follow the specific Indian language/i);
+  assert.match(prompt, /Native Indian English with natural Hindi and Urdu pronunciation/i);
+});
+
+test("actors without language canon get a neutral fallback instead of an Indian accent", () => {
+  const prompt = composeVoiceDesignPrompt({
+    ...actor,
+    personality: "A watchful station mechanic who answers in short, practical sentences.",
+    voiceDesc: "Smoky alto, measured pace, precise consonants.",
+  });
+  assert.match(prompt, /neutral international English/i);
+  assert.doesNotMatch(prompt, /Indian English|Hindi|Urdu/i);
+});
 
 test("product image grammar keeps identity block, references, claims, and merged negatives", () => {
   const prompt = composeProductImagePrompt({ videoType: VideoType.UgcAd, product, actor, shot, hookText: "Look what I packed.", ctaText: "Pack yours.", personaStyle: "casual" });

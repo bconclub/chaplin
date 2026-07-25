@@ -20,7 +20,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const USERS: User[] = [
-  { id: "u-admin", name: "Chaplin Admin", handle: "@superadmin", roleBadges: ["admin"], avatarInitial: "S", avatarHue: 165, imageUrl: "/avatars/chaplin-admin-ocelot.webp" },
+  { id: "u-admin", name: "Chaplin", handle: "@chaplin", roleBadges: ["admin"], avatarInitial: "C", avatarHue: 165, imageUrl: "/brand/chaplin-mark.png" },
   { id: "u-creator", name: "Chaplin Creator", handle: "@creator", roleBadges: ["maker"], avatarInitial: "C", avatarHue: 202, imageUrl: "/avatars/arjun-owl.webp" },
 ];
 

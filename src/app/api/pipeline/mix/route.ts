@@ -5,8 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { getMediaPipelineRun } from "@/lib/server/media-pipeline";
 import { saveMediaAsset } from "@/lib/server/supabase-admin";
+import { ffmpegExecutable, isMissingFfmpegError } from "@/lib/server/ffmpeg-runtime";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const execute = promisify(execFile);
 
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       download(stepUrl(run, "room-tone"), roomTonePath),
     ]);
 
-    await execute("ffmpeg", [
+    await execute(ffmpegExecutable(), [
       "-y",
       "-i", videoPath,
       "-i", dialoguePath,
@@ -85,7 +87,10 @@ export async function POST(request: Request) {
     });
     return Response.json({ url: asset.url, assetId: asset.id });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Could not mix the shot." }, { status: 500 });
+    const message = isMissingFfmpegError(error)
+      ? "Chaplin's sound-and-video editor is not available in this deployment. The bundled FFmpeg binary was not packaged."
+      : error instanceof Error ? error.message : "Could not mix the shot.";
+    return Response.json({ error: message }, { status: 500 });
   } finally {
     if (workDirectory) await rm(workDirectory, { recursive: true, force: true }).catch(() => undefined);
   }

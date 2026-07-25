@@ -111,3 +111,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.3 | `973c8ef` | 2026-07-25T22:17:27+05:30 | Upgrade character audio direction and master prompts |
 | v0.1.4 | `17c72ba` | 2026-07-25T22:47:25+05:30 | Move Magic Scene into studio header |
 | v0.1.5 | `be195dc` | 2026-07-26T01:45:51+05:30 | Version Chaplin production workflow as v0.1.5 |
+| v0.1.6 | `01d80fe` | 2026-07-26T02:56:09+05:30 | Refine creator access and production workflows |

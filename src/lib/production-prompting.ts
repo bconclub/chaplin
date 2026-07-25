@@ -11,6 +11,10 @@ import {
 } from "@/lib/character-card";
 import { productIdentityLock, type ProductCard } from "@/lib/product-card";
 import { VideoType, isProductVideoType } from "@/lib/video-brief";
+import {
+  resolveVoiceLanguageDirection,
+  sanitizeVoicePerformanceDirection,
+} from "@/lib/voice-language";
 
 export type CharacterIdentityInput = Pick<Character, "name" | "archetype" | "tagline" | "personality" | "voiceGender"> &
   Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "cardV2" | "brollLine" | "brollScene">> & {
@@ -549,10 +553,20 @@ export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
   if (card) return buildCardVoiceDesignPrompt(card);
   const bible = buildProductionBible(character);
   const persona = `${character.archetype.replace("-", " ")}, ${bible.dramatic.contradiction}`;
+  const source = bible.creationInputs;
+  const voiceContext = {
+    characterBrief: source?.characterBrief,
+    worldBrief: source?.worldBrief || character.worldBrief,
+    personality: character.personality,
+    tagline: character.tagline,
+    voiceDirection: source?.voiceDirection || character.voiceDesc,
+  };
+  const languageDirection = resolveVoiceLanguageDirection(voiceContext);
+  const performanceDirection = sanitizeVoicePerformanceDirection(voiceContext);
   return [
-    `Native Indian English with natural Hindi and Urdu pronunciation. ${character.voiceGender}, adult. Studio quality.`,
+    `${languageDirection} ${character.voiceGender}, adult. Studio quality.`,
     `Persona: ${persona}. Emotion: controlled, alert, emotionally specific.`,
-    `${sentence(character.voiceDesc || "Clear mid-register resonance")}`,
+    `${sentence(performanceDirection || "Clear mid-register resonance")}`,
     `Conversational delivery with ${bible.performance.tempo}; under pressure, ${bible.performance.underPressure}. Clean close-mic signal without reverb, echo, telephone, tape, or synthetic FX.`
   ].join(" ");
 }

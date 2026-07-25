@@ -8,7 +8,9 @@ const supabaseHostname = process.env.SUPABASE_URL
 const nextConfig: NextConfig = {
   serverExternalPackages: ["ffmpeg-static"],
   outputFileTracingIncludes: {
-    "/api/generate": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/generate": ["./node_modules/ffmpeg-static/**"],
+    "/api/pipeline/assemble": ["./node_modules/ffmpeg-static/**"],
+    "/api/pipeline/mix": ["./node_modules/ffmpeg-static/**"],
   },
   turbopack: {
     root: path.join(__dirname),

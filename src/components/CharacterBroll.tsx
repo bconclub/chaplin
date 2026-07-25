@@ -315,7 +315,7 @@ export default function CharacterBroll({ character }: { character: Character }) 
           loop
           playsInline
           preload="metadata"
-          className="absolute inset-0 h-full w-full bg-black object-contain"
+          className="absolute inset-0 h-full w-full object-cover object-center"
         />
       )}
       {dialogueSource && <audio ref={dialogueRef} src={dialogueSource} preload="metadata" onEnded={() => handleTrackEnded("voice")} data-broll-track="voice" />}

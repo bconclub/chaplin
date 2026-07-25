@@ -5,8 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { attachMediaPipelineOutput, getMediaPipelineRun } from "@/lib/server/media-pipeline";
 import { saveMediaAsset } from "@/lib/server/supabase-admin";
+import { ffmpegExecutable, isMissingFfmpegError } from "@/lib/server/ffmpeg-runtime";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const execute = promisify(execFile);
 
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
     const outputPath = path.join(workDirectory, "punch-master.mp4");
     await Promise.all(shotUrls.map((url, index) => download(url, shotPaths[index])));
 
-    await execute("ffmpeg", [
+    await execute(ffmpegExecutable(), [
       "-y",
       ...shotPaths.flatMap((shotPath) => ["-i", shotPath]),
       "-filter_complex",
@@ -101,8 +103,11 @@ export async function POST(request: Request) {
     });
     return Response.json({ url: asset.url, assetId: asset.id, run: updatedRun });
   } catch (error) {
+    const message = isMissingFfmpegError(error)
+      ? "Chaplin's video editor is not available in this deployment. The bundled FFmpeg binary was not packaged."
+      : error instanceof Error ? error.message : "Could not assemble the Punch output.";
     return Response.json(
-      { error: error instanceof Error ? error.message : "Could not assemble the Punch output." },
+      { error: message },
       { status: 500 },
     );
   } finally {

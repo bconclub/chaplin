@@ -61,7 +61,7 @@ async function ensureSuperAdminUser(email: string, password: string, resetExisti
     password,
     email_confirm: true,
     user_metadata: {
-      display_name: "Chaplin Super Admin",
+      display_name: "Chaplin",
       account_role: "admin",
     },
   };

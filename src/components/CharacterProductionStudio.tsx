@@ -236,6 +236,28 @@ type GenerationRun = {
   error?: string;
 };
 
+type AutoStudioStepState = "queued" | "writing" | "generating" | "complete" | "failed";
+type AutoStudioStep = {
+  state: AutoStudioStepState;
+  detail: string;
+};
+type AutoStudioRun = {
+  status: "running" | "complete" | "failed";
+  error?: string;
+  steps: Record<number, AutoStudioStep>;
+};
+
+function initialAutoStudioSteps(completed: Set<number>): Record<number, AutoStudioStep> {
+  return Object.fromEntries(
+    WORKFLOW_STEPS.map((step) => [
+      step.id,
+      completed.has(step.id)
+        ? { state: "complete", detail: "Already ready" }
+        : { state: "queued", detail: "Waiting" },
+    ]),
+  ) as Record<number, AutoStudioStep>;
+}
+
 const PRODUCTION_TASK_TO_STEP: Record<string, number> = {
   "voice-build": 1,
   "voice-save": 1,
@@ -524,6 +546,8 @@ export default function CharacterProductionStudio({
   const [generationRun, setGenerationRun] = useState<GenerationRun | null>(null);
   const [voiceBuildStage, setVoiceBuildStage] = useState<number | null>(null);
   const [quickWriting, setQuickWriting] = useState<QuickWriteField | null>(null);
+  const [studioAutoMode, setStudioAutoMode] = useState(false);
+  const [autoStudioRun, setAutoStudioRun] = useState<AutoStudioRun | null>(null);
   const [selectingAsset, setSelectingAsset] = useState("");
   const [message, setMessage] = useState("");
   const [seedanceRetryArmed, setSeedanceRetryArmed] = useState(false);
@@ -804,8 +828,8 @@ export default function CharacterProductionStudio({
         field,
         currentText,
         character,
-        context: {
         referenceImage,
+        context: {
           voiceDescription,
           voicePreview: previewText,
           dialogue: speechText,
@@ -1257,6 +1281,301 @@ export default function CharacterProductionStudio({
     ...(sfxCandidates.length > 0 && !sfxUrl ? [3] : []),
     ...(imageCandidates.length > 0 && !selectedImageAssetId ? [5] : []),
   ]);
+  const autoRunningSteps = new Set(
+    Object.entries(autoStudioRun?.steps ?? {})
+      .filter(([, step]) => step.state === "writing" || step.state === "generating")
+      .map(([stepId]) => Number(stepId)),
+  );
+
+  function updateAutoStudioStep(stepId: number, state: AutoStudioStepState, detail: string) {
+    setAutoStudioRun((current) => current
+      ? {
+          ...current,
+          steps: {
+            ...current.steps,
+            [stepId]: { state, detail },
+          },
+        }
+      : current);
+  }
+
+  async function runAutoStudio() {
+    if (busy || autoStudioRun?.status === "running") return;
+
+    const startingCompletedSteps = new Set(completedSteps);
+    setAutoStudioRun({
+      status: "running",
+      steps: initialAutoStudioSteps(startingCompletedSteps),
+    });
+    setBusy("auto-studio");
+    setMessage("Studio Auto is writing prompts and running every missing production lane. It will stop at final review.");
+    jumpToStep(1);
+
+    // An identity portrait is the seed, not the finished scene. For a new
+    // automatic run, create a dedicated scene frame from that identity before
+    // asking Seedance to animate it. Reuse the identity directly only when a
+    // finished video already exists and no new render is required.
+    let automaticFrame = generatedImage ||
+      ((generatedVideo || character.videoUrl) ? identityReferenceImage : "");
+
+    const runVoiceAndDialogue = async () => {
+      let automaticVoiceId = lockedVoiceId;
+      if (!automaticVoiceId) {
+        updateAutoStudioStep(1, "writing", "Writing voice direction");
+        try {
+          if (!elevenReady) throw new Error("ElevenLabs is not ready for voice, dialogue, SFX, or theme generation.");
+          const [descriptionResult, auditionResult] = await Promise.all([
+            writeField("voice-description", voiceDescription),
+            writeField("voice-preview", previewText),
+          ]);
+          const directedVoice = (descriptionResult.text ?? voiceDescription).trim().slice(0, 1000);
+          const auditionLine = (auditionResult.text ?? previewText).trim();
+          setVoiceDescription(directedVoice);
+          setPreviewText(auditionLine);
+          updateAutoStudioStep(1, "generating", "Creating and locking the strongest take");
+          const voiceData = await jsonAction("voice-design", {
+            description: directedVoice,
+            previewText: auditionLine,
+          }) as { previews?: VoicePreview[] };
+          const firstVoice = voiceData.previews?.[0];
+          if (!firstVoice) throw new Error("ElevenLabs returned no voice take to lock.");
+          setPreviews(voiceData.previews ?? []);
+          const savedVoice = await jsonAction("voice-save", {
+            name: `${character.name} - Chaplin`,
+            description: directedVoice,
+            generatedVoiceId: firstVoice.generated_voice_id,
+            characterId: character.id,
+          }) as { voice_id?: string };
+          if (!savedVoice.voice_id) throw new Error("The selected voice take could not be locked.");
+          automaticVoiceId = savedVoice.voice_id;
+          setLockedVoiceId(automaticVoiceId);
+          setCharacterVoice(character.id, automaticVoiceId);
+          setPreviews([]);
+          updateAutoStudioStep(1, "complete", "Voice locked automatically");
+        } catch (error) {
+          updateAutoStudioStep(1, "failed", error instanceof Error ? error.message : "Voice generation failed");
+          throw error;
+        }
+      } else {
+        updateAutoStudioStep(1, "complete", "Existing locked voice reused");
+      }
+
+      if (speechUrl) {
+        updateAutoStudioStep(2, "complete", "Existing dialogue reused");
+        return;
+      }
+
+      updateAutoStudioStep(2, "writing", "Writing dialogue for the locked voice");
+      try {
+        const dialogueResult = await writeField("dialogue", speechText);
+        const writtenDialogue = (dialogueResult.text ?? speechText).trim();
+        setSpeechText(writtenDialogue);
+        updateAutoStudioStep(2, "generating", "Performing dialogue");
+        const automaticSpeechUrl = await audioAction("speech", { speechText: writtenDialogue });
+        setSpeechUrl(automaticSpeechUrl);
+        updateAutoStudioStep(2, "complete", "Dialogue ready");
+      } catch (error) {
+        updateAutoStudioStep(2, "failed", error instanceof Error ? error.message : "Dialogue generation failed");
+        throw error;
+      }
+    };
+
+    const runSignatureSound = async () => {
+      if (sfxUrl) {
+        updateAutoStudioStep(3, "complete", "Existing signature sound reused");
+        return;
+      }
+      updateAutoStudioStep(3, "writing", "Writing distinct sound events");
+      try {
+        if (!elevenReady) throw new Error("ElevenLabs is not ready for signature sound generation.");
+        const sfxResult = await writeField("sfx", sfxPrompt);
+        setSfxPrompt((sfxResult.text ?? sfxPrompt).trim());
+        updateAutoStudioStep(3, "generating", "Rendering and mixing signature sound");
+        const signature = await jsonAction("signature-sfx", {}) as {
+          url?: string;
+          events?: unknown[];
+        };
+        if (!signature.url) throw new Error("The signature sound returned no playable asset.");
+        setSfxUrl(signature.url);
+        updateAutoStudioStep(3, "complete", `${signature.events?.length ?? signatureSfxEventCount} sound events mixed`);
+      } catch (error) {
+        updateAutoStudioStep(3, "failed", error instanceof Error ? error.message : "Signature sound generation failed");
+        throw error;
+      }
+    };
+
+    const runThemeScore = async () => {
+      if (themeUrl) {
+        updateAutoStudioStep(4, "complete", "Existing theme reused");
+        return;
+      }
+      updateAutoStudioStep(4, "writing", "Writing the score direction");
+      try {
+        if (!elevenReady) throw new Error("ElevenLabs is not ready for theme generation.");
+        const themeResult = await writeField("theme", themePrompt);
+        const writtenTheme = (themeResult.text ?? themePrompt).trim();
+        setThemePrompt(writtenTheme);
+        updateAutoStudioStep(4, "generating", `Composing ${themeDurationSeconds}s theme`);
+        const automaticThemeUrl = await audioAction("theme", {
+          prompt: writtenTheme,
+          durationSeconds: themeDurationSeconds,
+          grammarVersion: "v3",
+        });
+        setThemeUrl(automaticThemeUrl);
+        updateAutoStudioStep(4, "complete", "Theme ready");
+      } catch (error) {
+        updateAutoStudioStep(4, "failed", error instanceof Error ? error.message : "Theme generation failed");
+        throw error;
+      }
+    };
+
+    const runVisualSeed = async () => {
+      if (automaticFrame) {
+        updateAutoStudioStep(5, "complete", "Existing visual seed reused");
+        return automaticFrame;
+      }
+
+      const automaticPurpose: ImagePurpose = identityReferenceImage ? "scene" : "identity";
+      setImagePurpose(automaticPurpose);
+      updateAutoStudioStep(5, "writing", automaticPurpose === "identity" ? "Writing the identity frame" : "Writing the scene frame");
+      try {
+        if (!imageGenerationReady) throw new Error(imageUnavailableReason ?? "No image provider is ready.");
+        const imageField: QuickWriteField = automaticPurpose === "identity" ? "identity-image" : "image";
+        const automaticImagePrompt = automaticPurpose === "scene"
+          ? (imagePurpose === "scene" ? imagePrompt : buildScenePackage(character, magicSceneIndex).image)
+          : imagePrompt;
+        const imageResult = await writeField(
+          imageField,
+          automaticImagePrompt,
+          automaticPurpose === "scene" ? identityReferenceImage : undefined,
+        );
+        const writtenImagePrompt = (imageResult.text ?? automaticImagePrompt).trim();
+        setImagePrompt(writtenImagePrompt);
+        updateAutoStudioStep(5, "generating", `Rendering with ${imageProviderRunLabel}`);
+
+        const identityVariationKey = automaticPurpose === "identity" ? crypto.randomUUID() : undefined;
+        const imageRequest = (imagePreset: string) => ({
+          prompt: writtenImagePrompt,
+          imagePurpose: automaticPurpose,
+          referenceImage: automaticPurpose === "scene" ? identityReferenceImage : undefined,
+          identityVariationKey,
+          imagePreset,
+        });
+        const requests: Array<{ provider: ImageProviderKey; result: Promise<ImageCandidate> }> = [];
+        if (gptImageReady) {
+          requests.push({ provider: "openai", result: jsonAction("image", imageRequest("gpt-image-2")) as Promise<ImageCandidate> });
+        }
+        if (nanoBananaReady) {
+          requests.push({ provider: "openrouter", result: jsonAction("image", imageRequest("nano-banana-2")) as Promise<ImageCandidate> });
+        }
+        if (dolaImageReady) {
+          requests.push({ provider: "byteplus", result: jsonAction("image", imageRequest("dola-seedream-5")) as Promise<ImageCandidate> });
+        }
+        const settled = await Promise.allSettled(requests.map((request) => request.result));
+        const candidates = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+        if (!candidates.length) {
+          const failures = settled.flatMap((result) =>
+            result.status === "rejected"
+              ? [result.reason instanceof Error ? result.reason.message : "An image provider failed."]
+              : [],
+          );
+          throw new Error(failures.join(" ") || "No image provider returned a visual.");
+        }
+        setImageCandidates(candidates);
+        candidates.forEach((candidate) => addCharacterImage(character.id, candidate.url));
+        const selected = candidates[0];
+        const selectResponse = await fetch("/api/characters/profile-media", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            characterId: character.id,
+            assetId: selected.assetId,
+            slot: automaticPurpose === "identity" ? "cover" : "scene",
+          }),
+        });
+        if (!selectResponse.ok) throw new Error(await errorFrom(selectResponse));
+        setSelectedImageAssetId(selected.assetId);
+        automaticFrame = selected.url;
+        if (automaticPurpose === "identity") {
+          setCanonicalReferenceImage(selected.url);
+          setGeneratedImage("");
+        } else {
+          setGeneratedImage(selected.url);
+        }
+        updateAutoStudioStep(5, "complete", `${imageProviderLabel(selected.provider)} frame selected`);
+        return selected.url;
+      } catch (error) {
+        updateAutoStudioStep(5, "failed", error instanceof Error ? error.message : "Image generation failed");
+        throw error;
+      }
+    };
+
+    try {
+      await ensureCharacterIsSaved();
+      const parallelResults = await Promise.allSettled([
+        runVoiceAndDialogue(),
+        runSignatureSound(),
+        runThemeScore(),
+        runVisualSeed(),
+      ]);
+      const failures = parallelResults.flatMap((result) =>
+        result.status === "rejected"
+          ? [result.reason instanceof Error ? result.reason.message : "A production lane failed."]
+          : [],
+      );
+      if (failures.length) throw new Error([...new Set(failures)].join(" "));
+
+      if (generatedVideo || character.videoUrl) {
+        updateAutoStudioStep(6, "complete", "Existing video reused");
+      } else {
+        try {
+          updateAutoStudioStep(6, "writing", "Writing motion for the selected frame");
+          if (!seedModelsReady) throw new Error(videoUnavailableReason ?? "Seedance is not ready.");
+          if (!automaticFrame) throw new Error("Studio Auto could not find a first frame for video.");
+          const videoResult = await writeField("video", scenePrompt, automaticFrame);
+          const writtenVideoPrompt = (videoResult.text ?? scenePrompt).trim();
+          setScenePrompt(writtenVideoPrompt);
+          updateAutoStudioStep(6, "generating", "Rendering the five-second scene");
+          const videoData = await jsonAction("video", {
+            prompt: writtenVideoPrompt,
+            referenceImage: automaticFrame,
+          }) as { url?: string };
+          if (!videoData.url) throw new Error("Seedance returned no playable video.");
+          setGeneratedVideo(videoData.url);
+          setCharacterVideo(character.id, videoData.url);
+          updateAutoStudioStep(6, "complete", "Video ready");
+        } catch (error) {
+          updateAutoStudioStep(6, "failed", error instanceof Error ? error.message : "Video generation failed");
+          throw error;
+        }
+      }
+
+      await refreshHistory();
+      jumpToStep(6);
+      setAutoStudioRun((current) => current
+        ? { ...current, status: "complete" }
+        : current);
+      setMessage("Studio Auto finished every available stage. Review the assets and finish the scene when you are ready.");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Studio Auto stopped because a production stage failed.";
+      setAutoStudioRun((current) => current
+        ? { ...current, status: "failed", error: errorMessage }
+        : current);
+      setStudioAutoMode(false);
+      setMessage(`Studio Auto stopped: ${errorMessage}`);
+      await refreshHistory();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function toggleStudioAuto() {
+    if (autoStudioRun?.status === "running") return;
+    const next = !studioAutoMode;
+    setStudioAutoMode(next);
+    if (next) void runAutoStudio();
+  }
+
   const processingStep = busy
     ? (busy === "magic-scene" ? activeStep : PRODUCTION_TASK_TO_STEP[busy] ?? activeStep)
     : quickWriting
@@ -1264,6 +1583,11 @@ export default function CharacterProductionStudio({
       : null;
 
   function progressForStep(stepId: number) {
+    const autoStep = autoStudioRun?.steps[stepId];
+    if (autoStep?.state === "complete") return 100;
+    if (autoStep?.state === "failed") return 72;
+    if (autoStep?.state === "writing") return 34;
+    if (autoStep?.state === "generating") return 68;
     if (processingStep === stepId) {
       if (stepId === 1 && voiceBuildStage !== null) {
         return VOICE_BUILD_STAGES[voiceBuildStage].progress;
@@ -1280,8 +1604,17 @@ export default function CharacterProductionStudio({
     return completedSteps.has(stepId) ? 100 : 0;
   }
 
-  const activeStepRunning = processingStep === activeStep;
+  const activeStepRunning = processingStep === activeStep || autoRunningSteps.has(activeStep);
   const activeStepProgress = progressForStep(activeStep);
+  const autoCompletedCount = Object.values(autoStudioRun?.steps ?? {})
+    .filter((step) => step.state === "complete").length;
+  const autoStatusLabel = autoStudioRun?.status === "running"
+    ? `${autoCompletedCount}/${WORKFLOW_STEPS.length} ready`
+    : autoStudioRun?.status === "complete"
+      ? "Final review ready"
+      : autoStudioRun?.status === "failed"
+        ? "Stopped on error"
+        : "Runs every missing stage";
   const activeStepHasOutput = activeStep === 1
     ? previews.length > 0 || Boolean(lockedVoiceId)
     : activeStep === 2
@@ -1411,6 +1744,87 @@ export default function CharacterProductionStudio({
         className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 py-2.5 backdrop-blur-xl sm:px-4"
         data-magic-scene-toolbar
       >
+        <div
+          className={`mb-2 rounded-md border px-3 py-2.5 ${
+            autoStudioRun?.status === "failed"
+              ? "border-red-500/50 bg-red-500/[0.07]"
+              : studioAutoMode
+                ? "border-accent-secondary/45 bg-accent-secondary/[0.065]"
+                : "border-white/10 bg-white/[0.025]"
+          }`}
+          data-studio-auto={studioAutoMode ? autoStudioRun?.status ?? "on" : "off"}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent-secondary">Studio Auto</span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-grey">
+                  Skip routine approvals
+                </span>
+              </div>
+              <p className="mt-1 text-[9px] leading-4 text-grey">
+                Voice and dialogue stay ordered; sound, theme, and visuals run in parallel. Chaplin stops on an error or at final review. Provider charges and configured limits still apply.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className={`text-[9px] font-semibold ${
+                autoStudioRun?.status === "failed"
+                  ? "text-red-300"
+                  : autoStudioRun?.status === "complete"
+                    ? "text-emerald-300"
+                    : studioAutoMode
+                      ? "text-accent-secondary"
+                      : "text-grey"
+              }`}>
+                {autoStatusLabel}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={studioAutoMode}
+                aria-label="Run Studio Auto without routine approval stops"
+                onClick={toggleStudioAuto}
+                disabled={Boolean(busy) && autoStudioRun?.status !== "failed"}
+                className={`relative h-7 w-12 rounded-full border transition-colors disabled:opacity-45 ${
+                  studioAutoMode
+                    ? "border-accent-secondary bg-accent-secondary/20"
+                    : "border-white/20 bg-black/30"
+                }`}
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full transition-all ${
+                  studioAutoMode
+                    ? "left-6 bg-accent-secondary shadow-[0_0_14px_rgba(45,212,191,.65)]"
+                    : "left-1 bg-grey"
+                }`} />
+              </button>
+            </div>
+          </div>
+          {autoStudioRun && (
+            <div className="mt-2 grid grid-cols-6 gap-1" aria-label="Studio Auto stage progress">
+              {WORKFLOW_STEPS.map((step) => {
+                const state = autoStudioRun.steps[step.id]?.state ?? "queued";
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => jumpToStep(step.id)}
+                    title={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
+                    className={`h-1.5 rounded-full transition-colors ${
+                      state === "complete"
+                        ? "bg-emerald-400"
+                        : state === "failed"
+                          ? "bg-red-400"
+                          : state === "writing" || state === "generating"
+                            ? "animate-pulse bg-accent"
+                            : "bg-white/10"
+                    }`}
+                    aria-label={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex shrink-0 items-center justify-between gap-3 lg:w-[11rem] xl:w-[12rem]">
             <span className="min-w-0">
@@ -1479,27 +1893,33 @@ export default function CharacterProductionStudio({
           {WORKFLOW_STEPS.map((step) => {
             const isActive = step.id === activeStep;
             const isComplete = completedSteps.has(step.id);
-            const isProcessing = processingStep === step.id;
+            const autoStep = autoStudioRun?.steps[step.id];
+            const isProcessing = processingStep === step.id || autoRunningSteps.has(step.id);
+            const isFailed = autoStep?.state === "failed";
             const showsComplete = isComplete && !isProcessing;
             const isReview = reviewSteps.has(step.id) && !isProcessing && !showsComplete;
             const progress = progressForStep(step.id);
-            const statusLabel = isProcessing
-              ? `${progress}%`
-              : showsComplete
-                ? "Ready"
-                : isReview
-                  ? "Review"
-                : isActive
-                  ? "Current"
-                  : "Queued";
+            const statusLabel = isFailed
+              ? "Error"
+              : isProcessing
+                ? autoStep?.detail ?? `${progress}%`
+                : showsComplete
+                  ? "Ready"
+                  : isReview
+                    ? "Review"
+                    : isActive
+                      ? "Current"
+                      : "Queued";
             return (
               <button
                 key={step.id}
                 type="button"
                 onClick={() => jumpToStep(step.id)}
                 className={`group min-w-0 rounded-md border px-2.5 py-2.5 text-left transition-all ${
-                  isProcessing
-                    ? "border-accent bg-accent/10 shadow-[0_0_24px_rgba(242,78,112,.12)]"
+                  isFailed
+                    ? "border-red-500/45 bg-red-500/[0.07]"
+                    : isProcessing
+                      ? "border-accent bg-accent/10 shadow-[0_0_24px_rgba(242,78,112,.12)]"
                     : showsComplete
                       ? "border-emerald-400/30 bg-emerald-400/[0.055]"
                       : isReview
@@ -1511,14 +1931,16 @@ export default function CharacterProductionStudio({
                 aria-current={isActive ? "step" : undefined}
                 aria-label={`${step.id}. ${step.title}, ${statusLabel}`}
                 data-production-step-jump={step.stage}
-                data-production-process={showsComplete ? "complete" : isProcessing ? "running" : isReview ? "review" : isActive ? "current" : "queued"}
+                data-production-process={isFailed ? "failed" : showsComplete ? "complete" : isProcessing ? "running" : isReview ? "review" : isActive ? "current" : "queued"}
               >
                 <span className="flex items-center gap-2">
                   <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
                     {!showsComplete && (
                       <span className={`absolute inset-0 rounded-full border ${
-                        isProcessing
-                          ? "animate-spin border-accent/20 border-t-accent border-r-accent-secondary shadow-[0_0_16px_rgba(242,78,112,.32)] [animation-duration:.9s]"
+                        isFailed
+                          ? "border-red-400/55 shadow-[0_0_14px_rgba(248,113,113,.2)]"
+                          : isProcessing
+                            ? "animate-spin border-accent/20 border-t-accent border-r-accent-secondary shadow-[0_0_16px_rgba(242,78,112,.32)] [animation-duration:.9s]"
                           : isReview
                             ? "animate-pulse border-accent-secondary/40 border-t-accent-secondary shadow-[0_0_14px_rgba(45,212,191,.25)]"
                           : isActive
@@ -1530,29 +1952,31 @@ export default function CharacterProductionStudio({
                       <span className="absolute inset-0 rounded-full border border-emerald-300 bg-emerald-400/15 shadow-[0_0_16px_rgba(52,211,153,.48)]" />
                     )}
                     <span className={`relative text-[9px] font-bold ${
-                      showsComplete ? "text-emerald-200" : isProcessing ? "text-white" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
+                      showsComplete ? "text-emerald-200" : isFailed ? "text-red-300" : isProcessing ? "text-white" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
                     }`}>
-                      {showsComplete ? "✓" : step.id}
+                      {showsComplete ? "✓" : isFailed ? "!" : step.id}
                     </span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${
-                      showsComplete ? "text-emerald-200" : isProcessing ? "text-ink" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
+                      showsComplete ? "text-emerald-200" : isFailed ? "text-red-300" : isProcessing ? "text-ink" : isReview ? "text-accent-secondary" : isActive ? "text-accent" : "text-grey"
                     }`}>
                       {step.label}
                     </span>
                     <span className={`mt-0.5 block text-[8px] ${
-                      showsComplete ? "text-emerald-400" : isProcessing ? "text-accent" : isReview ? "text-accent-secondary" : "text-grey/60"
-                    }`}>
+                      showsComplete ? "text-emerald-400" : isFailed ? "text-red-300" : isProcessing ? "text-accent" : isReview ? "text-accent-secondary" : "text-grey/60"
+                    }`} title={statusLabel}>
                       {statusLabel}
                     </span>
                   </span>
                 </span>
                 <span className="relative mt-2 block h-1 overflow-hidden rounded-full bg-white/[0.07]">
-                  {showsComplete || isProcessing || isReview ? (
+                  {showsComplete || isProcessing || isReview || isFailed ? (
                     <span
                       className={`block h-full rounded-full transition-[width] duration-700 ${
-                        showsComplete
+                        isFailed
+                          ? "bg-red-400 shadow-[0_0_10px_rgba(248,113,113,.65)]"
+                          : showsComplete
                           ? "bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,.9)]"
                           : isReview
                             ? "bg-accent-secondary shadow-[0_0_10px_rgba(45,212,191,.7)]"

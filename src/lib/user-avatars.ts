@@ -1,5 +1,7 @@
+export const CHAPLIN_BRAND_AVATAR = "/brand/chaplin-mark.png";
+
 export const CHAPLIN_USER_AVATARS = [
-  "/avatars/chaplin-admin-ocelot.webp",
+  CHAPLIN_BRAND_AVATAR,
   "/avatars/meera-caracal.webp",
   "/avatars/arjun-owl.webp",
   "/avatars/priya-fox.webp",

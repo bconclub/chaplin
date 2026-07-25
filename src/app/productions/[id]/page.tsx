@@ -17,7 +17,12 @@ import type {
   PipelineScope,
   PipelineStepAction,
 } from "@/lib/media-pipeline-types";
-import { buildShotImagePrompt, buildShotVideoPrompt, cameraPlanForShot } from "@/lib/shot-director";
+import {
+  buildShotImagePrompt,
+  buildShotVideoPrompt,
+  cameraPlanForShot,
+  validateShotSequence,
+} from "@/lib/shot-director";
 
 type ShotRenderStatus = "queued" | "designing" | "frame_ready" | "animating" | "ready" | "failed";
 
@@ -263,7 +268,7 @@ export default function ProductionDetailPage() {
   const shotTimeline = useMemo(() => {
     if (!contract || !story) return [];
     return Array.from({ length: contract.shotCount }, (_, index) => {
-      const scene = story.scenes[index % Math.max(story.scenes.length, 1)];
+      const scene = story.scenes[index];
       const liveShot = renderShots[index];
       const videoUrl = liveShot?.videoUrl ?? persistedShotUrls[index];
       const frameUrl = liveShot?.frameUrl ?? persistedFrameUrls[index] ?? scene?.previewImageUrl;
@@ -681,6 +686,12 @@ export default function ProductionDetailPage() {
       setError("Approve or attach one actor identity frame before rendering the Punch.");
       return;
     }
+    const authoredScenes = story.scenes.slice(0, contract.shotCount);
+    const sequenceValidation = validateShotSequence(authoredScenes, contract.shotCount);
+    if (!sequenceValidation.valid) {
+      setError(sequenceValidation.error ?? "The four-scene storyboard is incomplete.");
+      return;
+    }
     setBusy(true);
     setError("");
     setRenderProgress("Preparing the locked actor reference");
@@ -716,13 +727,10 @@ export default function ProductionDetailPage() {
       }
       activePipelineStepKey = "shot-packages";
 
-      const shotResults: Array<{ frameUrl: string; frameAssetId?: string; url: string; assetId: string }> = [];
-      const shotDesigns = [
-        "ESTABLISHING HOOK: a readable medium-wide view that clearly establishes the business, its merchandise, and the actor entering or discovering the situation.",
-        "PRODUCT ACTION: a medium performance shot where the actor physically interacts with the advertised product or the business offering; the product remains clearly visible and correctly scaled.",
-        "PROOF OR REVERSAL: show the visible result, reaction, or situation change that makes the promise believable without explanation.",
-        "PAYOFF: a tighter final composition that lands the actor's memorable choice while ending on a clean, unmistakable product or storefront hero moment.",
-      ];
+      const frameResults: Array<{ frameUrl: string; frameAssetId?: string }> = [];
+
+      // Build the complete storyboard before asking the video model to move any frame.
+      // This keeps the four authored scene starts visible and reviewable as one sequence.
       for (let index = 0; index < contract.shotCount; index += 1) {
         activeShotIndex = index;
         setSelectedShotIndex(index);
@@ -730,22 +738,17 @@ export default function ProductionDetailPage() {
           shotIndex === index ? { ...shot, status: "designing", error: undefined } : shot
         )));
         setRenderProgress(`Designing scene frame ${index + 1} of ${contract.shotCount}`);
-        const scene = story.scenes[index % Math.max(story.scenes.length, 1)];
-        const directedScene = {
-          ...(scene ?? {}),
-          objective: `${shotDesigns[index] ?? shotDesigns[shotDesigns.length - 1]} ${scene?.objective ?? ""}`.trim(),
-          action: scene?.action ?? story.logline,
-        };
+        const directedScene = authoredScenes[index];
         const framePrompt = buildShotImagePrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
           actorName: directedCastName, actorIdentity: directedCastIdentity,
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
-          continuityNote: "Keep every locked actor visually distinct and consistent. Preserve each face, age, hair, wardrobe, body scale, and screen position alongside the business geography, product design, palette, time of day, and direction of travel across the complete Punch.",
+          continuityNote: "Keep every locked actor visually distinct and consistent, but obey this scene's own authored location, blocking, action, and camera. Carry geography or screen direction only when adjacent scenes explicitly remain continuous.",
         });
         let frameData: { url?: string; assetId?: string; error?: string } = {
-          url: scene?.previewImageUrl,
-          assetId: scene?.previewAssetId,
+          url: directedScene.previewImageUrl,
+          assetId: directedScene.previewAssetId,
         };
         if (!frameData.url) {
           const frameResponse = await fetch("/api/generate", {
@@ -755,7 +758,7 @@ export default function ProductionDetailPage() {
               action: "image",
               characterId: cast[0].id,
               imagePurpose: "scene",
-              referenceImages: [...lockedCastReferences, lockedReference, story.productImageUrl ?? ""].filter(
+              referenceImages: [...lockedCastReferences, story.productImageUrl ?? ""].filter(
                 (value, referenceIndex, references) => references.indexOf(value) === referenceIndex,
               ),
               prompt: framePrompt,
@@ -769,17 +772,29 @@ export default function ProductionDetailPage() {
         setRenderFrameUrl(frameData.url);
         setRenderShots((shots) => shots.map((shot, shotIndex) => (
           shotIndex === index
-            ? { ...shot, frameUrl: frameData.url, frameAssetId: frameData.assetId, status: "animating" }
+            ? { ...shot, frameUrl: frameData.url, frameAssetId: frameData.assetId, status: "frame_ready" }
             : shot
         )));
+        frameResults.push({ frameUrl: frameData.url, frameAssetId: frameData.assetId });
+      }
 
+      const shotResults: Array<{ frameUrl: string; frameAssetId?: string; url: string; assetId: string }> = [];
+      for (let index = 0; index < contract.shotCount; index += 1) {
+        activeShotIndex = index;
+        setSelectedShotIndex(index);
+        const directedScene = authoredScenes[index];
+        const frameData = frameResults[index];
+        setRenderFrameUrl(frameData.frameUrl);
+        setRenderShots((shots) => shots.map((shot, shotIndex) => (
+          shotIndex === index ? { ...shot, status: "animating", error: undefined } : shot
+        )));
         setRenderProgress(`Animating four-second scene ${index + 1} of ${contract.shotCount}`);
         const motionPrompt = buildShotVideoPrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
           actorName: directedCastName, actorIdentity: directedCastIdentity,
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
-          continuityNote: "Preserve the exact identities and relative positions of every visible actor, plus product continuity, scene geography, object positions, and direction of travel from the adjacent Punch shot.",
+          continuityNote: "Animate only this scene's exact starting frame. Preserve every visible identity, object, spatial relationship, and screen direction inside the shot; do not borrow staging or action from another scene.",
         });
         const videoResponse = await fetch("/api/generate", {
           method: "POST",
@@ -787,7 +802,7 @@ export default function ProductionDetailPage() {
           body: JSON.stringify({
             action: "video",
             characterId: cast[0].id,
-            referenceImage: frameData.url,
+            referenceImage: frameData.frameUrl,
             prompt: motionPrompt,
           }),
         });
@@ -796,8 +811,8 @@ export default function ProductionDetailPage() {
           throw new Error(videoData.error ?? `Scene ${index + 1} did not produce a saved video.`);
         }
         shotResults.push({
-          frameUrl: frameData.url,
-          frameAssetId: frameData.assetId,
+          frameUrl: frameData.frameUrl,
+          frameAssetId: frameData.frameAssetId,
           url: videoData.url,
           assetId: videoData.assetId,
         });
@@ -805,8 +820,8 @@ export default function ProductionDetailPage() {
           shotIndex === index
             ? {
                 ...shot,
-                frameUrl: frameData.url,
-                frameAssetId: frameData.assetId,
+                frameUrl: frameData.frameUrl,
+                frameAssetId: frameData.frameAssetId,
                 videoUrl: videoData.url,
                 videoAssetId: videoData.assetId,
                 status: "ready",
@@ -1154,8 +1169,12 @@ export default function ProductionDetailPage() {
             </div>
             <div className="mb-2.5 flex items-center justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent-secondary">Scene timeline</p>
-                <p className="mt-0.5 text-[9px] text-grey">Select a scene to inspect its frame or playable clip in the canvas.</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent-secondary">
+                  Four starting frames · {framesReadyCount}/{shotTimeline.length || contract.shotCount} ready
+                </p>
+                <p className="mt-0.5 text-[9px] text-grey">
+                  These are the exact authored frames Seedance will animate. Select one to inspect its frame or clip.
+                </p>
               </div>
               {finalVideoUrl && (
                 <button

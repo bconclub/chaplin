@@ -29,7 +29,7 @@ import {
   planCameraForScene,
   type CameraMovementId,
 } from "@/lib/camera-movements";
-import { auditShotScene, buildShotImagePrompt } from "@/lib/shot-director";
+import { auditShotScene, buildShotImagePrompt, validateShotSequence } from "@/lib/shot-director";
 
 interface DraftLine {
   characterId: string;
@@ -522,12 +522,15 @@ export default function StoryBuilderForm() {
       || patch.objective !== undefined
       || patch.action !== undefined
       || patch.cameraMovementId !== undefined;
+    const carriesGeneratedPreview = patch.previewImageUrl !== undefined || patch.previewAssetId !== undefined;
     setScenes((prev) => prev.map((scene, index) => (
       index === i
         ? {
             ...scene,
             ...patch,
-            ...(invalidatesPreview ? { previewImageUrl: undefined, previewAssetId: undefined } : {}),
+            ...(invalidatesPreview && !carriesGeneratedPreview
+              ? { previewImageUrl: undefined, previewAssetId: undefined }
+              : {}),
           }
         : scene
     )));
@@ -876,6 +879,14 @@ export default function StoryBuilderForm() {
     if (validScenes.length === 0) {
       setError("Add a scene objective, visible action, or a line of dialogue.");
       setStep(3);
+      return;
+    }
+    const expectedSceneCount = productionShotCount(format, durationSeconds);
+    const sequenceValidation = validateShotSequence(validScenes, expectedSceneCount);
+    if (!sequenceValidation.valid) {
+      setError(sequenceValidation.error ?? "The scene sequence is incomplete.");
+      setStep(3);
+      document.querySelector("[data-scene-storyboard]")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
 
