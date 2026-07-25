@@ -392,7 +392,6 @@ export default function CharacterProductionStudio({
     }, 500);
     return () => window.clearInterval(timer);
   }, [generationRun]);
-  const referenceImage = identityReferenceImage;
   // A newly composed scene frame takes priority, but an actor with an approved
   // canonical image is already ready for image-to-video. Requiring another
   // still here left the video action disabled for otherwise complete actors.
@@ -926,17 +925,6 @@ export default function CharacterProductionStudio({
   // paused by ModelArk. Keep the still provider available if only Seedance is
   // paused, and vice versa.
   const seedModelsReady = seedModelsConfigured && !seedanceAccountPaused;
-  const configuredImageProvider = status?.pipeline?.stages?.image?.provider?.toLowerCase() ?? "byteplus";
-  const imageProviderReady = configuredImageProvider === "openrouter"
-    ? status?.openRouter ?? false
-    : configuredImageProvider === "openai"
-      ? status?.openAI ?? false
-      : seedModelsConfigured && !seedreamLimitPaused;
-  const imageProviderLabel = configuredImageProvider === "openrouter"
-    ? "OpenRouter"
-    : configuredImageProvider === "openai"
-      ? "GPT Image"
-      : "Seedream";
   const gptImageReady = status?.openAI ?? false;
   const dolaImageReady = seedModelsConfigured && !seedreamLimitPaused;
   const imageGenerationReady = gptImageReady || dolaImageReady;
@@ -959,9 +947,6 @@ export default function CharacterProductionStudio({
         ? "Choose or generate a still first. Seedance needs an exact first frame before it can animate the actor."
         : null;
   const elevenReady = status?.elevenLabs ?? false;
-  const elevenOperational =
-    status?.providers?.elevenLabs?.status === "succeeded" ||
-    status?.providers?.elevenLabs?.hasSucceeded === true;
   const configuredVideoModel = status?.pipeline?.stages?.video?.model ?? "dreamina-seedance-2-0-260128";
   const configuredSfxCount = Math.min(
     SFX_VARIATIONS.length,
