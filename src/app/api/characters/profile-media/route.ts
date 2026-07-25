@@ -1,11 +1,12 @@
 import {
   selectCharacterProfileMedia,
+  selectCharacterSceneImageAsset,
   type CharacterProfileSlot,
 } from "@/lib/server/supabase-admin";
 
 export const runtime = "nodejs";
 
-const SLOTS = new Set<CharacterProfileSlot>(["voice", "theme", "video", "cover"]);
+const SLOTS = new Set<CharacterProfileSlot | "scene">(["voice", "theme", "video", "cover", "scene"]);
 
 function requiredString(value: unknown, field: string, max = 100) {
   if (typeof value !== "string" || !value.trim() || value.length > max) {
@@ -19,8 +20,9 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const characterId = requiredString(body.characterId, "characterId");
     const assetId = requiredString(body.assetId, "assetId");
-    const slot = requiredString(body.slot, "slot", 20) as CharacterProfileSlot;
+    const slot = requiredString(body.slot, "slot", 20) as CharacterProfileSlot | "scene";
     if (!SLOTS.has(slot)) throw new Error("slot is invalid.");
+    if (slot === "scene") return Response.json(await selectCharacterSceneImageAsset({ characterId, assetId }));
     return Response.json(await selectCharacterProfileMedia({ characterId, assetId, slot }));
   } catch (error) {
     return Response.json(
@@ -29,4 +31,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

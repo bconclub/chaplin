@@ -542,6 +542,93 @@ export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
   ].join(" ");
 }
 
+/**
+ * A portable prompt export. It includes the creator's original inputs when
+ * available and the complete saved canon that Chaplin derived from them.
+ */
+export function composeCharacterMasterPrompt(character: Character) {
+  const bible = buildProductionBible(character);
+  const source = bible.creationInputs;
+  const originalInputs = source
+    ? [
+        `Creator brief: ${source.characterBrief || "Not supplied."}`,
+        `Appearance brief: ${source.appearanceBrief || "Not supplied."}`,
+        `World brief: ${source.worldBrief || "Not supplied."}`,
+        `Selected archetypes: ${source.archetypes.join(", ") || character.archetype}.`,
+        `Voice direction: ${source.voiceDirection || character.voiceDesc}.`,
+        `Signature SFX direction: ${source.signatureSfxDirection || character.sfxDesc}.`,
+        `Theme direction: ${source.themeDirection || character.themeDesc}.`,
+        `License: ${source.licenseType}; royalty: ${source.royaltyRate}.`,
+      ].join("\n")
+    : "Original builder form fields were not retained for this older character. The canonical profile below is the complete reconstructed source of truth.";
+
+  return [
+    `# Chaplin character master brief — ${character.name}`,
+    "",
+    "Use this as the complete source of truth for the same fictional AI actor. Preserve identity locks in every future still, video, voice, conversation, and story. Do not substitute a generic actor or silently redesign the person.",
+    "",
+    "## Original creator inputs",
+    originalInputs,
+    "",
+    "## Core character",
+    `Name: ${character.name}`,
+    `Primary archetype: ${character.archetype}`,
+    `Archetype mix: ${(character.archetypeMix ?? [character.archetype]).join(", ")}`,
+    `Tagline: ${character.tagline}`,
+    `Personality: ${character.personality}`,
+    `Voice presentation: ${character.voiceGender}`,
+    `Voice: ${character.voiceDesc}`,
+    `Signature SFX: ${character.sfxDesc}`,
+    `Theme: ${character.themeDesc}`,
+    `Signature spoken line: ${character.brollLine ?? "Not set."}`,
+    `Profile scene: ${character.brollScene ?? "Not set."}`,
+    "",
+    "## Dramatic engine",
+    `External want: ${bible.dramatic.externalWant}`,
+    `Inner need: ${bible.dramatic.innerNeed}`,
+    `Contradiction: ${bible.dramatic.contradiction}`,
+    `Stakes: ${bible.dramatic.stakes}`,
+    `Vulnerability: ${bible.dramatic.vulnerability}`,
+    `Moral boundary: ${bible.dramatic.moralBoundary}`,
+    "",
+    "## Performance and voice behavior",
+    `At rest: ${bible.performance.restingExpression}`,
+    `Under pressure: ${bible.performance.underPressure}`,
+    `Signature gesture: ${bible.performance.signatureGesture}`,
+    `Movement: ${bible.performance.movementStyle}`,
+    `Eyeline: ${bible.performance.eyeline}`,
+    `Tempo: ${bible.performance.tempo}`,
+    "",
+    "## Visual identity locks",
+    `Medium: ${bible.visual.medium ?? "live-action cinematic photography"}`,
+    `Perceived age: ${bible.visual.perceivedAge}`,
+    `Face anchors: ${bible.visual.faceAnchors.join("; ")}`,
+    `Hair: ${bible.visual.hair}`,
+    `Wardrobe: ${bible.visual.wardrobe}`,
+    `Silhouette: ${bible.visual.silhouette}`,
+    `Palette: ${bible.visual.palette.join(", ")}`,
+    `Recognition locks: ${(bible.visual.recognitionLocks ?? bible.visual.continuityRules).join("; ")}`,
+    `Continuity rules: ${bible.visual.continuityRules.join("; ")}`,
+    "",
+    "## Camera, light, and world",
+    `Hero framing: ${bible.cinematography.heroFraming}`,
+    `Camera height / angle: ${bible.cinematography.cameraHeight}`,
+    `Lens: ${bible.cinematography.lens}`,
+    `Key light: ${bible.cinematography.keyLight}`,
+    `Fill light: ${bible.cinematography.fillLight}`,
+    `Edge light: ${bible.cinematography.edgeLight}`,
+    `World texture: ${bible.cinematography.worldTexture}`,
+    "",
+    "## Story grammar",
+    `Hook: ${bible.story.hookPattern}`,
+    `Escalation: ${bible.story.escalationPattern}`,
+    `Cliffhanger: ${bible.story.cliffhangerPattern}`,
+    `Payoff: ${bible.story.payoffPattern}`,
+    `Recurring motifs: ${bible.story.recurringMotifs.join(", ")}`,
+    `Avoid: ${bible.story.avoid.join("; ")}`,
+  ].join("\n");
+}
+
 export function composeSfxPrompt(character: CharacterIdentityInput, sceneTexture?: string) {
   const source = character.sfxDesc || "one tactile signature action";
   return `A 1-2 second non-musical signature sound for ${character.name}: ${source}. ${sceneTexture ? `Let the material character subtly reflect ${sceneTexture}.` : "One immediate physical attack, one distinctive material detail, then a clean stop."} Dry close foreground, realistic texture, instantly recognizable at low volume. No sequence, ambience bed, speech, voice, melody, riser, or trailer braam.`;

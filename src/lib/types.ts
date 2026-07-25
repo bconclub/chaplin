@@ -109,6 +109,18 @@ export interface CharacterMemoryRecord {
 
 export interface CharacterProductionBible {
   version: 1;
+  /** Creator-entered material retained verbatim for reuse, audit, and prompt export. */
+  creationInputs?: {
+    characterBrief: string;
+    appearanceBrief: string;
+    worldBrief: string;
+    archetypes: Archetype[];
+    voiceDirection: string;
+    signatureSfxDirection: string;
+    themeDirection: string;
+    licenseType: LicenseType;
+    royaltyRate: number;
+  };
   dramatic: {
     externalWant: string;
     innerNeed: string;

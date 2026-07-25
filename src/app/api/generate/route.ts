@@ -300,6 +300,28 @@ function imageProvider(provider: string) {
   throw new Error(`Unsupported image provider "${provider}". Choose byteplus, openrouter, or openai in Super Admin.`);
 }
 
+function imageStageForPreset(stage: PipelineStageConfig, input: Input): PipelineStageConfig {
+  const preset = typeof input.imagePreset === "string" ? input.imagePreset.trim() : "";
+  if (!preset) return stage;
+  if (preset === "gpt-image-2") {
+    return {
+      ...stage,
+      provider: "openai",
+      model: "gpt-image-2",
+      settings: { ...stage.settings, size: "1536x1024", quality: "medium", outputFormat: "png" },
+    };
+  }
+  if (preset === "dola-seedream-5") {
+    return {
+      ...stage,
+      provider: "byteplus",
+      model: "dola-seedream-5-0-pro-260628",
+      settings: { ...stage.settings, size: "2560x1440", outputFormat: "png", watermark: false, sequentialImageGeneration: "disabled" },
+    };
+  }
+  throw new RequestValidationError("imagePreset must be gpt-image-2 or dola-seedream-5.");
+}
+
 async function providerError(response: Response, provider: string) {
   const detail = await response.text();
   let message = detail;
@@ -699,7 +721,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "image") {
-      const imageConfig = pipeline.stages.image;
+      const imageConfig = imageStageForPreset(pipeline.stages.image, input);
       requireStage(imageConfig, "Image");
       const requestedPrompt = text(input, "prompt", 10, 6000);
       const imagePurpose = input.imagePurpose === "scene" ? "scene" : "identity";

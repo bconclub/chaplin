@@ -39,7 +39,7 @@ const VISUAL_FIELDS = new Set<QuickField>(["identity-image", "image", "video"]);
 const FIELD_RULES: Record<QuickField, string> = {
   "voice-description": "Write only an ElevenLabs Voice Design prompt using this order: native language and dialect; gender presentation and age range; quality; 2-5 word persona; 2-3 emotions; timbre, pitch, resonance, pacing, intonation, and pressure behavior. Do not include biography, camera language, SFX, reverb, echo, phone, tape, or celebrity imitation. 65-105 words.",
   "voice-preview": "Write one natural spoken sentence of 5-8 words. It must reveal the actor's personality without pause-heavy punctuation and perform in 4-5 seconds, never more than 7 seconds. Output dialogue only.",
-  dialogue: "Write a concise, performable line in this actor's established personality and locked voice. Preserve the user's intent, use subtext rather than exposition, and make it memorable without catchphrase clichés. Output spoken words only: no speaker label, parentheses, brackets, stage directions, or written pause cues. Use punctuation for cadence. Output dialogue only.",
+  dialogue: "Write one original, performable line of 8-24 words for this exact dramatic moment. These must be the exact words the actor says aloud to another person, with an implied listener; use first person, direct address, or a natural reply. Never write third-person narration, a character description, an action phrase, a logline, a tagline, or a sentence that merely says what the actor is doing. The line must make a tactical move—test, withhold, dare, confess, accuse, bargain, deflect, or reverse the power dynamic—rather than merely sound atmospheric. Let the actor's central contradiction create the subtext. Use one precise detail from the supplied scene only when it sharpens the pressure; never invent a random prop, meal, door, clue, or backstory just to sound specific. The last phrase must land a turn, cost, or invitation that changes what the other person can do next. Before answering, silently reject any line that could belong to a different actor, explains an emotion or visible action, sounds like a slogan, or relies on a stock threat. Output spoken words only: no speaker label, quotation marks, parentheses, brackets, stage directions, or written pause cues. Use punctuation for cadence. Output dialogue only.",
   sfx: "Write only an ElevenLabs 1-2 second non-musical signature-sound prompt. Translate the actor's personality into one physical source, a precise material texture, a close acoustic distance, one unusual identifying detail, and a clean stop. It must work as a short repeatable sonic logo, not a sequence, biography, ambience bed, or score. No speech, voice, melody, riser, or trailer braam. 30-55 words.",
   theme: "Write only an Eleven Music prompt for a 12-second instrumental ident. Include BPM, key, a three-note motif, exact instruments, 0-3s / 3-8s / 8-12s development, mix priority, and final cadence. No biography, sound-effect sequence, vocals, choir, lyrics, or copyrighted imitation. 55-95 words.",
   "identity-image": "Write only a concise 16:9 identity-image prompt, 90-140 words. Treat the requested visual medium as binding: preserve manga, animation, illustration, or other explicit styling exactly; default to cinematic live-action photography only when no medium is requested. Use one direct paragraph covering medium and rendering language, visible subject anatomy, exact hair and wardrobe, expression and gesture, restrained world detail, camera, light, and palette. Then add one short Negative line and one Recognition locks line containing exactly four short visible invariants. Those four carry recognition; everything else may move between scenes. No biography, plot summary, symbolism essay, generic hero pose, dialogue, text, logo, UI, or watermark.",
@@ -56,7 +56,12 @@ function localRewrite(field: QuickField, character: Character, currentText: stri
   const scene = buildScenePackage(character, Math.abs(base.length) % 4);
   if (field === "voice-description") return composeVoiceDesignPrompt(character);
   if (field === "voice-preview") return compactVoicePreview(character.brollLine || scene.dialogue);
-  if (field === "dialogue") return dialogueForEditor(scene.dialogue);
+  if (field === "dialogue") {
+    // A Quick Write retry should not echo a weak starter line supplied during
+    // character creation. It needs a fresh, playable alternative even offline.
+    const alternateScene = buildScenePackage({ ...character, brollLine: undefined }, Math.abs(base.length + 1) % 4);
+    return dialogueForEditor(alternateScene.dialogue);
+  }
   if (field === "sfx") return composeSfxPrompt(character);
   if (field === "theme") return composeThemePrompt(character);
   if (field === "identity-image") return composeIdentityImagePrompt(character);
@@ -113,7 +118,9 @@ export async function POST(request: Request) {
       field,
       currentText: currentText || null,
       regenerationPass: variation,
-      creativeInstruction: "Make a genuinely different creative choice, not a synonym-level paraphrase. Preserve canon and user intent while changing the central playable beat, visual action, composition, or rhythm as appropriate for this field.",
+      creativeInstruction: field === "dialogue"
+        ? "Treat currentText as a disposable draft, not a line to preserve. Keep only useful scene intent. Make a genuinely different playable choice rooted in the actor's contradiction and immediate pressure; a synonym-level rewrite is a failure."
+        : "Make a genuinely different creative choice, not a synonym-level paraphrase. Preserve canon and user intent while changing the central playable beat, visual action, composition, or rhythm as appropriate for this field.",
       actor: {
         name: character.name,
         archetype: character.archetype,

@@ -10,6 +10,7 @@ import { ARCHETYPES } from "@/data/seed";
 import type { Archetype, CharacterProductionBible, LicenseType, VoiceGender } from "@/lib/types";
 import { ARCHETYPE_HUE, ARCHETYPE_LABEL } from "@/lib/format";
 import { alignVoiceDescription, explicitVoiceGender } from "@/lib/character-coherence";
+import { buildProductionBible } from "@/lib/production-prompting";
 
 const VOICE_PRESETS = [
   "Warm, steady, a little old-fashioned",
@@ -566,6 +567,33 @@ export default function NewCharacterPage() {
     }
     setSaving(true);
     setError("");
+    // Preserve the exact creator-entered fields alongside the derived canon so
+    // My Characters can later export the complete original brief.
+    const resolvedProductionBible = {
+      ...(productionBible ?? buildProductionBible({
+        name: name.trim(),
+        archetype,
+        tagline: tagline.trim(),
+        personality: personality.trim(),
+        voiceGender,
+        voiceDesc: voiceDesc.trim(),
+        sfxDesc: sfxDesc.trim(),
+        themeDesc: themeDesc.trim(),
+        appearanceBrief: appearanceBrief.trim(),
+        worldBrief: worldBrief.trim(),
+      })),
+      creationInputs: {
+        characterBrief: characterBrief.trim(),
+        appearanceBrief: appearanceBrief.trim(),
+        worldBrief: worldBrief.trim(),
+        archetypes,
+        voiceDirection: voiceDesc.trim(),
+        signatureSfxDirection: sfxDesc.trim(),
+        themeDirection: themeDesc.trim(),
+        licenseType,
+        royaltyRate,
+      },
+    };
     const character = addCharacter({
       makerId: currentUserId,
       name: name.trim(),
@@ -577,7 +605,7 @@ export default function NewCharacterPage() {
       voiceDesc: voiceDesc.trim(),
       sfxDesc: sfxDesc.trim(),
       themeDesc: themeDesc.trim(),
-      productionBible,
+      productionBible: resolvedProductionBible,
       avatarHue: hue,
       licenseType,
       royaltyRate,

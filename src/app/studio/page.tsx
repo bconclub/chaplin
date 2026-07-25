@@ -19,6 +19,8 @@ import StoryCard from "@/components/StoryCard";
 import SectionHeading from "@/components/SectionHeading";
 import { getClientAuthIdentity } from "@/lib/client-auth";
 import { money, formatDate, compactNumber } from "@/lib/format";
+import { composeCharacterMasterPrompt } from "@/lib/production-prompting";
+import type { Character } from "@/lib/types";
 
 type Tab = "drafts" | "characters" | "stories" | "earnings";
 
@@ -38,6 +40,8 @@ export default function StudioPage() {
   const [draftsLoading, setDraftsLoading] = useState(true);
   const [draftsNeedLogin, setDraftsNeedLogin] = useState(false);
   const [draftsError, setDraftsError] = useState("");
+  const [copiedCharacterId, setCopiedCharacterId] = useState("");
+  const [copyError, setCopyError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +89,19 @@ export default function StudioPage() {
   const earnings = makerEarnings(world, currentUserId);
   const totalCastings = myCharacters.reduce((n, c) => n + c.stats.castings, 0);
   const totalFans = myCharacters.reduce((n, c) => n + c.stats.fans, 0);
+
+  async function copyCharacterPrompt(character: Character) {
+    try {
+      await navigator.clipboard.writeText(composeCharacterMasterPrompt(character));
+      setCopyError("");
+      setCopiedCharacterId(character.id);
+      window.setTimeout(() => {
+        setCopiedCharacterId((current) => current === character.id ? "" : current);
+      }, 1800);
+    } catch {
+      setCopyError("Your browser blocked clipboard access. Please allow clipboard access and try again.");
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 w-full">
@@ -216,17 +233,36 @@ export default function StudioPage() {
       )}
 
       {tab === "characters" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          <Link
-            href="/characters/new"
-            className="border border-dashed border-line rounded-md flex flex-col items-center justify-center gap-2 text-grey hover:border-accent hover:text-accent transition-colors p-6 min-h-40"
-          >
-            <span className="text-2xl">+</span>
-            <span className="text-sm">Build a new AI actor</span>
-          </Link>
-          {myCharacters.map((c) => (
-            <CharacterCard key={c.id} character={c} />
-          ))}
+        <div>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">My AI actors</h2>
+              <p className="mt-1 text-xs text-grey">Copy an actor&apos;s complete creator brief and production canon for reuse.</p>
+            </div>
+            {copyError && <p className="text-xs text-red-300" role="alert">{copyError}</p>}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <Link
+              href="/characters/new"
+              className="border border-dashed border-line rounded-md flex flex-col items-center justify-center gap-2 text-grey hover:border-accent hover:text-accent transition-colors p-6 min-h-40"
+            >
+              <span className="text-2xl">+</span>
+              <span className="text-sm">Build a new AI actor</span>
+            </Link>
+            {myCharacters.map((c) => (
+              <div key={c.id} className="relative">
+                <CharacterCard character={c} />
+                <button
+                  type="button"
+                  onClick={() => void copyCharacterPrompt(c)}
+                  className="absolute right-3 top-3 z-10 rounded-full border border-white/20 bg-black/75 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur transition-colors hover:border-accent hover:text-accent"
+                  aria-label={`Copy the complete character prompt for ${c.name}`}
+                >
+                  {copiedCharacterId === c.id ? "Copied ✓" : "Copy full prompt"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

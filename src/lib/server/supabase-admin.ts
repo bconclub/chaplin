@@ -409,6 +409,11 @@ export async function getCharacterProductionState(characterId: string) {
     const metadata = asset.metadata as Record<string, unknown> | null;
     return metadata?.featuredSfx === true;
   });
+  const selectedSceneImage = rows.find((asset) => {
+    if (asset.kind !== "gallery") return false;
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    return metadata?.selectedForVideo === true;
+  });
   const featuredCover = rows.find((asset) => asset.id === featured.featured_cover_asset_id);
   const identityReference = rows.find((asset) => {
     if (asset.kind !== "gallery") return false;
@@ -432,9 +437,11 @@ export async function getCharacterProductionState(characterId: string) {
     voiceId: activeVoiceId,
     voicePreviewUrl: voice.data?.preview_url ?? null,
     latestDialogueUrl: latestDialogue?.url ?? null,
-    latestSfxUrl: featuredSfx?.url ?? rows.find((asset) => asset.kind === "sfx")?.url ?? null,
+    // A new SFX take belongs to the actor's library, but it is not the
+    // character's reusable signature until the creator explicitly selects it.
+    latestSfxUrl: featuredSfx?.url ?? null,
     latestThemeUrl: featuredTheme?.url ?? rows.find((asset) => asset.kind === "theme")?.url ?? null,
-    latestImageUrl: featuredCover?.url ?? rows.find((asset) => asset.kind === "gallery")?.url ?? null,
+    latestImageUrl: selectedSceneImage?.url ?? featuredCover?.url ?? rows.find((asset) => asset.kind === "gallery")?.url ?? null,
     latestVideoUrl: latestVideo?.url ?? null,
     visualReference,
     featured: {
@@ -445,6 +452,33 @@ export async function getCharacterProductionState(characterId: string) {
     },
     assets: rows,
   };
+}
+
+export async function selectCharacterSceneImageAsset(input: { characterId: string; assetId: string }) {
+  const supabase = adminClient();
+  const assets = await supabase
+    .from("media_assets")
+    .select("id,url,kind,metadata")
+    .eq("character_id", input.characterId)
+    .eq("kind", "gallery");
+  assert(assets.error, "Load scene image candidates");
+  const selected = (assets.data ?? []).find((asset) => asset.id === input.assetId);
+  if (!selected) throw new Error("Select scene image: candidate not found.");
+  const selectedMetadata = selected.metadata as Record<string, unknown> | null;
+  if (selectedMetadata?.imagePurpose !== "scene") {
+    throw new Error("Only a scene-frame candidate can become the video first frame.");
+  }
+  const updates = await Promise.all((assets.data ?? []).map((asset) => {
+    const metadata = asset.metadata && typeof asset.metadata === "object"
+      ? asset.metadata as Record<string, unknown>
+      : {};
+    return supabase
+      .from("media_assets")
+      .update({ metadata: { ...metadata, selectedForVideo: asset.id === input.assetId } })
+      .eq("id", asset.id);
+  }));
+  for (const update of updates) assert(update.error, "Select scene image");
+  return { assetId: selected.id, url: selected.url };
 }
 
 export async function selectCharacterSfxAsset(input: { characterId: string; assetId: string }) {

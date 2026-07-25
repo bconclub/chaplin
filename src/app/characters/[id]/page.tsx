@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useChaplinStore } from "@/lib/store";
@@ -11,8 +11,8 @@ import CharacterSoundProfile from "@/components/CharacterSoundProfile";
 import CharacterPersonalityCard from "@/components/CharacterPersonalityCard";
 import EarningsSparkline from "@/components/EarningsSparkline";
 import CharacterGallery from "@/components/CharacterGallery";
+import CharacterConversationPanel from "@/components/CharacterConversationPanel";
 import DeveloperAccessCard from "@/components/DeveloperAccessCard";
-import CharacterProductionStudio from "@/components/CharacterProductionStudio";
 import CharacterBroll from "@/components/CharacterBroll";
 import { IconArrowLeft } from "@/components/Icons";
 import {
@@ -36,9 +36,9 @@ type CharacterVideoAsset = {
 
 export default function CharacterProfilePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const world = useChaplinStore((s) => s);
   const character = getCharacter(world, params.id);
-  const [productionOpen, setProductionOpen] = useState(false);
   const [availableVideos, setAvailableVideos] = useState<CharacterVideoAsset[]>([]);
   const [videosLoading, setVideosLoading] = useState(true);
 
@@ -129,16 +129,14 @@ export default function CharacterProfilePage() {
   }
 
   const maker = getUser(world, character.makerId);
+  const characterId = character.id;
   const resume = resumeForCharacter(world, character.id);
   const ledger = ledgerForCharacter(world, character.id);
   const canProduce = world.activeRole === "admin" || (world.activeRole === "maker" && character.makerId === world.currentUserId);
   const canCast = world.activeRole === "admin" || world.activeRole === "caster" || world.activeRole === "brand";
 
   function openProductionStudio() {
-    setProductionOpen(true);
-    window.setTimeout(() => {
-      document.getElementById("production-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
+    router.push(`/characters/${characterId}/studio`);
   }
 
   return (
@@ -157,6 +155,15 @@ export default function CharacterProfilePage() {
         <span className="h-2 w-2 rounded-full bg-[#07d2be] shadow-[0_0_12px_#07d2be]" />
         Character system
       </Link>
+      {canProduce && (
+        <button
+          type="button"
+          onClick={openProductionStudio}
+          className="ml-2 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-light"
+        >
+          Open production editor
+        </button>
+      )}
 
       {/* Casting card header */}
       {character.bannerUrl ? (
@@ -246,6 +253,10 @@ export default function CharacterProfilePage() {
         </div>
       )}
 
+      <div className="mt-6">
+        <CharacterConversationPanel character={character} />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         {/* Left: personality, voice, license terms */}
         <div className="md:col-span-2 flex flex-col gap-6">
@@ -254,44 +265,6 @@ export default function CharacterProfilePage() {
           {character.galleryUrls && character.galleryUrls.length > 0 && (
             <CharacterGallery name={character.name} images={character.galleryUrls} />
           )}
-
-          <CharacterSoundProfile character={character} canProduce={canProduce} onOpenProduction={openProductionStudio} />
-
-          <section className="poster-card rounded-md p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">
-              Résumé: every story so far
-            </h2>
-            {resume.length === 0 ? (
-              <p className="text-sm text-grey">Not cast yet. This story could be the first.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {resume.map(({ casting, story }) => {
-                  const lineCount = story.scenes.reduce(
-                    (n, sc) => n + sc.lines.filter((l) => l.characterId === character.id).length,
-                    0
-                  );
-                  return (
-                    <li key={casting.id} className="py-3">
-                      <Link
-                        href={`/stories/${story.id}`}
-                        className="flex items-center justify-between gap-3 hover:text-accent"
-                      >
-                        <span className="min-w-0">
-                          <span className="block font-medium truncate">{story.title}</span>
-                          <span className="block text-xs text-grey">
-                            {lineCount} line{lineCount === 1 ? "" : "s"} · cast {timeAgo(casting.timestamp)}
-                          </span>
-                        </span>
-                        <span className="text-xs text-grey shrink-0">
-                          {casting.fee > 0 ? money(casting.fee) : "open"}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
         </div>
 
         {/* Right: license terms + earnings + CTA */}
@@ -359,33 +332,6 @@ export default function CharacterProfilePage() {
             )}
           </section>
 
-          <section className="poster-card rounded-md p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">
-              License terms
-            </h2>
-            <p className="text-sm mb-1">{LICENSE_LABEL[character.licenseType]}</p>
-            <p className="text-xs text-grey">
-              {character.licenseType === "open" &&
-                "Anyone can cast this AI actor for free. The maker still earns from fan tips."}
-              {character.licenseType === "paid" &&
-                `Casting this AI actor costs ${money(character.royaltyRate)}, paid to the maker every time.`}
-              {character.licenseType === "approval" &&
-                `The maker signs off on each story before ${character.name} can appear in it. Fee once approved: ${money(character.royaltyRate)}.`}
-            </p>
-            <p className="text-[11px] text-grey mt-3">
-              On the shelf since {formatDate(character.createdAt)}
-            </p>
-          </section>
-
-          <section className="poster-card rounded-md p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">
-              Earnings over time
-            </h2>
-            <EarningsSparkline entries={ledger} />
-          </section>
-
-          {canProduce && <DeveloperAccessCard character={character} />}
-
           {canCast && (
             <Link
               href={`/studio/write?cast=${character.id}`}
@@ -405,39 +351,63 @@ export default function CharacterProfilePage() {
         </div>
       </div>
 
-      {canProduce && (
-        <details
-          id="production-studio"
-          open={productionOpen}
-          onToggle={(event) => setProductionOpen(event.currentTarget.open)}
-          className="mt-6 scroll-mt-24 rounded-md border border-line bg-paper/30"
-        >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 hover:bg-white/[0.03] sm:px-6">
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold">Production Studio</span>
-              <span className="mt-1 block text-[11px] leading-relaxed text-grey">
-                Create or reuse voice, dialogue, sound, images, and video for {character.name}.
-              </span>
-            </span>
-            <span className="shrink-0 rounded-full border border-accent/60 px-3 py-1.5 text-[10px] font-semibold text-accent">
-              {productionOpen ? "Close" : "Open studio"}
-            </span>
-          </summary>
-          <div className="border-t border-line">
-            <CharacterProductionStudio
-              character={character}
-              onExit={() => {
-                const studio = document.getElementById("production-studio") as HTMLDetailsElement | null;
-                if (studio) studio.open = false;
-                setProductionOpen(false);
-                window.requestAnimationFrame(() => {
-                  studio?.scrollIntoView({ behavior: "smooth", block: "start" });
-                });
-              }}
-            />
-          </div>
-        </details>
-      )}
+      <details className="group mt-6 rounded-md border border-line bg-black/10" data-character-record>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 hover:bg-white/[0.03] sm:px-6">
+          <span>
+            <span className="block text-sm font-semibold">Actor record</span>
+            <span className="mt-0.5 block text-[11px] text-grey">Voice assets, casting history, licensing, and maker controls.</span>
+          </span>
+          <span className="rounded-full border border-line px-3 py-1.5 text-[10px] font-semibold text-grey transition-colors group-open:border-accent group-open:text-accent">Open details</span>
+        </summary>
+        <div className="grid gap-5 border-t border-line p-4 sm:p-6 lg:grid-cols-2">
+          <CharacterSoundProfile character={character} canProduce={canProduce} onOpenProduction={openProductionStudio} />
+
+          <section className="poster-card rounded-md p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">Résumé: every story so far</h2>
+            {resume.length === 0 ? (
+              <p className="text-sm text-grey">Not cast yet. This story could be the first.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {resume.map(({ casting, story }) => {
+                  const lineCount = story.scenes.reduce(
+                    (n, sc) => n + sc.lines.filter((l) => l.characterId === character.id).length,
+                    0,
+                  );
+                  return (
+                    <li key={casting.id} className="py-3">
+                      <Link href={`/stories/${story.id}`} className="flex items-center justify-between gap-3 hover:text-accent">
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{story.title}</span>
+                          <span className="block text-xs text-grey">{lineCount} line{lineCount === 1 ? "" : "s"} · cast {timeAgo(casting.timestamp)}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-grey">{casting.fee > 0 ? money(casting.fee) : "open"}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="poster-card rounded-md p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">License terms</h2>
+            <p className="text-sm mb-1">{LICENSE_LABEL[character.licenseType]}</p>
+            <p className="text-xs text-grey">
+              {character.licenseType === "open" && "Anyone can cast this AI actor for free. The maker still earns from fan tips."}
+              {character.licenseType === "paid" && `Casting this AI actor costs ${money(character.royaltyRate)}, paid to the maker every time.`}
+              {character.licenseType === "approval" && `The maker signs off on each story before ${character.name} can appear in it. Fee once approved: ${money(character.royaltyRate)}.`}
+            </p>
+            <p className="mt-3 text-[11px] text-grey">On the shelf since {formatDate(character.createdAt)}</p>
+          </section>
+
+          <section className="poster-card rounded-md p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-grey mb-2">Earnings over time</h2>
+            <EarningsSparkline entries={ledger} />
+          </section>
+
+          {canProduce && <DeveloperAccessCard character={character} />}
+        </div>
+      </details>
     </div>
   );
 }

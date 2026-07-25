@@ -1,0 +1,236 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Avatar from "@/components/Avatar";
+import { composeCharacterSheetPrompt } from "@/lib/character-system";
+import {
+  buildProductionBible,
+  buildScenePackage,
+  composeIdentityImagePrompt,
+  composeSfxPrompt,
+  composeThemePrompt,
+  composeVideoPrompt,
+  composeVoiceDesignPrompt,
+} from "@/lib/production-prompting";
+import { PIPELINE_STAGE_META, pipelineModelLabel, type PipelineConfig, type PipelineStageId } from "@/lib/pipeline-config";
+import type { Character } from "@/lib/types";
+
+type PromptCard = {
+  id: string;
+  step: string;
+  title: string;
+  destination: string;
+  note: string;
+  prompt: string;
+  stage?: PipelineStageId;
+};
+
+function stageLabel(config: PipelineConfig, stage: PipelineStageId) {
+  const current = config.stages[stage];
+  return `${PIPELINE_STAGE_META[stage].label} · ${current.provider} · ${pipelineModelLabel(current.model)}`;
+}
+
+function PromptCardView({ card, config }: { card: PromptCard; config: PipelineConfig }) {
+  const stage = card.stage ? config.stages[card.stage] : null;
+  return (
+    <article className="poster-card rounded-md p-4" data-prompt-stage={card.id}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">{card.step}</p>
+          <h3 className="reel-title mt-1 text-xl">{card.title}</h3>
+        </div>
+        <span className="rounded-full border border-line px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-grey">{card.destination}</span>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-grey">{card.note}</p>
+      {stage && (
+        <p className="mt-3 text-[10px] uppercase tracking-[0.12em] text-[#36e0cd]">
+          Active route · {stageLabel(config, card.stage!)}
+        </p>
+      )}
+      <details open className="mt-3 rounded-sm border border-line bg-black/10">
+        <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-grey">Prompt emitted by Chaplin</summary>
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line p-3 font-sans text-[11px] leading-5 text-ink">{card.prompt}</pre>
+      </details>
+      {stage?.promptPrelude && (
+        <details className="mt-2 rounded-sm border border-line bg-black/5">
+          <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-grey">Pipeline prelude appended at request time</summary>
+          <p className="border-t border-line p-3 text-[11px] leading-5 text-grey">{stage.promptPrelude}</p>
+        </details>
+      )}
+    </article>
+  );
+}
+
+export default function AdminSceneWiringMap({ characters, config }: { characters: Character[]; config: PipelineConfig }) {
+  const [characterId, setCharacterId] = useState(characters[0]?.id ?? "");
+  const character = characters.find((item) => item.id === characterId) ?? characters[0];
+  const bible = useMemo(() => character ? buildProductionBible(character) : null, [character]);
+  const scene = useMemo(
+    () => character ? buildScenePackage({ ...character, brollLine: undefined }, 0) : null,
+    [character],
+  );
+
+  if (!character || !bible || !scene) {
+    return <div className="poster-card rounded-md p-6 text-sm text-grey">No saved actor is available to map yet.</div>;
+  }
+
+  const promptCards: PromptCard[] = [
+    {
+      id: "sheet",
+      step: "01 · Identity reference",
+      title: "Character sheet frame",
+      destination: "Image provider",
+      note: "The canonical reference image travels beside this prompt. The prompt only changes the chosen view and age state while the recognition locks remain fixed.",
+      prompt: composeCharacterSheetPrompt(character, bible, { viewId: "front", ageStateId: "canonical" }),
+      stage: "image",
+    },
+    {
+      id: "voice",
+      step: "02 · Voice identity",
+      title: "Voice design",
+      destination: "ElevenLabs Voice Design",
+      note: "This creates candidate voices. It is not dialogue and never includes visual or scene direction.",
+      prompt: composeVoiceDesignPrompt(character),
+      stage: "voice",
+    },
+    {
+      id: "dialogue",
+      step: "03 · Spoken performance",
+      title: "Dialogue line",
+      destination: "ElevenLabs TTS",
+      note: "These are the exact words the actor says aloud. The locked voice ID, stable seed, and voice settings are attached by the server; no new voice identity is created here.",
+      prompt: scene.dialogue,
+      stage: "voice",
+    },
+    {
+      id: "sfx",
+      step: "04 · Sound stem",
+      title: "Signature SFX",
+      destination: "ElevenLabs Sound",
+      note: "A physical, repeatable sound mark. Character biography and spoken dialogue are intentionally excluded.",
+      prompt: composeSfxPrompt(character, scene.blueprint.soundTexture),
+      stage: "sfx",
+    },
+    {
+      id: "theme",
+      step: "05 · Music stem",
+      title: "Theme ident",
+      destination: "ElevenLabs Music",
+      note: "A short instrumental identity cue. It remains independent from dialogue and the silent motion plate.",
+      prompt: composeThemePrompt(character, scene.blueprint.musicalArc),
+      stage: "theme",
+    },
+    {
+      id: "identity-still",
+      step: "06 · Canonical visual",
+      title: "Identity still",
+      destination: "Image provider",
+      note: "This prompt establishes the castable visual source. A creator must explicitly approve it before it becomes the canonical reference.",
+      prompt: composeIdentityImagePrompt(character),
+      stage: "image",
+    },
+    {
+      id: "scene-still",
+      step: "07 · Directed first frame",
+      title: "Scene still",
+      destination: "Image provider",
+      note: "This prompt changes only the playable moment, composition, and light. The approved canonical reference is submitted separately as identity truth.",
+      prompt: scene.image,
+      stage: "image",
+    },
+    {
+      id: "motion",
+      step: "08 · Silent motion plate",
+      title: "Image-to-video direction",
+      destination: "Seedance",
+      note: "The approved still is the exact first frame. This prompt controls only motion and camera; it deliberately contains no dialogue, sound, or identity redesign.",
+      prompt: composeVideoPrompt(character, scene.blueprint),
+      stage: "video",
+    },
+  ];
+
+  return (
+    <div className="space-y-8" data-admin-scene-wiring-map>
+      <section className="poster-card overflow-hidden rounded-md">
+        <div className="grid gap-5 p-5 lg:grid-cols-[220px_1fr] lg:p-6">
+          <div className="relative min-h-56 overflow-hidden rounded-sm border border-line bg-black/20">
+            {character.imageUrl || character.bannerUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- saved provider media is dynamic
+              <img src={character.imageUrl ?? character.bannerUrl} alt={`${character.name} canonical actor`} className="absolute inset-0 h-full w-full object-cover" />
+            ) : <div className="grid h-full place-items-center"><Avatar hue={character.avatarHue} label={character.name} size={88} /></div>}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pb-3 pt-12">
+              <p className="text-sm font-semibold text-white">{character.name}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/70">Canonical actor reference</p>
+            </div>
+          </div>
+          <div>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Selected production bible</p>
+                <h2 className="reel-title mt-1 text-3xl">{character.name}</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-grey">{character.tagline}</p>
+              </div>
+              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-grey">
+                Map actor
+                <select value={character.id} onChange={(event) => setCharacterId(event.target.value)} className="mt-1 block min-w-48 rounded-sm border border-line bg-paper px-3 py-2 text-xs font-medium normal-case tracking-normal text-ink">
+                  {characters.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ["Want", bible.dramatic.externalWant],
+                ["Contradiction", bible.dramatic.contradiction],
+                ["Under pressure", bible.performance.underPressure],
+                ["Signature look", bible.visual.wardrobe],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-sm border border-line bg-black/10 p-3">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-accent">{label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-grey">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-sm border border-line bg-black/10 p-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-accent">Recognition locks carried into every visual request</p>
+              <ol className="mt-2 grid gap-1 text-xs leading-relaxed text-grey sm:grid-cols-2">
+                {(bible.visual.recognitionLocks ?? bible.visual.continuityRules).slice(0, 4).map((lock, index) => <li key={lock}>{index + 1}. {lock}</li>)}
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Scene handoff map</p>
+            <h2 className="reel-title mt-1 text-3xl">One bible, separate production artifacts</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-grey">Every card below shows the actual prompt constructed for the selected actor and exactly where it travels. Audio, image, and motion are intentionally separated so no stage silently rewrites the actor.</p>
+          </div>
+          <span className="rounded-full border border-line px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-grey">Scene · {scene.sceneName}</span>
+        </div>
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {promptCards.map((card) => <PromptCardView key={card.id} card={card} config={config} />)}
+        </div>
+      </section>
+
+      <section className="poster-card rounded-md p-5 sm:p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Final assembly contract</p>
+        <h2 className="reel-title mt-1 text-2xl">What connects at the end</h2>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          {[
+            ["1", "Approved scene still", "Becomes the exact first frame for motion."],
+            ["2", "Silent motion plate", "Seedance animates the frame without audio or identity changes."],
+            ["3", "Independent audio stems", "Locked-voice dialogue, SFX, and theme remain separate until mix."],
+            ["4", "Reviewable final shot", "FFmpeg aligns approved stems to the five-second motion plate for QC and approval."],
+          ].map(([number, title, copy]) => (
+            <div key={number} className="flex gap-3 border-l border-accent/50 pl-3">
+              <span className="text-lg font-semibold text-accent">{number}</span>
+              <div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs leading-relaxed text-grey">{copy}</p></div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
