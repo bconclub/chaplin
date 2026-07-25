@@ -19,6 +19,17 @@ import type {
 } from "@/lib/media-pipeline-types";
 import { buildShotImagePrompt, buildShotVideoPrompt, cameraPlanForShot } from "@/lib/shot-director";
 
+type ShotRenderStatus = "queued" | "designing" | "frame_ready" | "animating" | "ready" | "failed";
+
+type ShotRenderState = {
+  frameUrl?: string;
+  frameAssetId?: string;
+  videoUrl?: string;
+  videoAssetId?: string;
+  status: ShotRenderStatus;
+  error?: string;
+};
+
 function stepTone(status: string) {
   if (status === "ready") return "border-accent-secondary text-accent-secondary";
   if (status === "running") return "border-accent text-accent";
@@ -55,7 +66,6 @@ const AUTOMATED_SHOT_STEPS = new Set([
 const OUTPUT_REQUIRED_STEPS = new Set([
   "shot-packages",
   "assembly",
-  "captions",
   "mastering",
   "reference-frame",
   "motion-plate",
@@ -97,6 +107,8 @@ export default function ProductionDetailPage() {
   const [error, setError] = useState("");
   const [renderProgress, setRenderProgress] = useState("");
   const [renderFrameUrl, setRenderFrameUrl] = useState<string | null>(null);
+  const [renderShots, setRenderShots] = useState<ShotRenderState[]>([]);
+  const [selectedShotIndex, setSelectedShotIndex] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
   const referenceStep = run?.steps.find((step) => step.key === "reference-frame");
   const referenceImageUrl = typeof referenceStep?.output.url === "string"
@@ -111,6 +123,23 @@ export default function ProductionDetailPage() {
   const finalVideoUrl = typeof finalVideoStep?.output.url === "string"
     ? finalVideoStep.output.url
     : null;
+  const shotPackageStep = run?.steps.find((step) => step.key === "shot-packages");
+  const { persistedShotUrls, persistedFrameUrls } = useMemo(() => {
+    const shotSource = Array.isArray(finalVideoStep?.output.shotUrls) && finalVideoStep.output.shotUrls.length > 0
+      ? finalVideoStep.output.shotUrls
+      : shotPackageStep?.output.shotUrls;
+    const frameSource = Array.isArray(finalVideoStep?.output.frameUrls) && finalVideoStep.output.frameUrls.length > 0
+      ? finalVideoStep.output.frameUrls
+      : shotPackageStep?.output.frameUrls;
+    return {
+      persistedShotUrls: Array.isArray(shotSource)
+        ? shotSource.filter((value): value is string => typeof value === "string")
+        : [],
+      persistedFrameUrls: Array.isArray(frameSource)
+        ? frameSource.filter((value): value is string => typeof value === "string")
+        : [],
+    };
+  }, [finalVideoStep, shotPackageStep]);
   const motionPreviewStep = run
     ? [...run.steps].reverse().find((step) => (
       ["motion-plate", "shot-mix", "assembly", "mastering"].includes(step.key)
@@ -230,6 +259,55 @@ export default function ProductionDetailPage() {
       scopeId,
     };
   }, [cast, story]);
+
+  const shotTimeline = useMemo(() => {
+    if (!contract || !story) return [];
+    return Array.from({ length: contract.shotCount }, (_, index) => {
+      const scene = story.scenes[index % Math.max(story.scenes.length, 1)];
+      const liveShot = renderShots[index];
+      const videoUrl = liveShot?.videoUrl ?? persistedShotUrls[index];
+      const frameUrl = liveShot?.frameUrl ?? persistedFrameUrls[index] ?? scene?.previewImageUrl;
+      const status: ShotRenderStatus = liveShot?.status
+        ?? (videoUrl ? "ready" : frameUrl ? "frame_ready" : "queued");
+      return {
+        index,
+        title: scene?.setting?.trim() || `Scene ${index + 1}`,
+        objective: scene?.objective?.trim() || scene?.action?.trim() || "Shot direction is ready.",
+        durationSeconds: scene?.durationSeconds ?? (contract.format === "punch" ? 4 : 5),
+        frameUrl,
+        videoUrl,
+        status,
+        error: liveShot?.error,
+      };
+    });
+  }, [contract, persistedFrameUrls, persistedShotUrls, renderShots, story]);
+
+  const selectedShot = shotTimeline[Math.min(selectedShotIndex, Math.max(shotTimeline.length - 1, 0))];
+  const canvasVideoUrl = contract?.format === "punch"
+    ? selectedShot?.videoUrl ?? null
+    : previewVideoUrl;
+  const canvasImageUrl = selectedShot?.frameUrl ?? previewImageUrl;
+  const framesReadyCount = shotTimeline.filter((shot) => Boolean(shot.frameUrl)).length;
+  const clipsReadyCount = shotTimeline.filter((shot) => Boolean(shot.videoUrl)).length;
+  const productionPhases = [
+    { label: "Plan", complete: Boolean(run), live: false },
+    {
+      label: "Frames",
+      complete: shotTimeline.length > 0 && framesReadyCount === shotTimeline.length,
+      live: renderShots.some((shot) => shot.status === "designing"),
+    },
+    {
+      label: "Motion",
+      complete: shotTimeline.length > 0 && clipsReadyCount === shotTimeline.length,
+      live: renderShots.some((shot) => shot.status === "animating"),
+    },
+    { label: "Master", complete: Boolean(finalVideoUrl), live: busy && clipsReadyCount === shotTimeline.length && !finalVideoUrl },
+    {
+      label: "Approval",
+      complete: run?.steps.some((step) => step.key === "creative-review" && step.status === "approved") ?? false,
+      live: reviewStep?.key === "creative-review",
+    },
+  ];
 
   useEffect(() => {
     if (!contract?.scopeId) return;
@@ -592,6 +670,13 @@ export default function ProductionDetailPage() {
   async function renderPunchOutput() {
     if (!run || !story || !cast[0] || contract?.format !== "punch") return;
     const lockedReference = referenceImageUrl ?? castPreviewImageUrl;
+    const lockedCastReferences = cast
+      .map((character) => character.imageUrl ?? character.galleryUrls?.[0] ?? character.bannerUrl ?? "")
+      .filter(Boolean);
+    const directedCastName = cast.map((character) => character.name).join(" and ");
+    const directedCastIdentity = cast
+      .map((character) => `${character.name}: ${character.personality}`)
+      .join("\n");
     if (!lockedReference) {
       setError("Approve or attach one actor identity frame before rendering the Punch.");
       return;
@@ -600,7 +685,37 @@ export default function ProductionDetailPage() {
     setError("");
     setRenderProgress("Preparing the locked actor reference");
     setRenderFrameUrl(null);
+    setSelectedShotIndex(0);
+    setRenderShots(Array.from({ length: contract.shotCount }, () => ({ status: "queued" })));
+    let activeShotIndex = 0;
+    let activeRun = run;
+    let activePipelineStepKey = "";
     try {
+      const promiseStep = activeRun.steps.find((step) => step.key === "promise-lock");
+      if (promiseStep && ["ready", "queued", "failed"].includes(promiseStep.status)) {
+        setRenderProgress("Locking the personality promise");
+        activeRun = await runInstantStep(activeRun, promiseStep);
+      }
+
+      let packageStep = activeRun.steps.find((step) => step.key === "shot-packages");
+      if (!packageStep) throw new Error("This Punch does not have a scene-package step.");
+      if (packageStep.status === "failed") {
+        activeRun = await transitionStep(activeRun, packageStep.key, "retry");
+        packageStep = activeRun.steps.find((step) => step.key === "shot-packages") ?? packageStep;
+      }
+      if (packageStep.status === "ready") {
+        activeRun = await transitionStep(activeRun, packageStep.key, "queue");
+        packageStep = activeRun.steps.find((step) => step.key === "shot-packages") ?? packageStep;
+      }
+      if (packageStep.status === "queued") {
+        activeRun = await transitionStep(activeRun, packageStep.key, "start");
+        packageStep = activeRun.steps.find((step) => step.key === "shot-packages") ?? packageStep;
+      }
+      if (packageStep.status !== "running") {
+        throw new Error(`The scene package is ${packageStep.status}, so it cannot render new clips.`);
+      }
+      activePipelineStepKey = "shot-packages";
+
       const shotResults: Array<{ frameUrl: string; frameAssetId?: string; url: string; assetId: string }> = [];
       const shotDesigns = [
         "ESTABLISHING HOOK: a readable medium-wide view that clearly establishes the business, its merchandise, and the actor entering or discovering the situation.",
@@ -609,6 +724,11 @@ export default function ProductionDetailPage() {
         "PAYOFF: a tighter final composition that lands the actor's memorable choice while ending on a clean, unmistakable product or storefront hero moment.",
       ];
       for (let index = 0; index < contract.shotCount; index += 1) {
+        activeShotIndex = index;
+        setSelectedShotIndex(index);
+        setRenderShots((shots) => shots.map((shot, shotIndex) => (
+          shotIndex === index ? { ...shot, status: "designing", error: undefined } : shot
+        )));
         setRenderProgress(`Designing scene frame ${index + 1} of ${contract.shotCount}`);
         const scene = story.scenes[index % Math.max(story.scenes.length, 1)];
         const directedScene = {
@@ -619,9 +739,9 @@ export default function ProductionDetailPage() {
         const framePrompt = buildShotImagePrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
-          actorName: cast[0].name, actorIdentity: cast[0].personality,
+          actorName: directedCastName, actorIdentity: directedCastIdentity,
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
-          continuityNote: "Keep the same actor identity, wardrobe, business geography, product design, palette, time of day, and direction of travel across the complete Punch.",
+          continuityNote: "Keep every locked actor visually distinct and consistent. Preserve each face, age, hair, wardrobe, body scale, and screen position alongside the business geography, product design, palette, time of day, and direction of travel across the complete Punch.",
         });
         let frameData: { url?: string; assetId?: string; error?: string } = {
           url: scene?.previewImageUrl,
@@ -635,7 +755,9 @@ export default function ProductionDetailPage() {
               action: "image",
               characterId: cast[0].id,
               imagePurpose: "scene",
-              referenceImages: [lockedReference, story.productImageUrl ?? ""].filter(Boolean),
+              referenceImages: [...lockedCastReferences, lockedReference, story.productImageUrl ?? ""].filter(
+                (value, referenceIndex, references) => references.indexOf(value) === referenceIndex,
+              ),
               prompt: framePrompt,
             }),
           });
@@ -645,14 +767,19 @@ export default function ProductionDetailPage() {
           }
         }
         setRenderFrameUrl(frameData.url);
+        setRenderShots((shots) => shots.map((shot, shotIndex) => (
+          shotIndex === index
+            ? { ...shot, frameUrl: frameData.url, frameAssetId: frameData.assetId, status: "animating" }
+            : shot
+        )));
 
         setRenderProgress(`Animating four-second scene ${index + 1} of ${contract.shotCount}`);
         const motionPrompt = buildShotVideoPrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
-          actorName: cast[0].name, actorIdentity: cast[0].personality,
+          actorName: directedCastName, actorIdentity: directedCastIdentity,
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
-          continuityNote: "Preserve exact actor and product continuity, scene geography, object positions, and direction of travel from the adjacent Punch shot.",
+          continuityNote: "Preserve the exact identities and relative positions of every visible actor, plus product continuity, scene geography, object positions, and direction of travel from the adjacent Punch shot.",
         });
         const videoResponse = await fetch("/api/generate", {
           method: "POST",
@@ -674,14 +801,55 @@ export default function ProductionDetailPage() {
           url: videoData.url,
           assetId: videoData.assetId,
         });
+        setRenderShots((shots) => shots.map((shot, shotIndex) => (
+          shotIndex === index
+            ? {
+                ...shot,
+                frameUrl: frameData.url,
+                frameAssetId: frameData.assetId,
+                videoUrl: videoData.url,
+                videoAssetId: videoData.assetId,
+                status: "ready",
+              }
+            : shot
+        )));
       }
 
+      activeRun = await transitionStep(activeRun, "shot-packages", "complete", {
+        output: {
+          shotUrls: shotResults.map((shot) => shot.url),
+          shotAssetIds: shotResults.map((shot) => shot.assetId),
+          frameUrls: shotResults.map((shot) => shot.frameUrl),
+          frameAssetIds: shotResults.map((shot) => shot.frameAssetId).filter(Boolean),
+          sceneDurationSeconds: 4,
+          completedAt: new Date().toISOString(),
+        },
+      });
+
+      let assemblyStep = activeRun.steps.find((step) => step.key === "assembly");
+      if (!assemblyStep) throw new Error("This Punch does not have an assembly step.");
+      if (assemblyStep.status === "failed") {
+        activeRun = await transitionStep(activeRun, assemblyStep.key, "retry");
+        assemblyStep = activeRun.steps.find((step) => step.key === "assembly") ?? assemblyStep;
+      }
+      if (assemblyStep.status === "ready") {
+        activeRun = await transitionStep(activeRun, assemblyStep.key, "queue");
+        assemblyStep = activeRun.steps.find((step) => step.key === "assembly") ?? assemblyStep;
+      }
+      if (assemblyStep.status === "queued") {
+        activeRun = await transitionStep(activeRun, assemblyStep.key, "start");
+        assemblyStep = activeRun.steps.find((step) => step.key === "assembly") ?? assemblyStep;
+      }
+      if (assemblyStep.status !== "running") {
+        throw new Error(`The master assembly is ${assemblyStep.status}, so it cannot run now.`);
+      }
+      activePipelineStepKey = "assembly";
       setRenderProgress(`Assembling the ${contract.duration}-second master`);
       const response = await fetch("/api/pipeline/assemble", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          runId: run.id,
+          runId: activeRun.id,
           characterId: cast[0].id,
           shotUrls: shotResults.map((shot) => shot.url),
           frameUrls: shotResults.map((shot) => shot.frameUrl),
@@ -689,15 +857,80 @@ export default function ProductionDetailPage() {
           finalDurationSeconds: contract.duration,
         }),
       });
-      const data = await response.json() as { run?: MediaPipelineRun; error?: string };
-      if (!response.ok || !data.run) throw new Error(data.error ?? "The Punch master could not be assembled.");
-      setRun(data.run);
+      const data = await response.json() as { run?: MediaPipelineRun; url?: string; assetId?: string; error?: string };
+      if (!response.ok || !data.run || !data.url || !data.assetId) {
+        throw new Error(data.error ?? "The Punch master could not be assembled.");
+      }
+      activeRun = await transitionStep(data.run, "assembly", "complete", {
+        outputAssetId: data.assetId,
+        output: {
+          url: data.url,
+          shotUrls: shotResults.map((shot) => shot.url),
+          frameUrls: shotResults.map((shot) => shot.frameUrl),
+          durationSeconds: contract.duration,
+          completedAt: new Date().toISOString(),
+        },
+      });
+
+      const captionsStep = activeRun.steps.find((step) => step.key === "captions");
+      if (captionsStep && ["ready", "queued", "failed"].includes(captionsStep.status)) {
+        activeRun = await transitionStep(activeRun, captionsStep.key, "skip", {
+          output: {
+            skippedAt: new Date().toISOString(),
+            reason: "No burned-in or sidecar captions were requested for this preview.",
+          },
+        });
+      }
+
+      const masteringStep = activeRun.steps.find((step) => step.key === "mastering");
+      if (masteringStep?.status === "ready") {
+        activePipelineStepKey = "mastering";
+        activeRun = await transitionStep(activeRun, masteringStep.key, "queue");
+        activeRun = await transitionStep(activeRun, masteringStep.key, "start");
+        activeRun = await transitionStep(activeRun, masteringStep.key, "complete", {
+          outputAssetId: data.assetId,
+          output: {
+            url: data.url,
+            durationSeconds: contract.duration,
+            codec: "h264",
+            fastStart: true,
+            completedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      const creativeReviewStep = activeRun.steps.find((step) => step.key === "creative-review");
+      if (creativeReviewStep?.status === "ready") {
+        activePipelineStepKey = "creative-review";
+        activeRun = await transitionStep(activeRun, creativeReviewStep.key, "queue");
+        activeRun = await transitionStep(activeRun, creativeReviewStep.key, "start");
+        activeRun = await transitionStep(activeRun, creativeReviewStep.key, "complete", {
+          outputAssetId: data.assetId,
+          output: {
+            url: data.url,
+            durationSeconds: contract.duration,
+            review: "human",
+            completedAt: new Date().toISOString(),
+          },
+        });
+      }
+      setRun(activeRun);
       setRenderProgress("");
       window.setTimeout(() => {
         document.querySelector("[data-human-review]")?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 100);
     } catch (renderError) {
-      setError(renderError instanceof Error ? renderError.message : "The Punch output could not be rendered.");
+      const message = renderError instanceof Error ? renderError.message : "The Punch output could not be rendered.";
+      const failedPipelineStep = activeRun.steps.find((step) => step.key === activePipelineStepKey);
+      if (failedPipelineStep && ["queued", "running"].includes(failedPipelineStep.status)) {
+        activeRun = await transitionStep(activeRun, activePipelineStepKey, "fail", {
+          errorMessage: message,
+        }).catch(() => activeRun);
+      }
+      setRenderShots((shots) => shots.map((shot, shotIndex) => (
+        shotIndex === activeShotIndex ? { ...shot, status: "failed", error: message } : shot
+      )));
+      setError(message);
       setRenderProgress("");
     } finally {
       setBusy(false);
@@ -900,25 +1133,152 @@ export default function ProductionDetailPage() {
             </div>
           </div>
 
+          <div className="border-b border-white/10 bg-[#090d07] px-3 py-3 sm:px-4">
+            <div className="mb-4 grid grid-cols-5 gap-1" aria-label="Production phase progress">
+              {productionPhases.map((phase) => (
+                <div key={phase.label} className="min-w-0">
+                  <span className={`block h-1 rounded-full ${
+                    phase.complete
+                      ? "bg-emerald-400"
+                      : phase.live
+                        ? "animate-pulse bg-accent"
+                        : "bg-white/10"
+                  }`} />
+                  <p className={`mt-1.5 truncate text-center text-[7px] font-bold uppercase tracking-[0.1em] ${
+                    phase.complete ? "text-emerald-300" : phase.live ? "text-accent" : "text-white/30"
+                  }`}>
+                    {phase.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent-secondary">Scene timeline</p>
+                <p className="mt-0.5 text-[9px] text-grey">Select a scene to inspect its frame or playable clip in the canvas.</p>
+              </div>
+              {finalVideoUrl && (
+                <button
+                  type="button"
+                  onClick={() => document.querySelector("#production-output video")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                  className="shrink-0 rounded-full border border-emerald-400/45 px-3 py-1.5 text-[9px] font-semibold text-emerald-300"
+                >
+                  Play master
+                </button>
+              )}
+            </div>
+            <div className="chaplin-scrollbar flex snap-x gap-2 overflow-x-auto pb-2" aria-label="Production scene timeline">
+              {shotTimeline.map((shot) => {
+                const selected = shot.index === selectedShotIndex;
+                const isLive = shot.status === "designing" || shot.status === "animating";
+                return (
+                  <button
+                    type="button"
+                    key={`${shot.index}-${shot.title}`}
+                    onClick={() => setSelectedShotIndex(shot.index)}
+                    className={`group relative min-w-[9.5rem] max-w-[9.5rem] snap-start overflow-hidden rounded-xl border text-left transition ${
+                      selected
+                        ? "border-accent shadow-[0_0_0_1px_rgba(244,63,105,0.35),0_10px_30px_rgba(0,0,0,0.32)]"
+                        : shot.status === "failed"
+                          ? "border-red-400/55"
+                          : "border-white/10 hover:border-white/25"
+                    }`}
+                    aria-current={selected ? "true" : undefined}
+                  >
+                    <div className="relative aspect-video overflow-hidden bg-white/[0.04]">
+                      {shot.frameUrl ? (
+                        <div
+                          className="h-full w-full bg-cover bg-center transition-transform duration-500 group-hover:scale-[1.03]"
+                          style={{ backgroundImage: `url("${shot.frameUrl.replaceAll('"', "%22")}")` }}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center font-mono text-lg text-white/20">
+                          {String(shot.index + 1).padStart(2, "0")}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/15" />
+                      {shot.videoUrl && (
+                        <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] text-black">▶</span>
+                      )}
+                      {isLive && (
+                        <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[7px] font-bold uppercase tracking-[0.12em] text-accent">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+                          </span>
+                          Live
+                        </span>
+                      )}
+                      <span className="absolute bottom-1.5 left-2 font-mono text-[8px] text-white/70">{shot.durationSeconds}s</span>
+                    </div>
+                    <div className="min-h-[3.8rem] px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-white/45">
+                          Scene {String(shot.index + 1).padStart(2, "0")}
+                        </p>
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          shot.status === "ready"
+                            ? "bg-emerald-400"
+                            : shot.status === "failed"
+                              ? "bg-red-400"
+                              : isLive
+                                ? "animate-pulse bg-accent"
+                                : shot.frameUrl
+                                  ? "bg-amber-300"
+                                  : "bg-white/15"
+                        }`} />
+                      </div>
+                      <p className="mt-1 truncate text-[10px] font-semibold text-white">{shot.title}</p>
+                      <p className={`mt-1 truncate text-[8px] ${shot.status === "failed" ? "text-red-300" : isLive ? "text-accent" : "text-grey"}`}>
+                        {shot.status === "ready"
+                          ? "Clip ready"
+                          : shot.status === "animating"
+                            ? "Animating motion"
+                            : shot.status === "designing"
+                              ? "Designing frame"
+                              : shot.status === "frame_ready"
+                                ? "Frame ready"
+                              : shot.status === "failed"
+                                ? shot.error ?? "Generation stopped"
+                                : "Queued"}
+                      </p>
+                    </div>
+                    <span className={`block h-0.5 w-full ${
+                      shot.status === "ready"
+                        ? "bg-emerald-400"
+                        : shot.status === "failed"
+                          ? "bg-red-400"
+                          : isLive
+                            ? "animate-pulse bg-accent"
+                            : shot.frameUrl
+                              ? "bg-amber-300"
+                              : "bg-white/10"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="relative aspect-video overflow-hidden bg-black">
-            {previewVideoUrl ? (
+            {canvasVideoUrl ? (
               <video
-                key={previewVideoUrl}
-                src={previewVideoUrl}
+                key={canvasVideoUrl}
+                src={canvasVideoUrl}
                 autoPlay
                 muted
-                loop={!finalVideoUrl}
+                loop
                 controls
                 playsInline
                 className="h-full w-full object-contain"
-                aria-label={`Production preview for ${story.title}`}
+                aria-label={`Scene ${selectedShotIndex + 1} preview for ${story.title}`}
               />
-            ) : previewImageUrl ? (
+            ) : canvasImageUrl ? (
               <div
                 className={`h-full w-full bg-cover bg-center transition duration-700 ${busy ? "scale-[1.02] opacity-75" : ""}`}
-                style={{ backgroundImage: `url("${previewImageUrl.replaceAll('"', "%22")}")` }}
+                style={{ backgroundImage: `url("${canvasImageUrl.replaceAll('"', "%22")}")` }}
                 role="img"
-                aria-label={`Locked actor waiting for preview generation for ${story.title}`}
+                aria-label={`Scene ${selectedShotIndex + 1} frame for ${story.title}`}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-center">
@@ -929,23 +1289,23 @@ export default function ProductionDetailPage() {
               </div>
             )}
 
-            {!previewVideoUrl && <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/35" />}
-            {(busy || liveStep) && !previewVideoUrl && (
+            {!canvasVideoUrl && <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/35" />}
+            {(busy || liveStep) && !canvasVideoUrl && (
               <div className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 animate-[pipeline-live-sweep_2.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/15 to-transparent blur-xl" />
             )}
-            {!previewVideoUrl && (
+            {!canvasVideoUrl && (
               <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-end sm:justify-between">
                 <div className="max-w-lg">
                   <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-200">
-                    {productionState.eyebrow}
+                    Scene {selectedShotIndex + 1} of {contract.shotCount}
                   </p>
                   <h2 className="reel-title mt-1 text-3xl text-white">
-                    {productionState.title}
+                    {selectedShot?.title ?? productionState.title}
                   </h2>
                   <p className="mt-1 text-xs leading-5 text-white/65">
-                    {productionState.detail}
+                    {selectedShot?.error ?? selectedShot?.objective ?? productionState.detail}
                   </p>
-                  {previewImageUrl && !referenceImageUrl && (
+                  {canvasImageUrl && !selectedShot?.frameUrl && (
                     <p className="mt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/45">
                       Identity reference only · this is not generated production media
                     </p>

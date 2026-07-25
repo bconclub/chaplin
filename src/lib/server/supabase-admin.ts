@@ -401,7 +401,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
 
 export async function getCharacterProductionState(characterId: string) {
   const supabase = adminClient();
-  const [voice, assets, character] = await Promise.all([
+  const [voice, assets, character, jobs] = await Promise.all([
     supabase
       .from("character_voices")
       .select("provider_voice_id,preview_url")
@@ -418,10 +418,17 @@ export async function getCharacterProductionState(characterId: string) {
       .select("image_url,banner_url,featured_voice_asset_id,featured_theme_asset_id,featured_video_asset_id,featured_cover_asset_id")
       .eq("id", characterId)
       .single(),
+    supabase
+      .from("generation_jobs")
+      .select("id,kind,provider,model,status,prompt,provider_request_id,output_asset_id,error_message,metadata,started_at,completed_at,created_at")
+      .eq("character_id", characterId)
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
   assert(voice.error, "Load character voice");
   assert(assets.error, "Load character media");
   assert(character.error, "Load featured character media");
+  assert(jobs.error, "Load character generation timing");
   if (!character.data) throw new Error("Load featured character media: AI actor not found.");
   const rows = assets.data ?? [];
   const featured = character.data;
@@ -484,6 +491,7 @@ export async function getCharacterProductionState(characterId: string) {
       coverAssetId: featured.featured_cover_asset_id,
     },
     assets: rows,
+    jobs: jobs.data ?? [],
   };
 }
 

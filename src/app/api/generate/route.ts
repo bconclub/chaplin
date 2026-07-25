@@ -964,7 +964,11 @@ export async function POST(request: Request) {
       const imageConfig = imageStageForPreset(pipeline.stages.image, input);
       requireStage(imageConfig, "Image");
       const requestedPrompt = text(input, "prompt", 10, 6000);
-      const imagePurpose = input.imagePurpose === "scene" ? "scene" : "identity";
+      const imagePurpose = input.imagePurpose === "scene"
+        ? "scene"
+        : input.imagePurpose === "character-sheet"
+          ? "character-sheet"
+          : "identity";
       const requestedReference = typeof input.referenceImage === "string" ? input.referenceImage : "";
       const requestedReferences = Array.isArray(input.referenceImages)
         ? input.referenceImages
@@ -973,13 +977,34 @@ export async function POST(request: Request) {
         : [];
       const production = await getCharacterProductionState(characterId);
       const canonicalReference = production.visualReference;
-      const references = [
-        canonicalReference?.url ?? requestedReference,
-        ...requestedReferences,
-      ].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+      // Rebuilding an identity must not feed the existing face back into the
+      // image model. Scene frames inherit the selected canonical actor, while
+      // a character sheet deliberately uses the newly generated identity hero
+      // supplied by the editor as its first and strongest reference.
+      const preserveIdentity = imagePurpose !== "identity";
+      const references = preserveIdentity
+        ? (imagePurpose === "character-sheet"
+            ? [
+                requestedReference,
+                ...requestedReferences,
+                canonicalReference?.url ?? "",
+              ]
+            : [
+                canonicalReference?.url ?? requestedReference,
+                ...requestedReferences,
+              ]
+          ).filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
+        : [];
       const reference = references[0] ?? "";
       const stylizedOutput = requestsStylizedImage(requestedPrompt);
-      const prompt = lockVisualIdentity(imageGenerationPrompt(imageConfig, requestedPrompt), Boolean(reference));
+      const generatedPrompt = imageGenerationPrompt(imageConfig, requestedPrompt);
+      const newIdentityPrompt = generatedPrompt.replace(
+        /Use the canonical reference as identity truth\.\s*/i,
+        "",
+      );
+      const prompt = preserveIdentity
+        ? lockVisualIdentity(generatedPrompt, Boolean(reference))
+        : `${newIdentityPrompt}\n\nNEW IDENTITY: Create a new original fictional actor from this written brief only. Do not copy, preserve, or derive the face from any existing profile, gallery, or cover image.`;
       const configuredNegativePrompt = settingString(
         imageConfig,
         "negativePrompt",
@@ -989,8 +1014,12 @@ export async function POST(request: Request) {
       const referenceMetadata = {
         imagePurpose,
         referenceImage: reference || null,
-        referenceAssetId: canonicalReference?.assetId ?? null,
-        referenceSource: canonicalReference?.source ?? (requestedReference ? "request-fallback" : null),
+        referenceAssetId: imagePurpose === "scene" ? canonicalReference?.assetId ?? null : null,
+        referenceSource: preserveIdentity
+          ? imagePurpose === "character-sheet"
+            ? "generated-identity-hero"
+            : canonicalReference?.source ?? (requestedReference ? "request-fallback" : null)
+          : "new-identity-no-reference",
         referenceImages: references,
       };
       const provider = imageProvider(imageConfig.provider);

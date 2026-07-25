@@ -4,6 +4,7 @@ import { createClient, type Session, type User } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
+import { userAvatarUrl } from "@/lib/user-avatars";
 
 export type AccountRole = "creator" | "brand" | "admin";
 
@@ -12,6 +13,7 @@ export type AuthIdentity = {
   email: string;
   name: string;
   role: AccountRole;
+  imageUrl: string;
 };
 
 export const ACCESS_COOKIE = "chaplin-access-token";
@@ -46,6 +48,13 @@ export async function ensureAuthProfile(user: User): Promise<AuthIdentity> {
   const name = String(user.user_metadata?.display_name ?? user.email.split("@")[0] ?? "Chaplin Creator").trim().slice(0, 80);
   const handleBase = user.email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "creator";
   const handle = `@${handleBase}_${user.id.slice(0, 4)}`;
+  const existingUser = await admin
+    .from("users")
+    .select("image_url")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (existingUser.error) throw new Error(`Load creator avatar: ${existingUser.error.message}`);
+  const imageUrl = existingUser.data?.image_url || userAvatarUrl(user.id);
 
   const profileResult = await admin.from("user_profiles").upsert({
     user_id: user.id,
@@ -63,11 +72,12 @@ export async function ensureAuthProfile(user: User): Promise<AuthIdentity> {
     role_badges: roleBadges(role),
     avatar_initial: name.slice(0, 1).toUpperCase(),
     avatar_hue: role === "brand" ? 28 : role === "admin" ? 165 : 202,
+    image_url: imageUrl,
     updated_at: new Date().toISOString(),
   }, { onConflict: "id" });
   if (userResult.error) throw new Error(`Save authenticated creator: ${userResult.error.message}`);
 
-  return { id: user.id, email: user.email, name, role };
+  return { id: user.id, email: user.email, name, role, imageUrl };
 }
 
 export async function identityFromAccessToken(accessToken: string) {

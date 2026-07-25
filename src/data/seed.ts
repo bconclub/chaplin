@@ -20,11 +20,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const USERS: User[] = [
-  { id: "u-admin", name: "Chaplin Admin", handle: "@superadmin", roleBadges: ["admin"], avatarInitial: "S", avatarHue: 165 },
-  { id: "u-meera", name: "Meera Rao", handle: "@meera", roleBadges: ["maker"], avatarInitial: "M", avatarHue: 28, imageUrl: "/unsplash/u-meera-mkpinodl-tw.webp" },
-  { id: "u-arjun", name: "Arjun Dev", handle: "@arjun", roleBadges: ["caster", "maker"], avatarInitial: "A", avatarHue: 202, imageUrl: "/unsplash/u-arjun-zxr0fnwhddq.webp" },
-  { id: "u-priya", name: "Priya Nair", handle: "@priya", roleBadges: ["maker", "caster"], avatarInitial: "P", avatarHue: 335, imageUrl: "/unsplash/u-priya-f49xhybpia0.webp" },
-  { id: "u-kabir", name: "Kabir Singh", handle: "@kabir", roleBadges: ["caster", "maker", "brand"], avatarInitial: "K", avatarHue: 150, imageUrl: "/unsplash/u-kabir-imwizuq-jzi.webp" },
+  { id: "u-admin", name: "Chaplin Admin", handle: "@superadmin", roleBadges: ["admin"], avatarInitial: "S", avatarHue: 165, imageUrl: "/avatars/chaplin-admin-ocelot.webp" },
+  { id: "u-meera", name: "Meera Rao", handle: "@meera", roleBadges: ["maker"], avatarInitial: "M", avatarHue: 28, imageUrl: "/avatars/meera-caracal.webp" },
+  { id: "u-arjun", name: "Arjun Dev", handle: "@arjun", roleBadges: ["caster", "maker"], avatarInitial: "A", avatarHue: 202, imageUrl: "/avatars/arjun-owl.webp" },
+  { id: "u-priya", name: "Priya Nair", handle: "@priya", roleBadges: ["maker", "caster"], avatarInitial: "P", avatarHue: 335, imageUrl: "/avatars/priya-fox.webp" },
+  { id: "u-kabir", name: "Kabir Singh", handle: "@kabir", roleBadges: ["caster", "maker", "brand"], avatarInitial: "K", avatarHue: 150, imageUrl: "/avatars/kabir-raven.webp" },
 ];
 
 // license + rate baked in here; stats.{castings,fans,earnings} are placeholders

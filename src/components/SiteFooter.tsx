@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { CHAPLIN_VERSION_LABEL } from "@/lib/version";
 
 export default function SiteFooter() {
   const pathname = usePathname();
@@ -20,7 +21,7 @@ export default function SiteFooter() {
           sizes="112px"
           className="h-8 w-auto max-w-28 object-contain"
         />
-        <span>A casting marketplace for AI actors. Every actor, every audience.</span>
+        <span>A casting marketplace for AI actors. Every actor, every audience. · {CHAPLIN_VERSION_LABEL}</span>
       </div>
     </footer>
   );

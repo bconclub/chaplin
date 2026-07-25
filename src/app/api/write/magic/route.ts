@@ -115,6 +115,9 @@ function fallbackDraft(input: {
   const leadName = lead?.name ?? "The Lead";
   const foilName = foil?.name ?? leadName;
   const storyEngine = lead?.productionBible.story;
+  const performance = lead?.productionBible.performance;
+  const actorWorld = lead?.productionBible.cinematography.worldTexture || "the actor's established story world";
+  const leadLine = lead?.tagline || "Watch what changes when the choice becomes real.";
 
   if (input.format !== "episode") {
     const creatorShort = input.format === "spark" || input.format === "punch";
@@ -128,59 +131,59 @@ function fallbackDraft(input: {
       castIds: cast.map((character) => character.id),
       scenes: [
         {
-          setting: "EXT. CITY STREET - DAY",
+          setting: actorWorld,
           objective: `Hook attention in the first two seconds: ${storyEngine?.hookPattern ?? "show a visible problem or surprise"}.`,
-          action: `${leadName} steps directly into frame as the ordinary world freezes behind them. A single prop reveals the problem without explanation.`,
-          lines: [{ characterId: leadId, text: "Wait. You are still doing it the hard way?" }],
+          action: `${leadName} begins in their established resting behavior, registers the specific problem in ${subject.toLowerCase()}, and makes one readable choice through ${performance?.signatureGesture ?? "a restrained physical gesture"}.`,
+          lines: [{ characterId: leadId, text: leadLine }],
         },
         {
-          setting: "INT. PRODUCT WORLD - CONTINUOUS",
+          setting: `${actorWorld} — CONTINUOUS`,
           objective: "Demonstrate one concrete benefit rather than listing features.",
-          action: `${leadName} makes one clean gesture. The environment transforms to show the before-and-after result in the same composition.`,
-          lines: [{ characterId: leadId, text: "One move. Less friction. More of what you actually came for." }],
+          action: `${leadName} performs one concrete before-and-after action tied directly to ${subject.toLowerCase()}; the result remains visible in the same composition.`,
+          lines: [{ characterId: leadId, text: "One choice. One visible result." }],
         },
         {
-          setting: "INT. PROOF FRAME - CONTINUOUS",
+          setting: `${actorWorld} — PROOF FRAME`,
           objective: "Make the promise believable through a visual result or reaction.",
-          action: `${foilName} tests the result, looks back at ${leadName}, and gives the smallest possible impressed reaction.`,
-          lines: foilId ? [{ characterId: foilId, text: "That was the whole process?" }] : [],
+          action: `${foilName} tests the visible result while ${leadName} holds the response described by ${performance?.underPressure ?? "their established pressure behavior"}.`,
+          lines: foilId ? [{ characterId: foilId, text: "That changed the outcome." }] : [],
         },
         {
-          setting: "EXT. CLEAN END FRAME - DAY",
+          setting: `${actorWorld} — CLEAN END FRAME`,
           objective: `Pay off the actor's pattern (${storyEngine?.payoffPattern ?? "turn the demonstrated proof into a decision"}) and land a clear next action.`,
-          action: `${leadName} faces camera. Product, result, and brand space resolve into one uncluttered final composition.`,
-          lines: [{ characterId: leadId, text: creatorShort ? "You wanted proof. Keep watching." : "Make the next move. Start today." }],
+          action: `${leadName} completes the choice, holds the visible result, and leaves one uncluttered area for the final message without changing the actor's identity or world.`,
+          lines: [{ characterId: leadId, text: creatorShort ? leadLine : "The proof is already in the frame." }],
         },
       ].filter((scene) => scene.lines.length > 0).slice(0, spark ? 1 : 4),
     };
   }
 
   return {
-    title: input.title || `${leadName} and the Last Open Door`,
+    title: input.title || `${leadName}: The Choice`,
     logline: input.logline || `${leadName} pursues ${subject.toLowerCase()}, but ${foilName} forces a choice that changes what winning means.`,
     creativeDirection: `A compact three-act short built from the actor's persistent story engine. Hook: ${storyEngine?.hookPattern ?? "open after the obvious plan fails"}. Escalation: ${storyEngine?.escalationPattern ?? "make every gain create a cost"}. Cliffhanger: ${storyEngine?.cliffhangerPattern ?? "reverse the power relationship"}. Payoff: ${storyEngine?.payoffPattern ?? "resolve through a character choice"}. Every scene changes the situation; no biography as dialogue.`,
     castIds: cast.map((character) => character.id),
     scenes: [
       {
-        setting: "INT. ABANDONED CINEMA LOBBY - NIGHT",
-          objective: `Establish the external want (${lead?.productionBible.dramatic.externalWant ?? "a concrete urgent goal"}) through visible behavior and show why it must happen tonight.`,
-        action: `${leadName} crosses the dark lobby, finds the projector key already missing, and sees fresh rainwater leading toward the auditorium.`,
-        lines: [{ characterId: leadId, text: "Someone got here first. Good. I hate waiting for a story to begin." }],
+        setting: `${actorWorld} — OPENING`,
+        objective: `Establish the external want (${lead?.productionBible.dramatic.externalWant ?? "a concrete urgent goal"}) through visible behavior inside the actor's own world.`,
+        action: `${leadName} enters in their established movement style, reads the consequence of ${subject.toLowerCase()}, and begins ${performance?.signatureGesture ?? "one restrained signature action"} without explaining it.`,
+        lines: [{ characterId: leadId, text: leadLine }],
       },
       {
-        setting: "INT. CINEMA AUDITORIUM - MOMENTS LATER",
-          objective: `Escalate through the actor's contradiction: ${lead?.productionBible.dramatic.contradiction ?? "the plan conflicts with a private value"}. End by changing who holds power.`,
-        action: `${foilName} stands in the projector beam holding the key. The exit shutters slam down, turning negotiation into a deadline.`,
+        setting: `${actorWorld} — PRESSURE TURN`,
+        objective: `Escalate through the actor's contradiction: ${lead?.productionBible.dramatic.contradiction ?? "the plan conflicts with a private value"}. Change who holds power through an observable action.`,
+        action: `${foilName} makes the pressure concrete. ${leadName} responds through ${performance?.underPressure ?? "a visible break from their resting behavior"} and chooses what matters more.`,
         lines: [
-          { characterId: foilId, text: "You can keep the key, or you can get everyone out. Not both." },
-          { characterId: leadId, text: "Then I was chasing the wrong thing." },
+          { characterId: foilId, text: "You cannot keep both outcomes." },
+          { characterId: leadId, text: "Then I choose the one that changes us." },
         ],
       },
       {
-        setting: "EXT. CINEMA ROOFTOP - PRE-DAWN",
-          objective: `Pay off the central choice through ${storyEngine?.payoffPattern ?? "an irreversible visual action"}, not an explanatory speech.`,
-        action: `${leadName} uses the key to release the shutters, then lets it fall into the flooded street below. First light reaches the rooftop as the others emerge.`,
-        lines: [{ characterId: leadId, text: "Doors are useful. Knowing when to leave them open is rarer." }],
+        setting: `${actorWorld} — AFTERMATH`,
+        objective: `Pay off the central choice through ${storyEngine?.payoffPattern ?? "an irreversible visual action"}, not an explanatory speech.`,
+        action: `${leadName} completes one irreversible action tied to ${subject.toLowerCase()}, lets the consequence register, and returns to a changed version of the opening posture.`,
+        lines: [{ characterId: leadId, text: "Now the choice has a consequence." }],
       },
     ],
   };

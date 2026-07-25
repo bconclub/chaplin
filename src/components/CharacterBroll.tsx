@@ -308,7 +308,15 @@ export default function CharacterBroll({ character }: { character: Character }) 
         </div>
       )}
       {videoSource && (
-        <video src={videoSource} autoPlay muted loop playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover" />
+        <video
+          src={videoSource}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 h-full w-full bg-black object-contain"
+        />
       )}
       {dialogueSource && <audio ref={dialogueRef} src={dialogueSource} preload="metadata" onEnded={() => handleTrackEnded("voice")} data-broll-track="voice" />}
       {sfxSource && <audio ref={sfxRef} src={sfxSource} preload="metadata" onEnded={() => handleTrackEnded("sfx")} data-broll-track="sfx" />}

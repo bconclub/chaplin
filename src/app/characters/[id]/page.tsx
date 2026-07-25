@@ -140,7 +140,7 @@ export default function CharacterProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10 w-full min-w-0 overflow-x-clip">
+    <div className="mx-auto w-full max-w-6xl min-w-0 overflow-x-clip px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href="/characters"
         className="inline-flex items-center gap-1.5 pl-2.5 pr-4 py-2 rounded-full poster-card text-sm font-semibold hover:text-accent transition-colors mb-3"
@@ -169,10 +169,10 @@ export default function CharacterProfilePage() {
 
       {/* Casting card header */}
       {character.bannerUrl ? (
-        <div className="poster-card rounded-md overflow-hidden">
-          <div className="relative w-full aspect-[4/3] sm:aspect-[16/7] lg:aspect-[2/1]">
+        <div className="poster-card overflow-hidden rounded-xl">
+          <div className="relative aspect-video w-full bg-black">
             <CharacterBroll character={character} />
-            <div className="absolute inset-0 flex max-w-[78%] flex-col justify-end gap-1 p-4 pb-3 sm:max-w-[52%] sm:gap-2 sm:p-8">
+            <div className="absolute inset-0 flex max-w-[78%] flex-col justify-end gap-1 p-4 pb-4 sm:max-w-[52%] sm:gap-2 sm:p-8 lg:p-10">
               <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                 <h1 className="reel-title text-xl leading-none text-ink sm:text-4xl sm:leading-tight">
                   {character.name}

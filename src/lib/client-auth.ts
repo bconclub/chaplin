@@ -5,6 +5,7 @@ export type ClientAuthIdentity = {
   email: string;
   name: string;
   role: "creator" | "brand" | "admin";
+  imageUrl: string;
 };
 
 let activeRequest: Promise<ClientAuthIdentity | null> | null = null;

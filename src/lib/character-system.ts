@@ -26,6 +26,14 @@ export type CharacterSheetPromptRequest = {
   wardrobeOverride?: string;
 };
 
+export const CHARACTER_SHEET_MASTER_TEMPLATE = [
+  "Create one clean 16:9 character consistency contact sheet from the supplied identity seed.",
+  "Use a neutral low-detail studio background and one soft, physically plausible lighting setup across every panel.",
+  "Lay out twelve distinct panels: extreme close-up face, close-up face, medium close-up, left three-quarter face, right three-quarter face, left profile, right profile, full-body front, full-body back, relaxed standing pose, seated pose, and one character-specific action pose.",
+  "Repeat the exact same fictional actor in every panel. Preserve facial geometry, apparent age, skin tone, hair construction, body proportions, wardrobe materials, palette, and signature recognition details.",
+  "This is a visual continuity seed, not a story scene. No additional people, environment changes, labels, text, logos, borders, or watermark.",
+].join(" ");
+
 const SHEET_VIEWS: CharacterSheetView[] = [
   { id: "front", label: "Front", framing: "eye-level chest-up portrait", promptDelta: "face square to camera, shoulders level, neutral lens relationship" },
   { id: "left-three-quarter", label: "Left three-quarter", framing: "eye-level chest-up portrait", promptDelta: "body ten degrees left, face turned back to a left three-quarter view" },
@@ -146,6 +154,28 @@ export function composeCharacterSheetPrompt(
     `LOCKS: ${locks.join("; ")}.`,
     "EXCLUDE: identity drift, beautification, age caricature, costume redesign, extra person, distorted anatomy, text, labels, collage, logo, UI, watermark.",
   ].join("\n");
+}
+
+export function composeCharacterStyleSheetPrompt(
+  seed: CharacterSystemSeed,
+  bible: CharacterProductionBible,
+  options: {
+    identityMasterPrompt?: string;
+    template?: string;
+  } = {},
+) {
+  const locks = (bible.visual.recognitionLocks ?? bible.visual.continuityRules).slice(0, 4);
+  const prompt = [
+    options.template?.trim() || CHARACTER_SHEET_MASTER_TEMPLATE,
+    `ACTOR: ${seed.name}.`,
+    options.identityMasterPrompt?.trim()
+      ? `MASTER IDENTITY DIRECTION: ${options.identityMasterPrompt.trim()}`
+      : `MASTER IDENTITY DIRECTION: ${bible.visual.faceAnchors.join("; ")}; ${bible.visual.hair}; ${bible.visual.silhouette}; ${bible.visual.wardrobe}.`,
+    `FOUR RECOGNITION LOCKS: ${locks.join("; ")}.`,
+    `MEDIUM AND FINISH: ${bible.visual.medium || "cinematic live action"}; palette ${bible.visual.palette.join(", ")}; preserve the exact wardrobe materials and surface finish.`,
+    "Every crop and pose must remain recognizably the same actor. Keep expression neutral except for the action pose, which may use the actor's established pressure behavior.",
+  ].filter(Boolean).join("\n\n");
+  return prompt.slice(0, 5900);
 }
 
 export function composeCharacterInteractionPrompt(

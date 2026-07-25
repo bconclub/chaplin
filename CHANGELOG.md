@@ -3,6 +3,22 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.5 - 2026-07-26 - Versioned production editor
+
+- Established commit-ordinal Chaplin versions with the initial scaffold at
+  `v0.0.0`, one increment per committed change, and base-100 patch/minor rollover.
+- Backfilled the complete commit-to-version ledger in `docs/VERSION_HISTORY.md`.
+- Added a visible version badge, `/api/build-info`, synchronized web/native/Expo
+  versions, a tracked pre-commit version hook, and a GitHub history verification.
+- Rebalanced the production editor around a wider desktop Asset Canvas and added
+  an active mobile Asset Canvas with live image, video, audio, and recent outputs.
+- Replaced shared canned scene prompts with actor-native scene construction and
+  blocked repeated motion prompts using exact-frame and persisted-output history.
+- Added end-to-end generation timing, estimated remaining time, image polling, and
+  richer media-aware generation logs.
+- Preserved the existing provider, authentication, feed, character, and production
+  work while making the current release directly identifiable in the UI.
+
 ## 2026-07-25 - Creative engineering Experiment Ground
 
 - Split Super Admin tooling into Production Controls and a separate Experiment

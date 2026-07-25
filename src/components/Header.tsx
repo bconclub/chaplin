@@ -7,6 +7,7 @@ import { useChaplinStore } from "@/lib/store";
 import type { AppRole } from "@/lib/types";
 import Avatar from "@/components/Avatar";
 import HydrateStore from "@/components/HydrateStore";
+import { CHAPLIN_VERSION_LABEL } from "@/lib/version";
 import {
   clearClientAuthIdentity,
   getClientAuthIdentity,
@@ -137,6 +138,13 @@ export default function Header() {
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <Link
+            href="/api/build-info"
+            title={`Chaplin ${CHAPLIN_VERSION_LABEL}`}
+            className="rounded-full border border-line/80 px-2 py-1 font-mono text-[8px] font-semibold tracking-wide text-grey transition-colors hover:border-accent hover:text-accent sm:text-[9px]"
+          >
+            {CHAPLIN_VERSION_LABEL}
+          </Link>
           <Link href={contextLink.href} className={`hidden sm:block text-[10px] uppercase tracking-wider text-grey hover:text-accent transition-all duration-200 ${compact ? "pointer-events-none max-w-0 -translate-y-1 overflow-hidden opacity-0" : "max-w-28 translate-y-0 opacity-100"}`}>
             {contextLink.label}
           </Link>

@@ -1,38 +1,154 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Character } from "@/lib/types";
+import { ARCHETYPE_HUE, ARCHETYPE_LABEL, hsl } from "@/lib/format";
 import { useChaplinStore } from "@/lib/store";
-import HeroGridCard, { type HomepageBroll } from "@/components/HeroGridCard";
+import type { HomepageBroll } from "@/components/HeroGridCard";
 
 const CASTING_FORMATS = ["Reels", "Ads", "Micro Drama", "UGC"];
+const FEATURED_LIMIT = 5;
+
+function artworkFor(character: Character) {
+  return character.imageUrl ?? character.bannerUrl ?? character.galleryUrls?.[0] ?? null;
+}
+
+function featureScore(character: Character, broll?: HomepageBroll) {
+  return (broll?.videoUrl || character.videoUrl ? 1_000_000 : 0)
+    + (artworkFor(character) ? 100_000 : 0)
+    + character.stats.castings * 100
+    + character.stats.fans;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function FeaturedActorCard({
+  character,
+  broll,
+  active,
+  onActivate,
+  onPlaybackComplete,
+}: {
+  character: Character;
+  broll?: HomepageBroll;
+  active: boolean;
+  onActivate: () => void;
+  onPlaybackComplete: () => void;
+}) {
+  const pressedWhileActive = useRef(false);
+  const artwork = artworkFor(character);
+  const video = broll?.videoUrl ?? character.videoUrl ?? null;
+  const hue = ARCHETYPE_HUE[character.archetype];
+
+  return (
+    <article
+      className={`group relative h-[22rem] min-w-[72vw] overflow-hidden rounded-xl border bg-black/30 transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[17rem] lg:h-full lg:min-w-0 ${
+        active
+          ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,0.45),0_18px_60px_rgba(0,0,0,0.45)]"
+          : "border-line hover:-translate-y-1 hover:border-white/30"
+      }`}
+      data-featured-actor={character.id}
+      data-featured-active={active ? "true" : "false"}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") onActivate();
+      }}
+    >
+      <Link
+        href={`/characters/${character.id}`}
+        className="absolute inset-0 block"
+        onFocus={onActivate}
+        onPointerDown={() => {
+          pressedWhileActive.current = active;
+        }}
+        onClick={(event) => {
+          if (!pressedWhileActive.current) {
+            event.preventDefault();
+            onActivate();
+          }
+        }}
+        aria-label={`${active ? "Open" : "Preview"} ${character.name}`}
+      >
+        {artwork ? (
+          <Image
+            src={artwork}
+            alt={character.name}
+            fill
+            priority={active}
+            quality={90}
+            sizes="(max-width: 640px) 72vw, (max-width: 1024px) 17rem, 18vw"
+            className="object-cover transition-transform duration-700 group-hover:scale-[1.025]"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(150deg, ${hsl(hue, 52, 24)}, ${hsl(hue, 45, 7)})` }}
+          />
+        )}
+        {active && video && (
+          <video
+            key={video}
+            src={video}
+            autoPlay
+            muted
+            playsInline
+            preload="metadata"
+            onEnded={onPlaybackComplete}
+            className="absolute inset-0 h-full w-full object-cover motion-reduce:hidden"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/5 to-black/15" />
+        <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.15em] text-white backdrop-blur-md">
+          {ARCHETYPE_LABEL[character.archetype]}
+        </span>
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <p className="marquee-title text-base uppercase leading-none text-white">{character.name}</p>
+          <p className="mt-1 truncate text-[10px] text-white/65">{character.tagline}</p>
+          {active && (
+            <div className="mt-3 h-0.5 overflow-hidden rounded-full bg-white/20">
+              <span className="block h-full w-full origin-left animate-[featured-progress_5s_linear] bg-accent motion-reduce:animate-none" />
+            </div>
+          )}
+        </div>
+      </Link>
+    </article>
+  );
+}
 
 export default function InfiniteCharacterGallery() {
   const characters = useChaplinStore((state) => state.characters);
   const [castingFormatIndex, setCastingFormatIndex] = useState(0);
-  const [activeGridId, setActiveGridId] = useState<string | null>(null);
-  const [automaticGridId, setAutomaticGridId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [brolls, setBrolls] = useState<HomepageBroll[]>([]);
 
   const brollByCharacter = useMemo(
     () => new Map(brolls.map((broll) => [broll.characterId, broll])),
     [brolls],
   );
-  const readyBrollIds = useMemo(
-    () => characters
-      .filter((character) => brollByCharacter.get(character.id)?.videoUrl || character.videoUrl)
-      .map((character) => character.id),
+  const featured = useMemo(
+    () => [...characters]
+      .sort((left, right) =>
+        featureScore(right, brollByCharacter.get(right.id))
+        - featureScore(left, brollByCharacter.get(left.id)))
+      .slice(0, FEATURED_LIMIT),
     [brollByCharacter, characters],
   );
-  const validAutomaticGridId = automaticGridId && readyBrollIds.includes(automaticGridId)
-    ? automaticGridId
-    : null;
-  const currentFeaturedId = activeGridId ?? validAutomaticGridId ?? readyBrollIds[0] ?? characters[0]?.id;
+  const currentId = featured.some((character) => character.id === activeId)
+    ? activeId
+    : featured[0]?.id ?? null;
+  const totalPerformances = characters.reduce((total, character) => total + character.stats.castings, 0);
+  const creatorCount = new Set(characters.map((character) => character.makerId)).size;
+  const readyVideoCount = characters.filter((character) =>
+    brollByCharacter.get(character.id)?.videoUrl || character.videoUrl
+  ).length;
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setCastingFormatIndex((current) => (current + 1) % CASTING_FORMATS.length);
-    }, 2200);
+    }, 2400);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -51,7 +167,6 @@ export default function InfiniteCharacterGallery() {
           if (!cancelled) setBrolls([]);
         });
     }
-
     loadBrolls();
     window.addEventListener("chaplin:media-updated", loadBrolls);
     return () => {
@@ -60,86 +175,77 @@ export default function InfiniteCharacterGallery() {
     };
   }, []);
 
-
-  function advanceBroll(completedCharacterId: string) {
-    if (readyBrollIds.length < 2) return;
-    const nextIds = readyBrollIds.filter((characterId) => characterId !== completedCharacterId);
-    const nextId = nextIds[Math.floor(Math.random() * nextIds.length)];
-    setActiveGridId(null);
-    setAutomaticGridId(nextId);
+  function playNext() {
+    if (!currentId || featured.length < 2) return;
+    const currentIndex = featured.findIndex((character) => character.id === currentId);
+    setActiveId(featured[(currentIndex + 1) % featured.length].id);
   }
 
   if (!characters.length) return null;
-  const totalBaseTiles = characters.length + 1;
-  const fillerCount = (8 - (totalBaseTiles % 8)) % 8;
-  const repeatedCharacters = Array.from(
-    { length: fillerCount },
-    (_, index) => characters[index % characters.length],
-  );
-
 
   return (
-    <main className="relative flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden" data-home-gallery>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(242,78,112,0.12),transparent_28%),radial-gradient(circle_at_78%_16%,rgba(7,210,190,0.14),transparent_27%)]" />
-      <section className="relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col px-3 py-2 sm:px-4 sm:py-3 lg:px-6" aria-label="AI actor gallery">
-        <div className="mx-auto mb-2 max-w-3xl shrink-0 text-center sm:mb-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-accent">The Chaplin cast</p>
-          <h1 className="marquee-title mt-1 text-[clamp(1.55rem,4.6vh,3.5rem)] uppercase leading-[0.92] text-ink">
-            The World of AI Actors
+    <main className="relative min-h-[calc(100dvh-5rem)] overflow-hidden pb-28" data-home-featured>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_28%,rgba(242,78,112,0.13),transparent_30%),radial-gradient(circle_at_76%_24%,rgba(7,210,190,0.12),transparent_34%)]" />
+      <section className="relative mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-[92rem] items-center gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(19rem,0.72fr)_minmax(0,1.78fr)] lg:gap-10 lg:px-10 lg:py-10" aria-label="Featured AI actors">
+        <div className="max-w-lg">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-accent">The Chaplin cast</p>
+          <h1 className="reel-title mt-5 text-[clamp(3.4rem,6.5vw,6.8rem)] leading-[0.82] tracking-[-0.055em] text-ink">
+            The world of
+            <span className="mt-2 block text-accent">AI actors.</span>
           </h1>
-          <p className="mt-1 text-xs leading-5 text-grey sm:text-base" aria-live="polite">
-            Ready to cast AI actors for{" "}
+          <p className="mt-6 max-w-md text-base leading-7 text-grey">
+            Original actors with locked faces, voices, and worlds—ready for your next{" "}
             <span
               key={CASTING_FORMATS[castingFormatIndex]}
-              className="font-semibold text-accent motion-safe:animate-[chaplin-format-enter_400ms_ease-out]"
+              className="font-semibold text-accent-secondary motion-safe:animate-[chaplin-format-enter_400ms_ease-out]"
             >
               {CASTING_FORMATS[castingFormatIndex]}.
             </span>
           </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link href="/characters" className="rounded-md bg-accent px-5 py-3 text-sm font-bold text-paper shadow-[0_12px_32px_rgba(242,78,112,0.2)] transition-transform hover:-translate-y-0.5">
+              Explore actors →
+            </Link>
+            <Link href="/feed" className="rounded-md border border-line px-5 py-3 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent">
+              Open feed
+            </Link>
+          </div>
+          <dl className="mt-9 grid max-w-md grid-cols-3 divide-x divide-line border-t border-line pt-5">
+            {[
+              [characters.length, "AI actors"],
+              [creatorCount, "Creators"],
+              [readyVideoCount || totalPerformances, readyVideoCount ? "Ready videos" : "Performances"],
+            ].map(([value, label]) => (
+              <div key={label} className="px-4 first:pl-0">
+                <dt className="text-xl font-semibold text-accent">{formatCount(Number(value))}</dt>
+                <dd className="mt-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-grey">{label}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-flow-dense grid-cols-4 auto-rows-[minmax(0,1fr)] gap-1.5 sm:grid-cols-8 sm:gap-2" data-home-gallery-grid>
-          {characters.map((character) => (
-            <HeroGridCard
-              key={character.id}
-              character={character}
-              fillCell
-              active={character.id === currentFeaturedId}
-              onActivate={() => setActiveGridId(character.id)}
-              broll={brollByCharacter.get(character.id)}
-              onPlaybackComplete={advanceBroll}
-            />
-          ))}
-          {repeatedCharacters.map((character, index) => (
-            <HeroGridCard
-              key={`repeat-${character.id}-${index}`}
-              character={character}
-              active={false}
-              onActivate={() => setActiveGridId(character.id)}
-              broll={brollByCharacter.get(character.id)}
-              fillCell
-            />
-          ))}
-          <Link
-            href="/characters/new"
-            className="flex h-full min-h-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line p-1.5 text-center text-grey transition-colors hover:border-accent hover:text-accent"
-          >
-            <span className="text-lg leading-none">+</span>
-            <span className="text-[8px] font-semibold leading-tight sm:text-[10px]">Create your AI actor</span>
-          </Link>
-        </div>
-
-        <div className="mx-auto mt-2 flex w-full shrink-0 items-center justify-between gap-3">
-          <p className="text-[9px] text-grey sm:text-[10px]">
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-grey">Featured this week</p>
+            <Link href="/characters" className="text-[10px] font-semibold text-grey hover:text-accent">View all →</Link>
+          </div>
+          <div className="chaplin-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 lg:grid lg:h-[31rem] lg:grid-cols-5 lg:overflow-visible lg:pb-0">
+            {featured.map((character) => (
+              <div key={character.id} className="snap-start">
+                <FeaturedActorCard
+                  character={character}
+                  broll={brollByCharacter.get(character.id)}
+                  active={character.id === currentId}
+                  onActivate={() => setActiveId(character.id)}
+                  onPlaybackComplete={playNext}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[9px] text-grey">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent-secondary shadow-[0_0_10px_var(--accent-secondary)]" />
-            {characters.length} characters ready to discover
+            Select a featured actor to preview. Select again to open the profile.
           </p>
-          <Link
-            href="/feed"
-            className="rounded-full border border-line bg-paper/65 px-3 py-1.5 text-[9px] font-semibold text-ink backdrop-blur-md transition-colors hover:border-accent hover:text-accent sm:text-[10px]"
-          >
-            Open Feed →
-          </Link>
         </div>
       </section>
     </main>

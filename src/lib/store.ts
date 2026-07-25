@@ -65,7 +65,7 @@ interface ChaplinState extends ChaplinWorld {
   hydrated: boolean;
   setCurrentUser: (userId: string) => void;
   switchDemoRole: (role: AppRole) => void;
-  syncAuthenticatedUser: (profile: { id: string; name: string; role: "creator" | "brand" | "admin" }) => void;
+  syncAuthenticatedUser: (profile: { id: string; name: string; role: "creator" | "brand" | "admin"; imageUrl: string }) => void;
   addCharacter: (input: NewCharacterInput) => Character;
   removeCharacter: (characterId: string) => void;
   addStory: (input: NewStoryInput) => Story;
@@ -145,7 +145,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
         roleBadges,
         avatarInitial: profile.name.slice(0, 1).toUpperCase(),
         avatarHue: existing?.avatarHue ?? (profile.role === "brand" ? 28 : profile.role === "admin" ? 165 : 202),
-        imageUrl: existing?.imageUrl,
+        imageUrl: profile.imageUrl || existing?.imageUrl,
       };
       return {
         users: existing ? state.users.map((user) => user.id === profile.id ? authenticatedUser : user) : [authenticatedUser, ...state.users],
@@ -361,6 +361,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
               ...current,
               ...(savedUsers.find((savedUser: { id?: string }) => savedUser.id === current.id) ?? {}),
               roleBadges: current.roleBadges,
+              imageUrl: current.imageUrl,
             })),
             ...savedUsers.filter(
               (savedUser: { id?: string }) => !currentUsers.some((current) => current.id === savedUser.id)

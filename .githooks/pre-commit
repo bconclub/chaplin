@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+node scripts/version.mjs prepare-commit
+git add version.json package.json package-lock.json mobile/package.json mobile/package-lock.json mobile/app.json docs/VERSION_HISTORY.md

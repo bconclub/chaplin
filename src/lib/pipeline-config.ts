@@ -166,6 +166,7 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
         outputFormat: "png",
         watermark: false,
         sequentialImageGeneration: "disabled",
+        characterSheetTemplate: "Create one clean 16:9 character consistency contact sheet from the supplied identity seed. Use a neutral low-detail studio background and one soft, physically plausible lighting setup across every panel. Lay out twelve distinct panels: extreme close-up face, close-up face, medium close-up, left three-quarter face, right three-quarter face, left profile, right profile, full-body front, full-body back, relaxed standing pose, seated pose, and one character-specific action pose. Repeat the exact same fictional actor in every panel. Preserve facial geometry, apparent age, skin tone, hair construction, body proportions, wardrobe materials, palette, and signature recognition details. This is a visual continuity seed, not a story scene. No additional people, environment changes, labels, text, logos, borders, or watermark.",
         negativePrompt: "multiple people, duplicate face, celebrity likeness, generic pose, plastic skin, distorted anatomy, extra fingers, text, logo, UI, border, watermark, cartoon, anime, illustration, digital painting, concept art, 3D render, CGI character, game art, doll-like face, wax figure, airbrushed skin, synthetic skin",
       },
     },

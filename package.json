@@ -1,6 +1,6 @@
 {
   "name": "chaplin",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,7 +16,12 @@
     "verify:mobile": "node scripts/verify-mobile.mjs",
     "test:character-card": "node --import tsx --test src/lib/character-card.test.ts",
     "test:video-types": "node --import tsx --test src/lib/video-brief.test.ts src/lib/production-prompting.test.ts",
-    "migrate:agni-maya": "tsx scripts/migrate-agni-maya.ts"
+    "migrate:agni-maya": "tsx scripts/migrate-agni-maya.ts",
+    "version:current": "node scripts/version.mjs current",
+    "version:prepare": "node scripts/version.mjs prepare-commit",
+    "version:check": "node scripts/version.mjs check",
+    "version:history": "node scripts/version.mjs history",
+    "version:install-hooks": "node scripts/install-version-hook.mjs"
   },
   "dependencies": {
     "@elevenlabs/client": "^1.15.2",

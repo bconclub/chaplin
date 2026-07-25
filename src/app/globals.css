@@ -919,6 +919,15 @@ button:hover .frost-chip,
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes featured-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @keyframes pipeline-water-flow {
   from { background-position: 200% 50%; }
   to { background-position: 0% 50%; }
