@@ -92,3 +92,30 @@ test("trending tags are counted from real post bodies", () => {
   const posts = [post({ body: "#CyberNoir #AIActors" }), post({ body: "#CyberNoir again" })];
   assert.deepEqual(trendingTags(posts, 2), [{ tag: "#CyberNoir", count: 2 }, { tag: "#AIActors", count: 1 }]);
 });
+
+const upcomingPost = (over: Partial<FeedPost>): FeedPost => ({
+  id: "p", body: "", mediaKind: null, mediaUrl: null,
+  createdAt: new Date(0).toISOString(),
+  author: { id: "u", name: "n", handle: "@n", avatarInitial: "N", avatarHue: 1, imageUrl: null },
+  sharedPostId: null, seriesId: null, episodeId: null,
+  replyCount: 0, reactionCount: 0, shareCount: 0, viewerHasLiked: false,
+  replies: [], sharedPost: null,
+  ...over,
+}) as FeedPost;
+
+test("Upcoming lists announced shows and drops the ones already delivered", () => {
+  const posts = [
+    upcomingPost({ id: "a", body: "Script locked: Curfew Tax", createdAt: "2026-07-20T00:00:00Z" }),
+    upcomingPost({ id: "b", body: "Script locked: Ghost in the Machine", createdAt: "2026-07-19T00:00:00Z" }),
+    // Curfew Tax has shipped its cut, so it is no longer upcoming.
+    upcomingPost({ id: "c", body: "Script locked: Curfew Tax", mediaKind: "video", mediaUrl: "u", createdAt: "2026-07-21T00:00:00Z" }),
+    upcomingPost({ id: "d", body: "A new scene with Sprocket is taking shape." }),
+  ];
+  const upcoming = applyFeedTab(posts, "upcoming" as FeedTabId, "viewer");
+  assert.deepEqual(upcoming.map((entry) => entry.id), ["b"]);
+});
+
+test("Upcoming is empty when nothing has been announced", () => {
+  const posts = [upcomingPost({ id: "x", body: "A new scene with Sprocket is taking shape." })];
+  assert.deepEqual(applyFeedTab(posts, "upcoming" as FeedTabId, "viewer"), []);
+});

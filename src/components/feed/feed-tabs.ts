@@ -1,9 +1,10 @@
 import type { FeedPost } from "@/lib/feed-types";
 
-export type FeedTabId = "for-you" | "following" | "trending" | "new" | "microdramas" | "shorts" | "behind";
+export type FeedTabId = "for-you" | "upcoming" | "following" | "trending" | "new" | "microdramas" | "shorts" | "behind";
 
 export const FEED_TABS: Array<{ id: FeedTabId; label: string }> = [
   { id: "for-you", label: "For you" },
+  { id: "upcoming", label: "Upcoming" },
   { id: "following", label: "Following" },
   { id: "trending", label: "Trending" },
   { id: "new", label: "New" },
@@ -19,6 +20,18 @@ function engagement(post: FeedPost) {
 /** A post that announces a locked production, e.g. "Script locked: Curfew Tax". */
 function isProduction(post: FeedPost) {
   return /^script locked:/i.test(post.body) || Boolean(post.seriesId) || Boolean(post.episodeId);
+}
+
+/**
+ * Identifies the production a post belongs to, so an announcement and its
+ * delivered cut can be matched. Series and episode ids are authoritative; a
+ * locked-script post falls back to its title.
+ */
+function productionKey(post: FeedPost) {
+  if (post.episodeId) return `episode:${post.episodeId}`;
+  if (post.seriesId) return `series:${post.seriesId}`;
+  const title = post.body.match(/^script locked:\s*(.+)$/im)?.[1]?.trim();
+  return title ? `title:${title.toLowerCase()}` : "";
 }
 
 /**
@@ -40,6 +53,23 @@ export function applyFeedTab(posts: FeedPost[], tab: FeedTabId, viewerId: string
       );
       return posts.filter((post) => likedAuthors.has(post.author.id) && post.author.id !== viewerId);
     }
+    case "upcoming": {
+      /*
+        A show that has been announced but has not delivered its cut yet. A
+        locked script is the announcement; the finished video is the delivery,
+        so a production with a video already in the feed is no longer upcoming.
+        Soonest announcement first, because that is what ships next.
+      */
+      const delivered = new Set(
+        posts
+          .filter((post) => post.mediaKind === "video")
+          .map((post) => productionKey(post))
+          .filter(Boolean),
+      );
+      return posts
+        .filter((post) => isProduction(post) && !delivered.has(productionKey(post)))
+        .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+    }
     case "microdramas":
       return posts.filter(isProduction);
     case "shorts":
@@ -54,6 +84,7 @@ export function applyFeedTab(posts: FeedPost[], tab: FeedTabId, viewerId: string
 
 export const EMPTY_TAB_COPY: Record<FeedTabId, string> = {
   "for-you": "Nothing has been posted here yet.",
+  upcoming: "No shows are in production right now.",
   following: "Like a post and the creators you follow will collect here.",
   trending: "Nothing has picked up engagement yet.",
   new: "Nothing has been posted here yet.",
