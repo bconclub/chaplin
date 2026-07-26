@@ -1901,135 +1901,121 @@ export default function CharacterProductionStudio({
 
   return (
     <section data-production-workflow className="character-production-room">
+      {/*
+        One header strip, not a stacked panel.
+
+        Studio Auto used to be a full-width card above the editor - label, chip,
+        a three-line paragraph, status, toggle and progress bar - with the Magic
+        Scene toolbar beneath it. Together they pushed the three studio columns
+        down and broke the canvas, and the explanation was read once and then
+        occupied space forever. Both controls now sit on one row: Magic Scene
+        takes the space it needs to be typed into, Studio Auto is a switch with
+        its explanation on hover, and stage progress is a hairline beneath.
+      */}
       <div
-        className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 py-2.5 backdrop-blur-xl sm:px-4 lg:ml-[12rem] lg:mr-[22rem] lg:border-x xl:ml-[13rem] xl:mr-[25rem]"
+        className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 backdrop-blur-xl sm:px-4 lg:ml-[12rem] lg:mr-[22rem] lg:border-x xl:ml-[13rem] xl:mr-[25rem]"
         data-studio-auto-dock
+        data-studio-auto={studioAutoMode ? autoStudioRun?.status ?? "on" : "off"}
       >
-        <div
-          className={`rounded-md border px-3 py-2.5 ${
-            autoStudioRun?.status === "failed"
-              ? "border-red-500/50 bg-red-500/[0.07]"
-              : studioAutoMode
-                ? "border-accent-secondary/45 bg-accent-secondary/[0.065]"
-                : "border-white/10 bg-white/[0.025]"
-          }`}
-          data-studio-auto={studioAutoMode ? autoStudioRun?.status ?? "on" : "off"}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent-secondary">Studio Auto</span>
-                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-grey">
-                  Skip routine approvals
-                </span>
-              </div>
-              <p className="mt-1 text-[9px] leading-4 text-grey">
-                Voice and dialogue stay ordered; sound, theme, and visuals run in parallel. Chaplin stops on an error or at final review. Provider charges and configured limits still apply.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <span className={`text-[9px] font-semibold ${
-                autoStudioRun?.status === "failed"
-                  ? "text-red-300"
-                  : autoStudioRun?.status === "complete"
-                    ? "text-emerald-300"
-                    : studioAutoMode
-                      ? "text-accent-secondary"
-                      : "text-grey"
-              }`}>
-                {autoStatusLabel}
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={studioAutoMode}
-                aria-label="Run Studio Auto without routine approval stops"
-                onClick={toggleStudioAuto}
-                disabled={Boolean(busy) && autoStudioRun?.status !== "failed"}
-                className={`relative h-7 w-12 rounded-full border transition-colors disabled:opacity-45 ${
-                  studioAutoMode
-                    ? "border-accent-secondary bg-accent-secondary/20"
-                    : "border-white/20 bg-black/30"
-                }`}
-              >
-                <span className={`absolute top-1 h-5 w-5 rounded-full transition-all ${
-                  studioAutoMode
-                    ? "left-6 bg-accent-secondary shadow-[0_0_14px_rgba(45,212,191,.65)]"
-                    : "left-1 bg-grey"
-                }`} />
-              </button>
-            </div>
-          </div>
-          {autoStudioRun && (
-            <div className="mt-2 grid grid-cols-6 gap-1" aria-label="Studio Auto stage progress">
-              {WORKFLOW_STEPS.map((step) => {
-                const state = autoStudioRun.steps[step.id]?.state ?? "queued";
-                return (
-                  <button
-                    key={step.id}
-                    type="button"
-                    onClick={() => jumpToStep(step.id)}
-                    title={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
-                    className={`h-1.5 rounded-full transition-colors ${
-                      state === "complete"
-                        ? "bg-emerald-400"
-                        : state === "failed"
-                          ? "bg-red-400"
-                          : state === "writing" || state === "generating"
-                            ? "animate-pulse bg-accent"
-                            : "bg-white/10"
-                    }`}
-                    aria-label={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div
-          className="mt-2 flex flex-col gap-2 lg:fixed lg:left-[19rem] lg:right-[17rem] lg:top-0 lg:z-[90] lg:mt-0 lg:h-16 lg:flex-row lg:items-center xl:left-[21rem] xl:right-[19rem]"
-          data-magic-scene-toolbar
-        >
-          <div className="flex shrink-0 items-center justify-between gap-3">
-            <span className="min-w-0">
-              <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">✦ Magic Scene</span>
+        <div className="flex h-14 items-center gap-3" data-magic-scene-toolbar>
+          <span className="hidden shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-accent sm:block">
+            ✦ Magic Scene
+          </span>
+          {magicSceneIndex > 0 && (
+            <span className="shrink-0 rounded-full border border-accent/35 px-2 py-0.5 text-[8px] font-semibold text-accent">
+              Take {magicSceneIndex + 1}
             </span>
-            {magicSceneIndex > 0 && (
-              <span className="rounded-full border border-accent/35 px-2 py-0.5 text-[8px] font-semibold text-accent">
-                Take {magicSceneIndex + 1}
-              </span>
-            )}
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <input
-              value={magicSceneBrief}
-              onChange={(event) => setMagicSceneBrief(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !busy) {
-                  event.preventDefault();
-                  applyMagicScene();
-                }
-              }}
-              maxLength={1600}
-              aria-label="Describe the scene or change for Magic Scene"
-              placeholder="Write the scene or change you want… e.g. Put her alone in a stalled metro as the lights return."
-              className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/25 px-3 py-2 text-[11px] text-ink outline-none placeholder:text-grey/65 focus:border-accent"
-            />
+          )}
+          <input
+            value={magicSceneBrief}
+            onChange={(event) => setMagicSceneBrief(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !busy) {
+                event.preventDefault();
+                applyMagicScene();
+              }
+            }}
+            maxLength={1600}
+            aria-label="Describe the scene or change for Magic Scene"
+            placeholder="Write the scene or change you want… e.g. Put her alone in a stalled metro as the lights return."
+            className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/25 px-3 py-2 text-[11px] text-ink outline-none placeholder:text-grey/65 focus:border-accent"
+          />
+          <button
+            type="button"
+            onClick={applyMagicScene}
+            disabled={Boolean(busy)}
+            data-action="magic-scene"
+            className="shrink-0 rounded-md bg-accent px-3.5 py-2 text-[10px] font-semibold text-paper hover:bg-accent-light disabled:opacity-40"
+          >
+            {busy === "magic-scene" && generationRun?.key === "magic-scene"
+              ? `Directing ${estimatedGenerationProgress(generationRun)}%`
+              : magicSceneBrief.trim()
+                ? "Direct scene"
+                : "Use Magic Scene"}
+          </button>
+
+          <span className="ml-1 hidden h-6 w-px shrink-0 bg-white/10 sm:block" />
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={`hidden text-[9px] font-semibold sm:block ${
+              autoStudioRun?.status === "failed"
+                ? "text-red-300"
+                : autoStudioRun?.status === "complete"
+                  ? "text-emerald-300"
+                  : studioAutoMode
+                    ? "text-accent-secondary"
+                    : "text-grey"
+            }`}>
+              {autoStatusLabel}
+            </span>
             <button
               type="button"
-              onClick={applyMagicScene}
-              disabled={Boolean(busy)}
-              data-action="magic-scene"
-              className="shrink-0 rounded-md bg-accent px-3.5 py-2 text-[10px] font-semibold text-paper hover:bg-accent-light disabled:opacity-40"
+              role="switch"
+              aria-checked={studioAutoMode}
+              aria-label="Studio Auto: run every missing stage without routine approval stops"
+              title="Voice and dialogue stay ordered; sound, theme, and visuals run in parallel. Chaplin stops on an error or at final review. Provider charges and configured limits still apply."
+              onClick={toggleStudioAuto}
+              disabled={Boolean(busy) && autoStudioRun?.status !== "failed"}
+              className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-45 ${
+                studioAutoMode
+                  ? "border-accent-secondary bg-accent-secondary/20"
+                  : "border-white/20 bg-black/30"
+              }`}
             >
-              {busy === "magic-scene" && generationRun?.key === "magic-scene"
-                ? `Directing ${estimatedGenerationProgress(generationRun)}%`
-                : magicSceneBrief.trim()
-                  ? "Direct scene"
-                  : "Use Magic Scene"}
+              <span className={`absolute top-[3px] h-4 w-4 rounded-full transition-all ${
+                studioAutoMode
+                  ? "left-[26px] bg-accent-secondary shadow-[0_0_14px_rgba(45,212,191,.65)]"
+                  : "left-1 bg-grey"
+              }`} />
             </button>
           </div>
         </div>
+
+        {autoStudioRun && (
+          <div className="grid grid-cols-6 gap-1 pb-1.5" aria-label="Studio Auto stage progress">
+            {WORKFLOW_STEPS.map((step) => {
+              const state = autoStudioRun.steps[step.id]?.state ?? "queued";
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => jumpToStep(step.id)}
+                  title={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
+                  className={`h-1 rounded-full transition-colors ${
+                    state === "complete"
+                      ? "bg-emerald-400"
+                      : state === "failed"
+                        ? "bg-red-400"
+                        : state === "writing" || state === "generating"
+                          ? "animate-pulse bg-accent"
+                          : "bg-white/10"
+                  }`}
+                  aria-label={`${step.label}: ${autoStudioRun.steps[step.id]?.detail ?? state}`}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="studio-production-grid lg:grid lg:grid-cols-[12rem_minmax(0,1fr)_22rem] xl:grid-cols-[13rem_minmax(0,1fr)_25rem]">
       <aside
