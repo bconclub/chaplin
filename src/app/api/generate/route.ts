@@ -42,6 +42,7 @@ import {
   prepareSeedanceAudioPrompt,
   seedanceSupportsAudioReference,
 } from "@/lib/seedance-audio";
+import { resolveAudioScene } from "@/lib/audio-scene";
 import {
   buildElevenMusicRequest,
   buildThemePlan,
@@ -1399,7 +1400,7 @@ export async function POST(request: Request) {
       // Applied after compaction so the audio brief is never trimmed away.
       const wantsSceneAudio = settingBoolean(videoConfig, "generateAudio", true);
       const composedPrompt = visualGenerationPrompt(videoConfig, silentPrompt, "video");
-      const prompt = prepareSeedanceAudioPrompt({
+      const basePrompt = prepareSeedanceAudioPrompt({
         prompt: composedPrompt,
         generateAudio: wantsSceneAudio,
         referenceAudioUrl: referenceAudio,
@@ -1411,6 +1412,38 @@ export async function POST(request: Request) {
         referenceSource: requestedReference ? "production-approved-frame" : canonicalReference?.source ?? null,
       };
       const durationSeconds = settingNumber(videoConfig, "durationSeconds", 5);
+      /*
+        An explicit audio plan opts a shot into the AUDIO SCENE grammar. Without
+        one the prompt is unchanged, so the silent-plate and ambient paths keep
+        behaving exactly as before. resolveAudioScene owns the Path A / Path B
+        decision: a model that cannot take the locked recording is never asked
+        to voice the actor, and such a shot is marked post-mix instead.
+      */
+      const audioPlan = input.audioPlan && typeof input.audioPlan === "object"
+        ? input.audioPlan as { ambience?: unknown; sfxMoments?: unknown }
+        : null;
+      const audioScene = audioPlan?.ambience
+        ? resolveAudioScene({
+            model: videoConfig.model,
+            generateAudio: wantsSceneAudio,
+            shotDurationSeconds: durationSeconds,
+            plan: {
+              dialogueLine: dialogueText || undefined,
+              ambience: String(audioPlan.ambience),
+              sfxMoments: Array.isArray(audioPlan.sfxMoments)
+                ? (audioPlan.sfxMoments as Array<{ description?: unknown; atSeconds?: unknown }>)
+                    .filter((moment) => moment && typeof moment.description === "string")
+                    .map((moment) => ({
+                      description: String(moment.description),
+                      atSeconds: Number(moment.atSeconds) || 0,
+                    }))
+                : [],
+            },
+            speakerName: requestCharacter?.name,
+            referenceAudioUrl: referenceAudio || undefined,
+          })
+        : null;
+      const prompt = audioScene?.block ? `${basePrompt}\n${audioScene.block}` : basePrompt;
       const consistencyWarnings = mediaPromptWarnings(requestCharacter, prompt, "video");
       jobId = await startGeneration({
         characterId,
@@ -1418,7 +1451,19 @@ export async function POST(request: Request) {
         provider: videoConfig.provider,
         model: videoConfig.model,
         prompt,
-        metadata: consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : undefined,
+        // The ledger records how a shot's audio was produced, so a delivered cut
+        // that needs its line mixed in is identifiable without re-reading the
+        // prompt.
+        metadata: {
+          ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
+          ...(audioScene
+            ? {
+                audioMode: audioScene.mode,
+                audioPostMix: audioScene.postMix,
+                dialogueCharacters: dialogueText.length,
+              }
+            : {}),
+        },
       });
       const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
       if (reference) {
