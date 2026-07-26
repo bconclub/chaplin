@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DELIVERY_LOUDNESS_FILTER, DUCK_UNDER_SPEECH } from "@/lib/audio-mix";
 import { promisify } from "node:util";
 import { attachMediaPipelineOutput, getMediaPipelineRun } from "@/lib/server/media-pipeline";
 import { getCharacterProductionState, saveMediaAsset } from "@/lib/server/supabase-admin";
@@ -139,11 +140,29 @@ export async function POST(request: Request) {
     }
     if (themePath) {
       stemInputs.push("-i", themePath);
-      audioFilters.push(`[${inputIndex}:a]volume=0.18,aloop=loop=-1:size=2e9,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[athm]`);
+      /*
+        The theme is a bed, not a duet. Held at a flat level it competed with
+        the actor's locked line, so it now drops 12dB for the length of every
+        scene that actually speaks. Ducking is driven by the known speech
+        windows rather than a sidechain compressor: the windows are exact, so
+        the result is identical on every render instead of varying with the
+        line's own level.
+      */
+      const speechWindows = dialogueFiles.map((source) => {
+        const start = source.sceneIndex * sceneDurationSeconds;
+        return { start, end: start + sceneDurationSeconds };
+      });
+      const duckedGain = (0.18 * DUCK_UNDER_SPEECH).toFixed(4);
+      const themeVolume = speechWindows.length
+        ? `volume='if(gt(${speechWindows.map((window) => `between(t,${window.start},${window.end})`).join("+")},0),${duckedGain},0.18)':eval=frame`
+        : "volume=0.18";
+      audioFilters.push(`[${inputIndex}:a]${themeVolume},aloop=loop=-1:size=2e9,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[athm]`);
       stemLabels.push("[athm]");
       inputIndex += 1;
     }
-    audioFilters.push(`${stemLabels.join("")}amix=inputs=${stemLabels.length}:duration=first:dropout_transition=0,alimiter=limit=0.95[aout]`);
+    // Normalised to the streaming reference so one Punch is not audibly louder
+    // than the next; the limiter still catches anything the normaliser leaves.
+    audioFilters.push(`${stemLabels.join("")}amix=inputs=${stemLabels.length}:duration=first:dropout_transition=0,${DELIVERY_LOUDNESS_FILTER},alimiter=limit=0.95[aout]`);
 
     await execute(ffmpegExecutable(), [
       "-y",
