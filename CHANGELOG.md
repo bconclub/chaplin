@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.58 - 2026-07-26 - Visible story-to-production handoff
+
+- Added a persistent handoff dock to the Punch script stage so the next action
+  no longer sits below four full scene editors.
+- Made the dock state explicit: it shows how many scenes are written, whether
+  preview frames are rendering, and that creators can continue without waiting
+  for optional thumbnails.
+- Added a guarded `Next: Production` action with an opening state to prevent
+  duplicate production creation while navigation is in progress.
+- Passed focused ESLint and the complete Next.js production build.
+
 ## v0.1.57 - 2026-07-26 - Full-width trending rail
 
 - Expanded Trending Now from six to ten distinct AI actors so wide screens stay
