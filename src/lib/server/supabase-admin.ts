@@ -493,12 +493,40 @@ export async function getCharacterProductionState(characterId: string) {
     return metadata?.selectedForVideo === true;
   });
   const featuredCover = rows.find((asset) => asset.id === featured.featured_cover_asset_id);
+  /*
+    A still from a multi-actor scene shows more than one face, so it must never
+    become this actor's identity seed. It previously could: the fallback simply
+    took the newest gallery row, so casting Sprocket alongside Boxer Benson put
+    Benson's face into Sprocket's canonical reference and changed his cover.
+    Newer jobs carry an explicit flag; older ones are detected by references
+    pointing into another character's media folder, so existing rows heal
+    without a migration.
+  */
+  const isEnsembleAsset = (asset: { metadata: unknown }) => {
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    if (metadata?.ensembleShot === true) return true;
+    const cast = metadata?.castCharacterIds;
+    if (Array.isArray(cast) && cast.filter(Boolean).length > 1) return true;
+    const references = metadata?.referenceImages;
+    if (!Array.isArray(references)) return false;
+    return references.some((reference) => {
+      if (typeof reference !== "string") return false;
+      const owner = /\/character-media\/([^/]+)\//.exec(reference)?.[1];
+      return Boolean(owner) && owner !== characterId;
+    });
+  };
+  const isIdentityCandidate = (asset: { kind: string; metadata: unknown }) => {
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    return metadata?.imagePurpose !== "scene" && !isEnsembleAsset(asset);
+  };
   const identityReference = rows.find((asset) => {
     if (asset.kind !== "gallery") return false;
+    if (isEnsembleAsset(asset)) return false;
     const metadata = asset.metadata as Record<string, unknown> | null;
     return metadata?.imagePurpose === "identity" || asset.provider === "upload";
   });
-  const fallbackReference = rows.find((asset) => ["gallery", "avatar", "banner"].includes(asset.kind));
+  const fallbackReference = rows.find((asset) =>
+    ["gallery", "avatar", "banner"].includes(asset.kind) && isIdentityCandidate(asset));
   const visualReference = featuredCover
     ? { url: featuredCover.url, assetId: featuredCover.id, source: "selected-cover" as const }
     : identityReference
@@ -519,7 +547,12 @@ export async function getCharacterProductionState(characterId: string) {
     // character's reusable signature until the creator explicitly selects it.
     latestSfxUrl: featuredSfx?.url ?? null,
     latestThemeUrl: featuredTheme?.url ?? rows.find((asset) => asset.kind === "theme")?.url ?? null,
-    latestImageUrl: selectedSceneImage?.url ?? featuredCover?.url ?? rows.find((asset) => asset.kind === "gallery")?.url ?? null,
+    // Same rule for the displayed image: an explicit selection wins, but the
+    // automatic fallback must not surface a frame containing another actor.
+    latestImageUrl: selectedSceneImage?.url
+      ?? featuredCover?.url
+      ?? rows.find((asset) => asset.kind === "gallery" && isIdentityCandidate(asset))?.url
+      ?? null,
     latestVideoUrl: latestVideo?.url ?? null,
     visualReference,
     featured: {

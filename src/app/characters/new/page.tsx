@@ -104,14 +104,6 @@ const CHARACTER_FORMAT_PREVIEWS: Record<CharacterFormat, string> = {
   custom: "/characters/c-astra-banner.webp",
 };
 
-const CHARACTER_PREVIEW_VARIANTS = [
-  "/characters/gallery/c-selene-gallery-1.webp",
-  "/characters/gallery/c-selene-gallery-2.webp",
-  "/characters/gallery/c-selene-gallery-3.webp",
-  "/characters/gallery/c-selene-gallery-4.webp",
-  "/characters/gallery/c-selene-gallery-5.webp",
-] as const;
-
 const QUICK_ACTOR_PRESETS = [
   {
     title: "Grounded hero",
@@ -302,6 +294,7 @@ export default function NewCharacterPage() {
   const [revealingField, setRevealingField] = useState("");
   const suggestStartedAt = useRef<number | null>(null);
   const magicWriteRunRef = useRef(0);
+  const [recoverableDraft, setRecoverableDraft] = useState<Partial<CharacterBuilderDraft> | null>(null);
   const restoredDraftKey = useRef<string | null>(null);
   const draftStorageKey = `chaplin-character-builder:${currentUserId}`;
   const progress = suggestingTarget ? estimatedBuildProgress(suggestingTarget, elapsedSeconds) : 0;
@@ -321,6 +314,46 @@ export default function NewCharacterPage() {
     return () => clearInterval(interval);
   }, [suggestingTarget]);
 
+  function applyDraft(draft: Partial<CharacterBuilderDraft>) {
+    const restoredVoiceGender = explicitVoiceGender(
+      `${draft.characterBrief ?? ""} ${draft.personality ?? ""}`,
+    ) ?? draft.voiceGender ?? "androgynous";
+    const restoredAppearanceBrief = draft.appearanceBrief?.trim() ||
+      (draft.productionBible ? appearanceDirectionFromBible(draft.productionBible) : "");
+    const restoredWorldBrief = draft.worldBrief?.trim() ||
+      (draft.productionBible ? worldDirectionFromBible(draft.productionBible) : "");
+    setName(draft.name ?? "");
+    setArchetypes(
+      Array.isArray(draft.archetypes) && draft.archetypes.length
+        ? draft.archetypes.filter((value): value is Archetype => (ARCHETYPES as readonly string[]).includes(value))
+        : ["hero"],
+    );
+    setCharacterBrief(draft.characterBrief ?? "");
+    setTagline(draft.tagline ?? "");
+    setPersonality(draft.personality ?? "");
+    setAppearanceBrief(restoredAppearanceBrief);
+    setWorldBrief(restoredWorldBrief);
+    setVoiceGender(restoredVoiceGender);
+    setVoicePreset(draft.voicePreset ?? VOICE_PRESETS[0]);
+    setCustomVoice(alignVoiceDescription(draft.customVoice ?? "", restoredVoiceGender));
+    setSfxPreset(draft.sfxPreset ?? SFX_PRESETS[0]);
+    setCustomSfx(draft.customSfx ?? "");
+    setScorePreset(draft.scorePreset ?? SCORE_PRESETS[0]);
+    setCustomScore(draft.customScore ?? "");
+    setLicenseType(draft.licenseType ?? "paid");
+    setRoyaltyRate(typeof draft.royaltyRate === "number" ? draft.royaltyRate : 30);
+    setHue(typeof draft.hue === "number" ? draft.hue : 205);
+    setVisualFormat(draft.visualFormat ?? "live-action");
+    setProductionBible(draft.productionBible);
+  }
+
+  /*
+    Opening /characters/new must start blank. This used to auto-apply the last
+    autosaved draft, so a fresh actor arrived pre-filled with the previous one's
+    name, brief, archetype, and bible. The draft is still kept — losing work on
+    a refresh mid-build would be worse — but it is now offered rather than
+    imposed, and only when it actually contains something.
+  */
   useEffect(() => {
     if (restoredDraftKey.current === draftStorageKey) return;
     restoredDraftKey.current = draftStorageKey;
@@ -329,41 +362,9 @@ export default function NewCharacterPage() {
     try {
       const draft = JSON.parse(stored) as Partial<CharacterBuilderDraft>;
       if (draft.version !== 1) return;
-      const timer = window.setTimeout(() => {
-        const restoredVoiceGender = explicitVoiceGender(
-          `${draft.characterBrief ?? ""} ${draft.personality ?? ""}`,
-        ) ?? draft.voiceGender ?? "androgynous";
-        const restoredAppearanceBrief = draft.appearanceBrief?.trim() ||
-          (draft.productionBible ? appearanceDirectionFromBible(draft.productionBible) : "");
-        const restoredWorldBrief = draft.worldBrief?.trim() ||
-          (draft.productionBible ? worldDirectionFromBible(draft.productionBible) : "");
-        setName(draft.name ?? "");
-        setArchetypes(
-          Array.isArray(draft.archetypes) && draft.archetypes.length
-            ? draft.archetypes.filter((value): value is Archetype => (ARCHETYPES as readonly string[]).includes(value))
-            : ["hero"],
-        );
-        setCharacterBrief(draft.characterBrief ?? "");
-        setTagline(draft.tagline ?? "");
-        setPersonality(draft.personality ?? "");
-        setAppearanceBrief(restoredAppearanceBrief);
-        setWorldBrief(restoredWorldBrief);
-        setVoiceGender(restoredVoiceGender);
-        setVoicePreset(draft.voicePreset ?? VOICE_PRESETS[0]);
-        setCustomVoice(alignVoiceDescription(draft.customVoice ?? "", restoredVoiceGender));
-        setSfxPreset(draft.sfxPreset ?? SFX_PRESETS[0]);
-        setCustomSfx(draft.customSfx ?? "");
-        setScorePreset(draft.scorePreset ?? SCORE_PRESETS[0]);
-        setCustomScore(draft.customScore ?? "");
-        setLicenseType(draft.licenseType ?? "paid");
-        setRoyaltyRate(typeof draft.royaltyRate === "number" ? draft.royaltyRate : 30);
-        setHue(typeof draft.hue === "number" ? draft.hue : 205);
-        setVisualFormat(draft.visualFormat ?? "live-action");
-        setProductionBible(draft.productionBible);
-        if (draft.name || draft.characterBrief || draft.tagline) {
-          setSuggestionMessage("Draft recovered. Your character work is safe after refresh.");
-        }
-      }, 0);
+      if (!draft.name && !draft.characterBrief && !draft.tagline) return;
+      // Deferred so the read does not set state synchronously inside the effect.
+      const timer = window.setTimeout(() => setRecoverableDraft(draft), 0);
       return () => window.clearTimeout(timer);
     } catch {
       window.localStorage.removeItem(draftStorageKey);
@@ -507,9 +508,11 @@ export default function NewCharacterPage() {
     .map(([label]) => label);
   const canCreateActor = missingCreationFields.length === 0;
   const selectedVisualFormat = CHARACTER_FORMATS.find((format) => format.id === visualFormat);
-  const previewImages = visualFormat === "live-action"
-    ? CHARACTER_PREVIEW_VARIANTS
-    : [CHARACTER_FORMAT_PREVIEWS[visualFormat ?? "live-action"]];
+  // Every medium shows the same example actor, which is the whole point of the
+  // picker ("The same example actor is shown in four mediums"). Live-action used
+  // to substitute an unrelated character's gallery, so choosing Realistic showed
+  // a different face than the Realistic thumbnail beside it.
+  const previewImages = [CHARACTER_FORMAT_PREVIEWS[visualFormat ?? "live-action"]];
   const activePreviewImage = previewImages[previewIndex] ?? previewImages[0];
 
   function selectVisualFormat(format: typeof CHARACTER_FORMATS[number]) {
@@ -882,6 +885,40 @@ export default function NewCharacterPage() {
                 </div>
                 <span className="rounded-full border border-accent/35 px-2.5 py-1 text-[9px] font-semibold text-accent">LIVE PREVIEW</span>
               </div>
+
+              {recoverableDraft && (
+                <div className="mt-4 rounded-lg border border-accent/35 bg-accent/[0.07] p-3">
+                  <p className="text-[10px] font-semibold text-accent">Unsaved draft found</p>
+                  <p className="mt-1 text-[10px] leading-4 text-grey">
+                    You were building{" "}
+                    <strong className="text-ink">{recoverableDraft.name?.trim() || "an unnamed actor"}</strong>.
+                    This new actor starts blank.
+                  </p>
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyDraft(recoverableDraft);
+                        setRecoverableDraft(null);
+                        setSuggestionMessage("Draft restored. Your earlier character work is back.");
+                      }}
+                      className="rounded-md bg-accent px-2.5 py-1.5 text-[10px] font-semibold text-paper"
+                    >
+                      Restore it
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.localStorage.removeItem(draftStorageKey);
+                        setRecoverableDraft(null);
+                      }}
+                      className="rounded-md border border-white/15 px-2.5 py-1.5 text-[10px] font-semibold text-grey hover:border-accent hover:text-accent"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 border-t border-white/10 pt-5">
                 <p className="text-xs font-semibold">Choose how the actor looks on screen</p>
