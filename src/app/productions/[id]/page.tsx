@@ -7,6 +7,12 @@ import Avatar from "@/components/Avatar";
 import { useChaplinStore } from "@/lib/store";
 import { castForStory, getStory } from "@/lib/selectors";
 import {
+  absentCastNegative,
+  resolveSceneActors,
+  sceneActorIdentity,
+  sceneActorNames,
+} from "@/lib/scene-cast";
+import {
   PRODUCTION_FORMATS,
   normalizeProductionFormat,
   productionShotCount,
@@ -727,10 +733,6 @@ export default function ProductionDetailPage() {
     const lockedCastReferences = cast
       .map((character) => character.imageUrl ?? character.galleryUrls?.[0] ?? character.bannerUrl ?? "")
       .filter(Boolean);
-    const directedCastName = cast.map((character) => character.name).join(" and ");
-    const directedCastIdentity = cast
-      .map((character) => `${character.name}: ${character.personality}`)
-      .join("\n");
     if (!lockedReference) {
       setError("Approve or attach one actor identity frame before rendering the Punch.");
       return;
@@ -788,10 +790,16 @@ export default function ProductionDetailPage() {
         )));
         setRenderProgress(`Designing scene frame ${index + 1} of ${contract.shotCount}`);
         const directedScene = authoredScenes[index];
+        /*
+          Only this scene's actors. Rendering every shot against the whole cast
+          is what let one actor appear holding another's weapon.
+        */
+        const sceneActors = resolveSceneActors(directedScene, cast).present;
         const framePrompt = buildShotImagePrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
-          actorName: directedCastName, actorIdentity: directedCastIdentity,
+          actorName: sceneActorNames(sceneActors),
+          actorIdentity: `${sceneActorIdentity(sceneActors)}\n${absentCastNegative(sceneActors, cast)}`.trim(),
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
           continuityNote: "Keep every locked actor visually distinct and consistent, but obey this scene's own authored location, blocking, action, and camera. Carry geography or screen direction only when adjacent scenes explicitly remain continuous.",
         });
@@ -860,7 +868,7 @@ export default function ProductionDetailPage() {
           "Create one physically plausible event caused by the visible action, different from the other scene sounds. No speech, melody, score, generic cinematic boom, or ambience bed.",
           `Location: ${clamp(directedScene.setting || "the established scene", 90)}.`,
           `Visible action: ${clamp(directedScene.action || directedScene.objective || "one concise physical action", 140)}.`,
-          `Character sound identity: ${clamp(cast[0].sfxDesc ?? "", 90)}.`,
+          `Character sound identity: ${clamp(resolveSceneActors(directedScene, cast).lead.sfxDesc ?? "", 90)}.`,
         ].join(" ");
         const [dialogueAsset, sfxAsset] = await Promise.all([
           dialogueText
@@ -908,10 +916,12 @@ export default function ProductionDetailPage() {
           shotIndex === index ? { ...shot, status: "animating", error: undefined } : shot
         )));
         setRenderProgress(`Animating four-second scene ${index + 1} of ${contract.shotCount}`);
+        const motionActors = resolveSceneActors(directedScene, cast).present;
         const motionPrompt = buildShotVideoPrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
           sceneIndex: index, sceneCount: contract.shotCount, format: story.format,
-          actorName: directedCastName, actorIdentity: directedCastIdentity,
+          actorName: sceneActorNames(motionActors),
+          actorIdentity: `${sceneActorIdentity(motionActors)}\n${absentCastNegative(motionActors, cast)}`.trim(),
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
           continuityNote: "Animate only this scene's exact starting frame. Preserve every visible identity, object, spatial relationship, and screen direction inside the shot; do not borrow staging or action from another scene.",
         });

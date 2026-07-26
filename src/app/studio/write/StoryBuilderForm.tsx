@@ -624,7 +624,17 @@ export default function StoryBuilderForm() {
           productImageUrl,
           productImageName,
           castIds,
-          characters: world.characters.map((character) => ({
+          /*
+            When a cast is already chosen, only those actors are offered.
+            Sending the whole shelf alongside the chosen ids let the model write
+            about someone else entirely - a Punch cast with one actor came back
+            as a story about another - because the shelf reads as a menu.
+            Narrowing the input makes the cast a constraint, not a suggestion.
+          */
+          characters: (castIds.length
+            ? world.characters.filter((character) => castIds.includes(character.id))
+            : world.characters
+          ).map((character) => ({
             id: character.id,
             name: character.name,
             archetype: character.archetype,
@@ -649,9 +659,18 @@ export default function StoryBuilderForm() {
       setLogline(draft.logline);
       setCreativeDirection(draft.creativeDirection);
       if (!conceptOnly) {
-        const nextCastIds = draft.castIds.filter((id) => world.characters.some((character) => character.id === id));
+        /*
+          A cast the creator already chose is the brief, not a suggestion.
+          Magic Write used to replace it with whatever the model picked, so a
+          Punch cast with Ash Reaper came back titled for Ash Reaper but cast
+          with two other actors - the script and the performers disagreed from
+          the moment it was written, and the creator's own choice was silently
+          discarded. The model only picks when nothing is cast yet.
+        */
+        const suggestedCastIds = draft.castIds.filter((id) => world.characters.some((character) => character.id === id));
+        const nextCastIds = castIds.length ? castIds : suggestedCastIds;
         setCastIds(nextCastIds);
-        const lead = castCharacters[0];
+        const lead = world.characters.find((character) => character.id === nextCastIds[0]) ?? castCharacters[0];
         const nextScenes = (draft.scenes.length ? draft.scenes : [{
           setting: "INT. CHARACTER WORLD - CONTINUOUS",
           objective: `Reveal ${lead?.name ?? "the actor"} through one visible, situation-changing choice.`,
@@ -742,7 +761,17 @@ export default function StoryBuilderForm() {
           productImageUrl,
           productImageName,
           castIds,
-          characters: world.characters.map((character) => ({
+          /*
+            When a cast is already chosen, only those actors are offered.
+            Sending the whole shelf alongside the chosen ids let the model write
+            about someone else entirely - a Punch cast with one actor came back
+            as a story about another - because the shelf reads as a menu.
+            Narrowing the input makes the cast a constraint, not a suggestion.
+          */
+          characters: (castIds.length
+            ? world.characters.filter((character) => castIds.includes(character.id))
+            : world.characters
+          ).map((character) => ({
             id: character.id,
             name: character.name,
             archetype: character.archetype,

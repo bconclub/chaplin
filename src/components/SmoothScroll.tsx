@@ -7,8 +7,20 @@ import Lenis from "lenis";
 export default function SmoothScroll() {
   const lenisRef = useRef<Lenis | null>(null);
   const pathname = usePathname();
+  /*
+    Workspace canvases own their scrolling: each column is a fixed-height
+    element with its own overflow, and Lenis intercepts the wheel to drive the
+    window instead - which those pages never scroll - so the columns receive
+    nothing and read as frozen.
+
+    This was a path whitelist that missed /studio/write. The Scene Studio canvas
+    shipped after the list was written, so its rail, editor, and asset panel
+    could not be scrolled at all. Matching the whole /studio subtree means a new
+    workspace route cannot silently inherit the same bug.
+  */
   const usesNativeWorkspaceScroll =
     pathname === "/studio" ||
+    pathname.startsWith("/studio/") ||
     pathname === "/characters/new" ||
     (pathname.startsWith("/characters/") && pathname.endsWith("/studio"));
 
