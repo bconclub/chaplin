@@ -164,6 +164,50 @@ function normalizedSceneSignature(scene: ShotSceneInput) {
     .join("|");
 }
 
+/*
+  Words that carry no dramatic information. Dropping them stops two scenes from
+  looking distinct merely because one says "he then walks" and the other "he
+  walks".
+*/
+const BEAT_STOPWORDS = new Set([
+  "a", "an", "and", "as", "at", "away", "back", "be", "before", "behind", "but",
+  "by", "down", "for", "from", "he", "her", "here", "hers", "him", "his", "in",
+  "into", "is", "it", "its", "of", "off", "on", "one", "onto", "out", "over",
+  "she", "so", "that", "the", "their", "them", "then", "there", "they", "this",
+  "to", "up", "upon", "with", "while", "who",
+]);
+
+function beatTokens(scene: ShotSceneInput) {
+  return new Set(
+    `${scene.objective ?? ""} ${scene.action ?? ""}`
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !BEAT_STOPWORDS.has(word)),
+  );
+}
+
+/** Jaccard overlap of two scenes' dramatic content, 0 (distinct) to 1 (identical). */
+export function beatSimilarity(left: ShotSceneInput, right: ShotSceneInput) {
+  const a = beatTokens(left);
+  const b = beatTokens(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const token of a) if (b.has(token)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
+/*
+  Two scenes this alike are the same beat rewritten.
+
+  Measured rather than guessed. On the production that shipped four takes of one
+  standoff, pairwise overlap ran 0.39-0.56; a Punch that genuinely moves through
+  four beats in the same alley peaks at 0.04. The gap between those is wide, so
+  the threshold sits in the middle of it and is forgiving of a shared location,
+  a recurring prop, or a repeated character name.
+*/
+export const BEAT_REPEAT_THRESHOLD = 0.32;
+
 export function validateShotSequence(
   scenes: ShotSceneInput[],
   expectedCount: number,
@@ -192,6 +236,24 @@ export function validateShotSequence(
       valid: false,
       error: `Scene ${repeatedIndex + 1} repeats another scene. Give every shot its own setting, objective, or visible action.`,
     };
+  }
+
+  /*
+    Exact-match detection let a whole production through as four takes of one
+    moment: same location, same standoff, wording varied just enough to differ
+    byte for byte. A format that promises hook, pressure, and a memorable choice
+    has to actually change between shots, so near-duplicate beats are rejected
+    too. Staying in one location is still fine - what must move is the beat.
+  */
+  for (let index = 1; index < scenes.length; index += 1) {
+    for (let earlier = 0; earlier < index; earlier += 1) {
+      if (beatSimilarity(scenes[index], scenes[earlier]) >= BEAT_REPEAT_THRESHOLD) {
+        return {
+          valid: false,
+          error: `Scene ${index + 1} plays the same beat as scene ${earlier + 1}. Each shot needs its own objective and a visible action that changes the situation — the story has to move, even if the location does not.`,
+        };
+      }
+    }
   }
 
   return { valid: true };

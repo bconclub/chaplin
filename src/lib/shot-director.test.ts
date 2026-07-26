@@ -69,3 +69,28 @@ test("video prompt animates the exact first frame as a five-second source with a
   assert.match(prompt, /STORY ANCHOR/i);
   assert.doesNotMatch(prompt, /OFFERING ANCHOR/i);
 });
+
+test("four takes of one standoff are rejected even when the wording differs", () => {
+  // The real failure: one location, one beat, reworded just enough to differ
+  // byte for byte, so exact-signature matching passed all four.
+  const alley = "INT/EXT. NIGHT MARKET ALLEY - DEAD END - NIGHT";
+  const result = validateShotSequence([
+    { setting: alley, objective: "Corner the accused man", action: "VANTA-9 advances low through sheeting rain and raises the gunmetal arm at the accused man" },
+    { setting: alley, objective: "Corner the accused man again", action: "VANTA-9 advances slowly through the rain and lifts the gunmetal arm toward the accused man" },
+    { setting: alley, objective: "Hold the accused man at gunpoint", action: "VANTA-9 steps through rain and holds the gunmetal arm on the accused man" },
+    { setting: alley, objective: "Keep the accused man cornered", action: "VANTA-9 moves through the rain and keeps the gunmetal arm raised at the accused man" },
+  ], 4);
+  assert.equal(result.valid, false);
+  assert.match(result.error ?? "", /plays the same beat as scene 1/);
+});
+
+test("one location is allowed when the beat actually moves", () => {
+  const alley = "INT/EXT. NIGHT MARKET ALLEY - DEAD END - NIGHT";
+  const result = validateShotSequence([
+    { setting: alley, objective: "Corner the debtor", action: "VANTA-9 advances through sheeting rain and blocks the only exit" },
+    { setting: alley, objective: "Read the ledger tattoo", action: "A soaked stray dog knocks a crate; the debtor's sleeve rides up and exposes an inked mark" },
+    { setting: alley, objective: "Recognise his own maker's sigil", action: "He lowers the gunmetal arm fully, chest stencil catching the neon as recognition lands" },
+    { setting: alley, objective: "Let the debt go unpaid", action: "He unclasps the chain, drops it in a puddle, and walks out of frame leaving the man standing" },
+  ], 4);
+  assert.equal(result.valid, true);
+});
