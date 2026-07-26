@@ -3,7 +3,7 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
-## v0.1.31 - 2026-07-26 - Selectable video seed images
+## v0.1.34 - 2026-07-26 - Selectable video seed images
 
 - Added an explicit seed-image picker to the Video stage with compact
   thumbnails for generated, uploaded, and previously saved character stills.

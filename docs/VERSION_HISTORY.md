@@ -136,3 +136,6 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.28 | `b40f605` | 2026-07-26T09:35:14+05:30 | chore: sync v0.1.28 release metadata |
 | v0.1.29 | `5d2672f` | 2026-07-26T09:36:06+05:30 | Stop every actor opening on the same fallback scene |
 | v0.1.30 | `a154642` | 2026-07-26T09:40:35+05:30 | Match the deployed Replicate env name and verified model schemas |
+| v0.1.31 | `720bdfd` | 2026-07-26T09:45:01+05:30 | Restore image quality on the character hero |
+| v0.1.32 | `dc62ab7` | 2026-07-26T09:46:26+05:30 | Surface stock scenes instead of passing them off as written |
+| v0.1.33 | `ca2e65f` | 2026-07-26T09:47:30+05:30 | fix: add selectable video seed images |
