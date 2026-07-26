@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
-import FeedBody from "@/components/feed/FeedBody";
+import FeedBody, { segmentBody } from "@/components/feed/FeedBody";
 import { FEED_TABS, EMPTY_TAB_COPY, applyFeedTab, trendingTags, type FeedTabId } from "@/components/feed/feed-tabs";
 import MediaPlayer from "@/components/MediaPlayer";
 import { useChaplinStore } from "@/lib/store";
@@ -21,14 +21,40 @@ function relativeTime(value: string) {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
-function FeedMedia({ kind, url, compact = false }: { kind: FeedMediaKind; url: string; compact?: boolean }) {
-  if (kind === "video") return <MediaPlayer src={url} label="Creator video" kind="video" compact />;
-  if (kind === "audio") return <MediaPlayer src={url} label="Creator audio" kind="audio" compact />;
-  return (
+/*
+  A post's media is one actor's work, so it is labelled with that actor rather
+  than "Creator video". The name is taken from the post's own first mention -
+  the same resolution the body already uses to render the cyan link - because a
+  feed post carries an author but no character reference.
+*/
+function FeedMedia({
+  kind,
+  url,
+  compact = false,
+  body = "",
+  characters = [],
+}: {
+  kind: FeedMediaKind;
+  url: string;
+  compact?: boolean;
+  body?: string;
+  characters?: Character[];
+}) {
+  const subject = segmentBody(body, characters).find((segment) => segment.character)?.character ?? null;
+  if (kind === "video") {
+    const player = <MediaPlayer src={url} label={subject ? `${subject.name} scene` : "Creator video"} kind="video" compact />;
+    // The whole card opens the actor it belongs to, matching the body mention.
+    return subject ? <Link href={`/characters/${subject.id}`} className="block">{player}</Link> : player;
+  }
+  if (kind === "audio") {
+    return <MediaPlayer src={url} label={subject ? `${subject.name} audio` : "Creator audio"} kind="audio" compact />;
+  }
+  const image = (
     // User-posted media can come from any HTTPS host, so it cannot use a static Next Image allowlist.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="Post attachment" className={`w-full object-cover ${compact ? "max-h-56" : "max-h-[34rem]"}`} />
+    <img src={url} alt={subject ? `${subject.name} still` : "Post attachment"} className={`w-full object-cover ${compact ? "max-h-56" : "max-h-[34rem]"}`} />
   );
+  return subject ? <Link href={`/characters/${subject.id}`} className="block">{image}</Link> : image;
 }
 
 type LockedProductionSummary = {
@@ -164,14 +190,14 @@ function ProductionFeedPoster({
   return href ? <Link href={href} aria-label={`Open ${summary.title}`}>{poster}</Link> : poster;
 }
 
-function SharedPostCard({ post }: { post: SharedFeedPost }) {
+function SharedPostCard({ post, characters = [] }: { post: SharedFeedPost; characters?: Character[] }) {
   return <div className="mt-3 overflow-hidden rounded-lg border border-line bg-black/15">
     <div className="flex items-center gap-2 p-3">
       <Avatar hue={post.author.avatarHue} label={post.author.name} src={post.author.imageUrl ?? undefined} size={28} />
       <p className="min-w-0 text-xs"><span className="font-semibold">{post.author.name}</span> <span className="text-grey">{post.author.handle}</span></p>
     </div>
     {post.body && <p className="px-3 pb-3 text-sm leading-5">{post.body}</p>}
-    {post.mediaKind && post.mediaUrl && <FeedMedia kind={post.mediaKind} url={post.mediaUrl} compact />}
+    {post.mediaKind && post.mediaUrl && <FeedMedia kind={post.mediaKind} url={post.mediaUrl} compact body={post.body} characters={characters} />}
   </div>;
 }
 
@@ -262,8 +288,8 @@ function PostCard({ post, currentUserId, refresh, expanded }: { post: FeedPost; 
       </div>
     </div>
 
-    {post.sharedPost && <div className="ml-12"><SharedPostCard post={post.sharedPost} /></div>}
-    {post.mediaKind && post.mediaUrl && <div className="ml-12 mt-3 overflow-hidden rounded-lg border border-line"><FeedMedia kind={post.mediaKind} url={post.mediaUrl} /></div>}
+    {post.sharedPost && <div className="ml-12"><SharedPostCard characters={characters} post={post.sharedPost} /></div>}
+    {post.mediaKind && post.mediaUrl && <div className="ml-12 mt-3 overflow-hidden rounded-lg border border-line"><FeedMedia kind={post.mediaKind} url={post.mediaUrl} body={post.body} characters={characters} /></div>}
     {productionSummary && (
       <div className="ml-12 mt-3">
         <ProductionFeedPoster
