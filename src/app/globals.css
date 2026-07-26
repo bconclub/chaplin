@@ -233,9 +233,16 @@ body:has(> main [data-home-featured]) > main {
   bar, and sidebar, so the global site chrome would double up on it. It owns
   100dvh and never scrolls the page; its three columns scroll internally.
 */
+/*
+  The home surface keeps the application's own left rail — the create button,
+  Feed, Actors, Watch and Studio that BottomNav already renders on desktop.
+  An earlier version hid it and substituted a bespoke rail of invented
+  destinations, which both duplicated the chrome and broke navigation.
+  Only the site header and footer are removed, since the shell provides its own
+  top bar.
+*/
 body:has([data-home-shell]) > header,
 body:has([data-home-shell]) > footer,
-body:has([data-home-shell]) [data-bottom-nav],
 /* The header is fixed, so the layout renders a 64px spacer to reserve its
    room. Hiding the header alone left that spacer in flow and pushed the page
    to 1088px, which is what broke the no-scroll requirement. */
@@ -248,13 +255,20 @@ body:has([data-home-shell]) > main {
   padding: 0;
 }
 
+/* Desktop keeps room for the application's own 5.5rem left rail. */
+@media (min-width: 1024px) {
+  body:has([data-home-shell]) > main {
+    padding-left: 5.5rem;
+  }
+}
+
 /*
   The no-scroll canvas is only correct when the viewport is actually tall enough
   to hold it. Locking overflow unconditionally made the lower half of the page
   unreachable on shorter windows, so the lock is height-gated: tall screens get
   the fixed 100dvh surface the design calls for, anything shorter scrolls.
 */
-@media (min-height: 860px) {
+@media (min-height: 1000px) {
   html:has([data-home-shell]),
   body:has([data-home-shell]) {
     overflow: hidden;
@@ -263,6 +277,26 @@ body:has([data-home-shell]) > main {
   body:has([data-home-shell]) > main {
     height: 100dvh;
     overflow: hidden;
+  }
+}
+
+/*
+  Below the height the fixed canvas actually needs, the surface behaves like a
+  normal page: the shell grows to its content and the internal panel scrollers
+  release, so one ordinary page scroll reaches everything. Keeping the lock on
+  a short window froze the page with the lower half still cut off.
+*/
+@media (max-height: 999px) {
+  [data-home-shell] {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  [data-home-shell] [data-home-scroll] {
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 }
 

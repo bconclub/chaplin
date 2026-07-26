@@ -7,7 +7,7 @@ import { ARCHETYPE_HUE, ARCHETYPE_LABEL, hsl } from "@/lib/format";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import type { HomepageBroll } from "@/components/HeroGridCard";
-import { RAIL_PRIMARY, COLLECTIONS, TRENDING_LABELS } from "@/components/home/home-nav";
+import { COLLECTIONS, TRENDING_LABELS } from "@/components/home/home-nav";
 import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
@@ -131,76 +131,9 @@ export default function HomeShell() {
 
   return (
     <div
-      className="grid h-dvh min-h-0 grid-cols-[13rem_minmax(0,1fr)] gap-0 overflow-hidden bg-[#080808] text-[#f5f2ec] xl:grid-cols-[13rem_minmax(0,1fr)_21.5rem]"
+      className="grid h-dvh min-h-0 grid-cols-[minmax(0,1fr)] gap-0 overflow-hidden bg-[#080808] text-[#f5f2ec] xl:grid-cols-[minmax(0,1fr)_21.5rem]"
       data-home-shell
     >
-      {/* ── LEFT RAIL ───────────────────────────────────────────────── */}
-      <aside className="flex min-h-0 flex-col border-r border-[#202020] bg-[#0a0a0a]">
-        <Link href="/" aria-label="Chaplin home" className="flex h-[4.5rem] shrink-0 items-center px-5">
-          {/* Canonical transparent wordmark, same asset the site header uses. */}
-          <Image
-            src="/brand/chaplin-logo-transparent.png"
-            alt="Chaplin"
-            width={1826}
-            height={585}
-            priority
-            quality={90}
-            sizes="150px"
-            className="h-9 w-auto max-w-[9.5rem] object-contain object-left"
-          />
-        </Link>
-
-        <nav className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
-          {RAIL_PRIMARY.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              aria-current={item.active ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[12.5px] font-medium transition-colors ${
-                item.active
-                  ? "border border-accent/45 bg-accent/12 text-ink"
-                  : "border border-transparent text-white/55 hover:bg-white/[0.04] hover:text-white"
-              }`}
-            >
-              <span className={item.active ? "text-accent" : "text-white/45 group-hover:text-white/80"}>{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-
-          <div className="my-3 h-px shrink-0 bg-[#202020]" />
-
-          {/* The two things a creator actually starts here, matching the
-              create menu the rest of the app already offers. */}
-          <Link
-            href="/characters/new"
-            className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
-          >
-            <span className="text-white/45 group-hover:text-white/80">＋</span>
-            Build an AI actor
-          </Link>
-          <Link
-            href="/studio/write?format=punch"
-            className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
-          >
-            <span className="text-white/45 group-hover:text-white/80">＋</span>
-            Make a scene
-          </Link>
-        </nav>
-
-        <div className="shrink-0 p-3">
-          <Link
-            href="/studio"
-            className="flex items-center gap-2.5 rounded-xl border border-amber-300/25 bg-amber-300/[0.07] px-3 py-3 transition-colors hover:border-amber-300/45"
-          >
-            <span className="text-base">🎁</span>
-            <span className="min-w-0">
-              <span className="block text-[12px] font-semibold text-amber-100">Invite &amp; Earn</span>
-              <span className="block text-[10px] text-amber-100/50">Get credits</span>
-            </span>
-          </Link>
-        </div>
-      </aside>
-
       {/* ── CENTER COLUMN ───────────────────────────────────────────── */}
       <div className="flex min-h-0 min-w-0 flex-col">
         <header className="flex h-[4.5rem] shrink-0 items-center gap-4 border-b border-[#202020] px-5">
@@ -239,7 +172,7 @@ export default function HomeShell() {
           </div>
         </header>
 
-        <div className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
+        <div className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4" data-home-scroll>
           {/* ── HERO ─────────────────────────────────────────────── */}
           <section
             className="group relative shrink-0 overflow-hidden rounded-2xl border border-[#202020] bg-[#111111]"
@@ -472,7 +405,7 @@ export default function HomeShell() {
       </div>
 
       {/* ── RIGHT SIDEBAR ───────────────────────────────────────────── */}
-      <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-3 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-3 xl:flex">
+      <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-3 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-3 xl:flex" data-home-scroll>
         <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Platform highlights</h2>
