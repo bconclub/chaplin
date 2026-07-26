@@ -110,6 +110,8 @@ export const SHOT_KNOWLEDGE_BASE = {
   negative: [
     "No identity drift, beautification, age shift, body morphing, duplicate person, or costume redesign.",
     "No floating props, detached hands, extra fingers, merged bodies, disappearing products, relabeled packaging, or background rebuild.",
+    "No held poster, sign, placard, banner, card, or any object that was not already in the actor's hand in the first frame.",
+    "No robotic or mechanical motion, no puppet-like joints, no evenly-timed looping gestures, no slow-motion drift, and no physically impossible movement.",
     "No subtitles, captions, UI, logo, watermark, unintended speech, lip-sync, music, or new sound source.",
   ],
   review: [
@@ -315,6 +317,13 @@ export function buildShotVideoPrompt(input: ShotPromptInput): string {
     ...(input.hasProductReference
       ? [`PRODUCT ANCHOR: Keep the visible ${input.productName || "product"} continuously present, correctly shaped, correctly labeled, stable in scale, and physically connected to the stated surface or hand.`]
       : ["STORY ANCHOR: Preserve only the people, objects, and environmental evidence visible in this scene's supplied first frame. Do not invent an advertising setup or borrow objects from another scene."]),
+    /*
+      A four-second shot has to contain a performance. Without this the model
+      returns an actor standing still, staring off, waiting to speak - correct
+      in every locked detail and completely inert.
+    */
+    `PERFORMANCE: ${actors[0].name} is alive and occupied throughout. Head turns, eyeline changes, and hand movement are motivated by the action and carry human timing - uneven, weighted, with a settle at the end rather than a mechanical ease. Include continuous secondary life: breath, a weight shift, a small adjustment of grip or posture. Do not open on the actor idling, staring into the distance, or visibly waiting to speak; the action is already underway by the end of the establish beat.`,
+    `DYNAMICS: Match the energy to the beat - ${input.scene.objective || "the situation changes"}. A tense beat is tight and contained; an urgent beat moves. Something visible must change between the first and last frame.`,
     "PHYSICS: Natural blink, breath, grounded weight, cloth inertia, plausible hand contact, and restrained environmental motion. Every moving object must have an explicit owner, support, or contact point.",
     `CONTINUITY: ${input.continuityNote || "Do not reverse travel direction, swap positions, rebuild the background, add people, or change object count."}`,
     ...(risks.length ? [`SIMPLIFY BEFORE RENDER: ${risks.map((risk) => risk.message).join(" ")}`] : []),

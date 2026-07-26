@@ -94,3 +94,30 @@ test("one location is allowed when the beat actually moves", () => {
   ], 4);
   assert.equal(result.valid, true);
 });
+
+test("a shot is directed to perform, not to stand and wait", () => {
+  const prompt = buildShotVideoPrompt({
+    productionTitle: "Curfew Tax",
+    productionLogline: "One choice changes the debt.",
+    scene: {
+      setting: "INT/EXT. NIGHT MARKET ALLEY - DEAD END - NIGHT",
+      objective: "Corner the debtor",
+      action: "VANTA-9 advances through sheeting rain and blocks the only exit",
+      lines: [],
+    },
+    sceneIndex: 0,
+    sceneCount: 4,
+    format: "punch",
+    actorName: "VANTA-9",
+    actorIdentity: "VANTA-9: a gunmetal enforcement android.",
+  } as Parameters<typeof buildShotVideoPrompt>[0]);
+
+  assert.match(prompt, /PERFORMANCE:/);
+  assert.match(prompt, /human timing/i);
+  assert.match(prompt, /waiting to speak/i);
+  assert.match(prompt, /DYNAMICS:/);
+  assert.match(prompt, /Something visible must change/i);
+  // Held signage is a common invented artefact.
+  assert.match(prompt, /No held poster, sign, placard/i);
+  assert.match(prompt, /No robotic or mechanical motion/i);
+});
