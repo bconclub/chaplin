@@ -1,5 +1,5 @@
-import InfiniteCharacterGallery from "@/components/InfiniteCharacterGallery";
+import HomeShell from "@/components/home/HomeShell";
 
 export default function HomePage() {
-  return <InfiniteCharacterGallery />;
+  return <HomeShell />;
 }

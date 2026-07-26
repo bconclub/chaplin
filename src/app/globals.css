@@ -200,6 +200,28 @@ body:has(> main [data-home-featured]) > main {
   overflow: hidden;
 }
 
+/*
+  The home shell is a full-viewport application surface with its own rail, top
+  bar, and sidebar, so the global site chrome would double up on it. It owns
+  100dvh and never scrolls the page; its three columns scroll internally.
+*/
+body:has([data-home-shell]) > header,
+body:has([data-home-shell]) > footer,
+body:has([data-home-shell]) [data-bottom-nav] {
+  display: none;
+}
+
+body:has([data-home-shell]) > main {
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body:has([data-home-shell]) {
+  overflow: hidden;
+}
+
 [data-create-toggle] {
   left: 50%;
   top: 0;
