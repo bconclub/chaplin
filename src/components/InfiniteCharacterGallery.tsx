@@ -49,7 +49,7 @@ function FeaturedLandscapeCard({
     <button
       type="button"
       onClick={onActivate}
-      className={`group relative aspect-video min-w-[68vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[16rem] lg:min-w-0 ${
+      className={`group relative aspect-[4/5] min-w-[44vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[11rem] lg:aspect-auto lg:h-[13.5rem] lg:min-w-0 ${
         active
           ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,0.28),0_14px_38px_rgba(0,0,0,0.32)]"
           : "border-white/10 hover:-translate-y-0.5 hover:border-white/30"
@@ -64,7 +64,7 @@ function FeaturedLandscapeCard({
           src={artwork}
           alt=""
           fill
-          sizes="(max-width: 640px) 68vw, (max-width: 1024px) 16rem, 19vw"
+          sizes="(max-width: 640px) 44vw, (max-width: 1024px) 11rem, 15vw"
           className="object-cover transition-transform duration-700 group-hover:scale-[1.035]"
         />
       ) : (
@@ -238,56 +238,80 @@ export default function InfiniteCharacterGallery() {
               </div>
             </div>
 
+            {/*
+              Desktop shows the performance inside a real 16:9 frame rather than
+              bleeding it across the panel. Filling the full width forced a
+              landscape source into a tall box and cropped the shot to a
+              close-up; the framed version letterboxes instead, so the whole
+              composition stays visible and nothing is distorted. Mobile keeps
+              the full-bleed backdrop that the overlaid text is designed for.
+            */}
             <div
-              className="absolute inset-0 min-h-0 overflow-hidden bg-black lg:relative lg:inset-auto"
+              className="absolute inset-0 min-h-0 overflow-hidden bg-black lg:relative lg:inset-auto lg:flex lg:items-center lg:justify-center lg:bg-transparent lg:p-5 xl:p-7"
               data-featured-media
             >
-              {currentArtwork ? (
-                <Image
-                  key={currentArtwork}
-                  src={currentArtwork}
-                  alt={currentCharacter.name}
-                  fill
-                  priority
-                  quality={90}
-                  sizes="(min-width: 1024px) 66vw, 100vw"
-                  className="object-cover object-center"
-                />
-              ) : (
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: `linear-gradient(120deg, ${hsl(ARCHETYPE_HUE[currentCharacter.archetype], 52, 20)}, #050807 72%)`,
-                  }}
-                />
+              {currentArtwork && (
+                <div className="pointer-events-none absolute inset-0 hidden lg:block" aria-hidden="true">
+                  <Image
+                    src={currentArtwork}
+                    alt=""
+                    fill
+                    sizes="60vw"
+                    className="scale-110 object-cover opacity-30 blur-2xl"
+                  />
+                  <div className="absolute inset-0 bg-[#050807]/60" />
+                </div>
               )}
 
-              {currentVideo && (
-                <video
-                  key={`${currentCharacter.id}-${currentVideo}`}
-                  src={currentVideo}
-                  poster={currentArtwork ?? undefined}
-                  autoPlay
-                  muted
-                  playsInline
-                  preload="auto"
-                  onLoadedMetadata={() => setHeroProgress(0)}
-                  onTimeUpdate={(event) => {
-                    const video = event.currentTarget;
-                    setHeroProgress(video.duration ? video.currentTime / video.duration : 0);
-                  }}
-                  onCanPlay={(event) => {
-                    void event.currentTarget.play().catch(() => {
-                      // The poster remains visible if a browser blocks muted autoplay.
-                    });
-                  }}
-                  onEnded={playNext}
-                  className="absolute inset-0 h-full w-full object-cover object-center"
-                  data-featured-video
-                />
-              )}
+              <div className="relative h-full w-full overflow-hidden lg:aspect-video lg:h-full lg:w-auto lg:max-w-full lg:rounded-lg lg:border lg:border-white/12 lg:bg-black lg:shadow-[0_24px_70px_rgba(0,0,0,0.55)]">
+                {currentArtwork ? (
+                  <Image
+                    key={currentArtwork}
+                    src={currentArtwork}
+                    alt={currentCharacter.name}
+                    fill
+                    priority
+                    quality={90}
+                    sizes="(min-width: 1024px) 60vw, 100vw"
+                    className="object-cover object-center lg:object-contain"
+                  />
+                ) : (
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: `linear-gradient(120deg, ${hsl(ARCHETYPE_HUE[currentCharacter.archetype], 52, 20)}, #050807 72%)`,
+                    }}
+                  />
+                )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
+                {currentVideo && (
+                  <video
+                    key={`${currentCharacter.id}-${currentVideo}`}
+                    src={currentVideo}
+                    poster={currentArtwork ?? undefined}
+                    autoPlay
+                    muted
+                    playsInline
+                    preload="auto"
+                    onLoadedMetadata={() => setHeroProgress(0)}
+                    onTimeUpdate={(event) => {
+                      const video = event.currentTarget;
+                      setHeroProgress(video.duration ? video.currentTime / video.duration : 0);
+                    }}
+                    onCanPlay={(event) => {
+                      void event.currentTarget.play().catch(() => {
+                        // The poster remains visible if a browser blocks muted autoplay.
+                      });
+                    }}
+                    onEnded={playNext}
+                    className="absolute inset-0 h-full w-full object-cover object-center lg:object-contain"
+                    data-featured-video
+                  />
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10 lg:hidden" />
+              </div>
+
               <div className="absolute inset-y-0 left-0 hidden w-20 bg-gradient-to-r from-[#030605] to-transparent lg:block" />
             </div>
           </div>
