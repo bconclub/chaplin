@@ -236,6 +236,14 @@ export default function StoryBuilderForm() {
   const [claudeConfigured, setClaudeConfigured] = useState<boolean | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [startingProduction, setStartingProduction] = useState(false);
+  /*
+    The cast a written script belongs to. Magic Write produces a title, logline
+    and scenes about specific actors; swapping the cast afterwards left all of
+    that naming someone who is no longer in the story, and the production shipped
+    as "Ash Reaper: A Day in the Life" cast entirely with a different actor.
+    Remembering the authored cast is what makes that drift detectable.
+  */
+  const [scriptCastIds, setScriptCastIds] = useState<string[]>([]);
   const [draftId, setDraftId] = useState(() => searchParams.get("draft") ?? "");
   const [draftReady, setDraftReady] = useState(() => !searchParams.get("draft"));
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>(
@@ -495,7 +503,13 @@ export default function StoryBuilderForm() {
           : scene
       )));
       setSceneAssistMessage(null);
-      setMagicMessage("Cast changed — scene stills were cleared. Regenerate them so every shot shows the new cast.");
+      const stranded = scriptCastIds
+        .filter((id) => !next.includes(id))
+        .map((id) => world.characters.find((character) => character.id === id)?.name)
+        .filter(Boolean);
+      setMagicMessage(stranded.length
+        ? `Cast changed — scene stills were cleared, and the script is still written for ${stranded.join(", ")}. Rewrite it for the new cast before producing.`
+        : "Cast changed — scene stills were cleared. Regenerate them so every shot shows the new cast.");
       return next;
     });
   }
@@ -645,6 +659,9 @@ export default function StoryBuilderForm() {
           lines: [],
         }]).map((scene) => ({ ...scene, durationSeconds: 4 }));
         setScenes(nextScenes);
+        // This script is about these actors; that binding is what later detects
+        // a cast swap leaving the script naming someone who is no longer cast.
+        setScriptCastIds(nextCastIds);
         setActiveSceneIndex(0);
         setStep(3);
         /*
@@ -891,6 +908,17 @@ export default function StoryBuilderForm() {
       setStep(2);
       return;
     }
+    // Refuse rather than ship a cut whose title, logline and scenes name an
+    // actor who is not in it.
+    const stranded = scriptCastIds
+      .filter((id) => !castIds.includes(id))
+      .map((id) => world.characters.find((character) => character.id === id)?.name)
+      .filter(Boolean);
+    if (stranded.length) {
+      setError(`This script was written for ${stranded.join(", ")}, who is no longer cast. Rewrite the concept and scenes for the current cast before producing.`);
+      setStep(3);
+      return;
+    }
     const validScenes = scenes
       .map((sc, sceneIndex) => ({
         ...(() => {
@@ -1013,6 +1041,16 @@ export default function StoryBuilderForm() {
     what is missing before the click instead of after it. Frames are deliberately
     absent: previews are a convenience, not a gate on production.
   */
+  /*
+    A script written for one cast and produced with another is the worst kind of
+    incoherence: the title, logline and every scene still name an actor the
+    audience never sees. It blocks production rather than warns, because the
+    delivered cut would be wrong in a way no amount of regenerated stills fixes.
+  */
+  const departedScriptCast = scriptCastIds
+    .filter((id) => !castIds.includes(id))
+    .map((id) => world.characters.find((character) => character.id === id)?.name)
+    .filter(Boolean) as string[];
   const productionBlockedReason =
     format === "spot" && !productImageUrl
       ? "Upload the product reference first"
@@ -1022,7 +1060,9 @@ export default function StoryBuilderForm() {
           ? "Lock at least one actor"
           : !scriptLocked
             ? `${scenes.length - authoredScenes} scene${scenes.length - authoredScenes === 1 ? "" : "s"} still unwritten`
-            : undefined;
+            : departedScriptCast.length
+              ? `Script still written for ${departedScriptCast.join(", ")}`
+              : undefined;
   const sceneAssets: SceneAsset[] = scenes.map((scene, index) => ({
     index,
     setting: scene.setting,
