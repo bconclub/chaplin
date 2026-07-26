@@ -4,7 +4,24 @@ type FeedGenerationVisibility = {
   mediaKind?: string | null;
   sourceAssetId?: string | null;
   videoType?: string | null;
+  /** True when this asset is being published because a creator chose it. */
+  selected?: boolean;
 };
+
+/**
+ * A still generated as one of several options for the creator to compare.
+ *
+ * Every provider's attempt was published the moment it rendered, so a
+ * two-provider pass put both candidates in the feed and the discarded one sat
+ * there alongside the kept one, muddying who the character is. A candidate
+ * stays private until it is chosen; choosing it is what publishes it.
+ */
+function isUnchosenComparisonCandidate(input: FeedGenerationVisibility) {
+  if (input.selected) return false;
+  const metadata = input.jobMetadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+  return (metadata as Record<string, unknown>).comparisonCandidate === true;
+}
 
 function normalized(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
@@ -28,6 +45,7 @@ export function isPunchGeneration(videoType?: string | null, metadata?: unknown)
  * event. Admin generation logs retain every asset regardless of this policy.
  */
 export function isGenerationVisibleInFeed(input: FeedGenerationVisibility) {
+  if (isUnchosenComparisonCandidate(input)) return false;
   if (!input.sourceAssetId) return normalized(input.mediaKind) !== "audio";
 
   const kind = normalized(input.assetKind);

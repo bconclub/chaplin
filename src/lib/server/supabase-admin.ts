@@ -671,6 +671,25 @@ export async function getCharacterProductionState(characterId: string) {
   };
 }
 
+
+/**
+ * Publishes a still that the creator has just chosen.
+ *
+ * Comparison candidates are withheld from the feed while they are only
+ * options, so choosing one is the moment it becomes part of the character's
+ * public record. Silent when the asset has no generation job behind it or was
+ * already published.
+ */
+async function publishSelectedAssetToFeed(assetId: string) {
+  const job = await adminClient()
+    .from("generation_jobs")
+    .select("id")
+    .eq("output_asset_id", assetId)
+    .maybeSingle();
+  if (job.error || !job.data?.id) return;
+  await publishGenerationToFeed(job.data.id, assetId, true).catch(() => undefined);
+}
+
 export async function selectCharacterSceneImageAsset(input: { characterId: string; assetId: string }) {
   const supabase = adminClient();
   const assets = await supabase
@@ -691,6 +710,7 @@ export async function selectCharacterSceneImageAsset(input: { characterId: strin
       .eq("id", asset.id);
   }));
   for (const update of updates) assert(update.error, "Select scene image");
+  await publishSelectedAssetToFeed(selected.id);
   return { assetId: selected.id, url: selected.url };
 }
 
@@ -1025,7 +1045,7 @@ function generationFeedCopy(kind: string, characterName: string, prompt: string 
   return `Something new is taking shape with ${characterName}.`;
 }
 
-async function publishGenerationToFeed(jobId: string, assetId: string) {
+async function publishGenerationToFeed(jobId: string, assetId: string, selected = false) {
   const supabase = adminClient();
   const [jobResult, assetResult] = await Promise.all([
     supabase.from("generation_jobs").select("character_id,kind,pipeline_experiment_id,video_type,metadata").eq("id", jobId).maybeSingle(),
@@ -1067,6 +1087,7 @@ async function publishGenerationToFeed(jobId: string, assetId: string) {
     mediaKind,
     videoType: job.video_type,
     jobMetadata: job.metadata,
+    selected,
   })) return;
   const insert = await supabase.from("feed_posts").insert({
     author_id: character.maker_id,

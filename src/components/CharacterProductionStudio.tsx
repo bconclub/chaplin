@@ -1143,6 +1143,8 @@ export default function CharacterProductionStudio({
         referenceImage: requestedPurpose === "scene" ? identityReferenceImage : undefined,
         identityVariationKey,
         imagePreset,
+        // One of several options to compare; it reaches the feed only if chosen.
+        comparisonCandidate: true,
       });
       setImageCandidates([]);
       setImageProviderErrors({});
@@ -1634,6 +1636,7 @@ export default function CharacterProductionStudio({
         const imageRequest = (imagePreset: string) => ({
           prompt: writtenImagePrompt,
           imagePurpose: automaticPurpose,
+          comparisonCandidate: true,
           referenceImage: automaticPurpose === "scene" ? identityReferenceImage : undefined,
           identityVariationKey,
           imagePreset,

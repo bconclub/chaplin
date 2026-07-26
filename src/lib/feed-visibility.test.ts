@@ -23,3 +23,24 @@ test("manual audio is hidden because it cannot be verified as a theme or Punch l
   assert.equal(isGenerationVisibleInFeed({ mediaKind: "image" }), true);
   assert.equal(isGenerationVisibleInFeed({ mediaKind: null }), true);
 });
+
+test("a comparison candidate stays out of the feed until it is chosen", () => {
+  const candidate = {
+    sourceAssetId: "asset-1",
+    assetKind: "gallery",
+    mediaKind: "image",
+    jobMetadata: { comparisonCandidate: true },
+  };
+  // Both providers' stills used to publish; the discarded one muddied the actor.
+  assert.equal(isGenerationVisibleInFeed(candidate), false);
+  assert.equal(isGenerationVisibleInFeed({ ...candidate, selected: true }), true);
+});
+
+test("an ordinary still is unaffected by the candidate rule", () => {
+  assert.equal(isGenerationVisibleInFeed({
+    sourceAssetId: "asset-2",
+    assetKind: "gallery",
+    mediaKind: "image",
+    jobMetadata: {},
+  }), true);
+});

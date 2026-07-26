@@ -1237,6 +1237,9 @@ export async function POST(request: Request) {
       const cardNegativePrompt = readCharacterCardV2(requestCharacter?.cardV2)?.identity_locks.negative_prompt;
       const referenceMetadata = {
         imagePurpose,
+        // Set when this still is one of several rendered for the creator to
+        // compare; it stays out of the feed until one is chosen.
+        comparisonCandidate: input.comparisonCandidate === true,
         referenceImage: reference || null,
         referenceAssetId: imagePurpose === "scene" ? canonicalReference?.assetId ?? null : null,
         referenceSource: preserveIdentity
