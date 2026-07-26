@@ -133,3 +133,6 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.25 | `77941f6` | 2026-07-26T09:21:30+05:30 | Changelog for v0.1.19 |
 | v0.1.26 | `819a67b` | 2026-07-26T09:30:44+05:30 | Keep identity references clean and start new actors blank |
 | v0.1.27 | `021b3e6` | 2026-07-26T09:34:06+05:30 | fix: unify production workspace header |
+| v0.1.28 | `b40f605` | 2026-07-26T09:35:14+05:30 | chore: sync v0.1.28 release metadata |
+| v0.1.29 | `5d2672f` | 2026-07-26T09:36:06+05:30 | Stop every actor opening on the same fallback scene |
+| v0.1.30 | `a154642` | 2026-07-26T09:40:35+05:30 | Match the deployed Replicate env name and verified model schemas |

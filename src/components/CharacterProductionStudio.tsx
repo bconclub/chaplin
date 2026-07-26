@@ -120,6 +120,12 @@ type ImageCandidate = {
   provider: "openai" | "openrouter" | "byteplus";
   model: string;
 };
+type VideoSeedOption = {
+  id: string;
+  assetId: string | null;
+  url: string;
+  label: string;
+};
 type ImageProviderKey = ImageCandidate["provider"];
 const IMAGE_PROVIDER_LABELS: Record<ImageProviderKey, string> = {
   openai: "GPT Image 2",
@@ -561,6 +567,8 @@ export default function CharacterProductionStudio({
   const [selectedImageAssetId, setSelectedImageAssetId] = useState("");
   const [generatedImage, setGeneratedImage] = useState("");
   const [canonicalReferenceImage, setCanonicalReferenceImage] = useState("");
+  const [selectedVideoSeedId, setSelectedVideoSeedId] = useState("");
+  const [selectedVideoSeedUrl, setSelectedVideoSeedUrl] = useState("");
   const [generatedVideo, setGeneratedVideo] = useState("");
   const [assetHistory, setAssetHistory] = useState<ProductionAsset[]>([]);
   const [magicSceneIndex, setMagicSceneIndex] = useState(0);
@@ -579,6 +587,47 @@ export default function CharacterProductionStudio({
   const workflowContentRef = useRef<HTMLDivElement | null>(null);
   const quickWriteRevisionRef = useRef(0);
   const identityReferenceImage = canonicalReferenceImage || character.imageUrl || character.galleryUrls?.[0] || character.bannerUrl || "";
+  const videoSeedOptions = useMemo(() => {
+    const seeds = new Map<string, VideoSeedOption>();
+    const addSeed = (seed: VideoSeedOption) => {
+      if (!seed.url || seeds.has(seed.url)) return;
+      seeds.set(seed.url, seed);
+    };
+    imageCandidates.forEach((candidate) => addSeed({
+      id: candidate.assetId,
+      assetId: candidate.assetId,
+      url: candidate.url,
+      label: imageProviderLabel(candidate.provider),
+    }));
+    assetHistory
+      .filter((asset) => asset.kind === "gallery")
+      .forEach((asset, index) => addSeed({
+        id: asset.id,
+        assetId: asset.id,
+        url: asset.url,
+        label: asset.metadata?.imagePurpose === "identity"
+          ? "Identity image"
+          : `Scene still ${index + 1}`,
+      }));
+    const visualReference = status?.production?.visualReference;
+    if (visualReference?.url) {
+      addSeed({
+        id: visualReference.assetId ?? "profile-reference",
+        assetId: visualReference.assetId,
+        url: visualReference.url,
+        label: "Profile reference",
+      });
+    }
+    if (identityReferenceImage) {
+      addSeed({
+        id: "identity-reference",
+        assetId: null,
+        url: identityReferenceImage,
+        label: "Identity reference",
+      });
+    }
+    return [...seeds.values()];
+  }, [assetHistory, identityReferenceImage, imageCandidates, status?.production?.visualReference]);
 
   useEffect(() => {
     if (!generationRun || generationRun.status !== "running") return;
@@ -593,7 +642,7 @@ export default function CharacterProductionStudio({
   // A newly composed scene frame takes priority, but an actor with an approved
   // canonical image is already ready for image-to-video. Requiring another
   // still here left the video action disabled for otherwise complete actors.
-  const videoReferenceImage = generatedImage || identityReferenceImage;
+  const videoReferenceImage = selectedVideoSeedUrl || generatedImage || identityReferenceImage;
   function jumpToStep(stepId: number) {
     setActiveStep(stepId);
     window.requestAnimationFrame(() => {
@@ -647,7 +696,14 @@ export default function CharacterProductionStudio({
         if (!production) return;
         const assets = production.assets ?? [];
         setAssetHistory(assets);
-        setGeneratedImage(latestSceneReference(assets));
+        const selectedVideoSeed = assets.find((asset) =>
+          asset.kind === "gallery" && asset.metadata?.selectedForVideo === true
+        );
+        setGeneratedImage(selectedVideoSeed?.url ?? "");
+        if (selectedVideoSeed) {
+          setSelectedVideoSeedId(selectedVideoSeed.id);
+          setSelectedVideoSeedUrl(selectedVideoSeed.url);
+        }
         setCanonicalReferenceImage(production.visualReference?.url ?? "");
         if (production.voiceId) setLockedVoiceId(production.voiceId);
         if (production.voiceId && production.voiceId !== character.voiceId) {
@@ -693,7 +749,14 @@ export default function CharacterProductionStudio({
       const assets = data.production.assets ?? [];
       setAssetHistory((current) => mergeProductionAssets(current, assets));
       const latestGeneratedImage = latestSceneReference(assets);
-      if (latestGeneratedImage) setGeneratedImage(latestGeneratedImage);
+      if (latestGeneratedImage) {
+        const selectedVideoSeed = assets.find((asset) =>
+          asset.kind === "gallery" && asset.metadata?.selectedForVideo === true
+        );
+        setGeneratedImage(latestGeneratedImage);
+        setSelectedVideoSeedId(selectedVideoSeed?.id ?? "");
+        setSelectedVideoSeedUrl(latestGeneratedImage);
+      }
       setCanonicalReferenceImage(data.production.visualReference?.url ?? "");
       if (data.production.voiceId) setLockedVoiceId(data.production.voiceId);
       if (data.production.voiceId && data.production.voiceId !== character.voiceId) {
@@ -1129,6 +1192,8 @@ export default function CharacterProductionStudio({
       });
       if (!response.ok) throw new Error(await errorFrom(response));
       setSelectedImageAssetId(candidate.assetId);
+      setSelectedVideoSeedId(candidate.assetId);
+      setSelectedVideoSeedUrl(candidate.url);
       if (imagePurpose === "identity") {
         setCanonicalReferenceImage(candidate.url);
         setGeneratedImage("");
@@ -1141,6 +1206,34 @@ export default function CharacterProductionStudio({
         : `${imageProviderLabel(candidate.provider)} is now Seedance’s exact first frame.`);
       advanceAfterCompletion(6);
     });
+  }
+
+  async function selectVideoSeed(seed: VideoSeedOption) {
+    setSelectingAsset(seed.id);
+    setMessage("");
+    try {
+      if (seed.assetId) {
+        const response = await fetch("/api/characters/profile-media", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            characterId: character.id,
+            assetId: seed.assetId,
+            slot: "scene",
+          }),
+        });
+        if (!response.ok) throw new Error(await errorFrom(response));
+      }
+      setSelectedVideoSeedId(seed.id);
+      setSelectedVideoSeedUrl(seed.url);
+      setGeneratedImage(seed.url);
+      if (seed.assetId) await refreshHistory();
+      setMessage(`${seed.label} is now the exact first frame for the next video.`);
+    } catch (error) {
+      setMessage(`Could not select this seed image: ${error instanceof Error ? error.message : "Please try again."}`);
+    } finally {
+      setSelectingAsset("");
+    }
   }
 
   function uploadReferenceImage(file: File) {
@@ -1163,6 +1256,8 @@ export default function CharacterProductionStudio({
 
       setCanonicalReferenceImage(data.url);
       setGeneratedImage(data.url);
+      setSelectedVideoSeedId(data.id);
+      setSelectedVideoSeedUrl(data.url);
       if (!character.galleryUrls?.includes(data.url)) addCharacterImage(character.id, data.url);
       await refreshHistory();
       setMessage("Reference image uploaded. It is now the actor’s canonical visual seed and Seedance’s exact first frame.");
@@ -2559,6 +2654,54 @@ export default function CharacterProductionStudio({
                 label={generatedVideo || character.videoUrl ? "Regenerate prompt" : "Quick Write"}
               />
             </div>
+            {videoSeedOptions.length > 0 && (
+              <section className="rounded-md border border-line bg-black/15 p-3" data-video-seed-picker>
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <span>
+                    <span className="block text-xs font-semibold">Choose the seed image</span>
+                    <span className="mt-0.5 block text-[10px] text-grey">Seedance will animate this exact first frame.</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => jumpToStep(5)}
+                    className="shrink-0 text-[10px] font-semibold text-accent hover:underline"
+                  >
+                    Create another still →
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {videoSeedOptions.map((seed) => {
+                    const selected = selectedVideoSeedId
+                      ? selectedVideoSeedId === seed.id
+                      : videoReferenceImage === seed.url;
+                    return (
+                      <button
+                        key={seed.id}
+                        type="button"
+                        onClick={() => void selectVideoSeed(seed)}
+                        disabled={Boolean(selectingAsset) || Boolean(busy)}
+                        className={`group relative overflow-hidden rounded-sm border text-left transition-colors disabled:opacity-45 ${
+                          selected
+                            ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,.4)]"
+                            : "border-line hover:border-accent/55"
+                        }`}
+                        aria-pressed={selected}
+                        data-video-seed={seed.id}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- generated CDN URLs are dynamic */}
+                        <img src={seed.url} alt={seed.label} className="aspect-video w-full object-cover" />
+                        <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black via-black/85 to-transparent px-2 pb-1.5 pt-5">
+                          <span className="truncate text-[9px] font-semibold text-white">{seed.label}</span>
+                          <span className={`shrink-0 text-[8px] font-semibold uppercase tracking-[0.1em] ${selected ? "text-accent" : "text-white/55"}`}>
+                            {selectingAsset === seed.id ? "Selecting" : selected ? "Selected" : "Use"}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             {videoReferenceImage && (
               <div className="relative overflow-hidden rounded-sm border border-line" data-video-reference>
                 {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}

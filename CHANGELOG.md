@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.31 - 2026-07-26 - Selectable video seed images
+
+- Added an explicit seed-image picker to the Video stage with compact
+  thumbnails for generated, uploaded, and previously saved character stills.
+- The chosen thumbnail is now persisted as the exact first frame and sent to
+  Seedance, instead of silently falling back to the latest generated image.
+- Allowed an intentional creator selection to use any saved character gallery
+  image as the video seed, while keeping the identity image as a safe fallback.
+- Passed TypeScript, ESLint with one pre-existing test warning, all four test
+  suites (40 tests), and the complete Next.js production build.
+
 ## v0.1.28 - 2026-07-26 - Unified production workspace header
 
 - Moved Magic Scene into the production header instead of stacking it as a

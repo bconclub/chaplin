@@ -576,10 +576,6 @@ export async function selectCharacterSceneImageAsset(input: { characterId: strin
   assert(assets.error, "Load scene image candidates");
   const selected = (assets.data ?? []).find((asset) => asset.id === input.assetId);
   if (!selected) throw new Error("Select scene image: candidate not found.");
-  const selectedMetadata = selected.metadata as Record<string, unknown> | null;
-  if (selectedMetadata?.imagePurpose !== "scene") {
-    throw new Error("Only a scene-frame candidate can become the video first frame.");
-  }
   const updates = await Promise.all((assets.data ?? []).map((asset) => {
     const metadata = asset.metadata && typeof asset.metadata === "object"
       ? asset.metadata as Record<string, unknown>
