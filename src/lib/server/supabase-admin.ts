@@ -125,6 +125,42 @@ export async function persistCharacter(character: Character) {
   assert(error, "Save AI actor");
 }
 
+/**
+ * Upserts a production's story row. Stories previously existed only in the
+ * client store, so pipeline runs referenced story ids the database never held
+ * and the Productions view had nothing to list.
+ */
+export async function persistStory(input: {
+  id: string;
+  authorId: string | null;
+  title: string;
+  logline: string;
+  coverHue: number;
+  backdropUrl: string | null;
+  posterUrl: string | null;
+}) {
+  const supabase = adminClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("stories")
+    .upsert({
+      id: input.id,
+      author_id: input.authorId,
+      title: input.title,
+      logline: input.logline,
+      cover_hue: input.coverHue,
+      backdrop_url: input.backdropUrl,
+      poster_url: input.posterUrl,
+      views: 0,
+      created_at: now,
+      updated_at: now,
+    }, { onConflict: "id", ignoreDuplicates: false })
+    .select("id,title")
+    .maybeSingle();
+  assert(error, "Save story");
+  return data;
+}
+
 export async function ensureCharacter(character: Character) {
   const { error } = await adminClient()
     .from("characters")

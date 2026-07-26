@@ -959,6 +959,26 @@ export default function StoryBuilderForm() {
       castCharacterIds: castIds,
       scenes: validScenes,
     });
+    /*
+      Persist the story before anything references it. addStory only writes to
+      the client store, so a pipeline run used to be created against a story id
+      the database had never seen: the run existed with its full script, the
+      story did not, and Productions listed nothing. Awaited so the row is in
+      place before the production starts.
+    */
+    await fetch("/api/stories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: story.id,
+        authorId: currentUserId,
+        title: story.title,
+        logline: story.logline,
+        coverHue: story.coverHue,
+        posterUrl: validScenes.find((scene) => scene.previewImageUrl)?.previewImageUrl ?? null,
+      }),
+    }).catch(() => undefined);
+
     if (draftId) {
       void fetch(`/api/drafts?id=${encodeURIComponent(draftId)}`, { method: "DELETE" });
     }

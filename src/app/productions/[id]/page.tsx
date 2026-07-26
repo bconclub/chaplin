@@ -101,6 +101,18 @@ function elapsedLabel(seconds: number) {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
+/**
+ * A step is worth another attempt when the failure is transient: a provider
+ * timeout, a rate limit, a 5xx, a dropped connection. Configuration and
+ * validation failures are not - retrying those just burns the budget and the
+ * creator's money on the same rejection.
+ */
+function isRetryableStepError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/not configured|is required|must be|invalid|paused by Super Admin|no longer exists/i.test(message)) return false;
+  return /timed out|timeout|rate limit|429|50\d|temporarily|unavailable|network|fetch failed|ECONN|socket hang up|did not return/i.test(message);
+}
+
 export default function ProductionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const world = useChaplinStore((state) => state);
@@ -598,72 +610,100 @@ export default function ProductionDetailPage() {
         activeRun = await transitionStep(activeRun, step.key, "start");
         step = activeRun.steps.find((candidate) => candidate.key === activeStepKey) ?? step;
 
-        let output: Record<string, unknown> = { completedAt: new Date().toISOString() };
+        /*
+          Steps carry max_attempts of 3 and the server already supports a
+          retry transition, but a failure used to break the run immediately,
+          so the budget was never spent and one transient provider hiccup
+          blocked every remaining step. Transient failures now retry through
+          the real state machine; configuration and validation failures still
+          fail fast rather than burning attempts on the same rejection.
+        */
+        let output: Record<string, unknown> = {};
         let outputAssetId: string | undefined;
-        const firstScene = story.scenes[0];
-        if (step.key === "motion-plate") {
-          const dialogueStep = activeRun.steps.find((candidate) => candidate.key === "dialogue");
-          const referenceAudio = typeof dialogueStep?.output.url === "string" ? dialogueStep.output.url : "";
-          const dialogueText = typeof dialogueStep?.output.text === "string" ? dialogueStep.output.text : "";
-          const response = await fetch("/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "video",
-              characterId: cast[0].id,
-              referenceImage: referenceImageUrl,
-              referenceAudio,
-              dialogueText,
-              prompt: buildShotVideoPrompt({
-                productionTitle: story.title, productionLogline: story.logline, scene: firstScene ?? {},
-                sceneIndex: 0, sceneCount: story.scenes.length || 1, format: story.format,
-                actorName: cast[0].name, actorIdentity: cast[0].personality,
-                productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
-                continuityNote: "Preserve the approved frame's actor, wardrobe, location, product, light, object positions, and direction of travel.",
-              }),
-            }),
-          });
-          const data = await response.json() as { url?: string; assetId?: string; error?: string };
-          if (!response.ok || !data.url || !data.assetId) throw new Error(data.error ?? "Seedance did not return a motion plate.");
-          output = { ...output, url: data.url, referenceImageUrl };
-          outputAssetId = data.assetId;
-        } else if (step.key === "dialogue") {
-          const line = story.scenes.flatMap((scene) => scene.lines).find((candidate) => candidate.characterId === cast[0].id)?.text
-            ?? story.scenes.flatMap((scene) => scene.lines)[0]?.text
-            ?? cast[0].tagline;
-          const asset = await generatePipelineAudio({ action: "speech", characterId: cast[0].id, speechText: line });
-          output = { ...output, url: asset.url, text: line };
-          outputAssetId = asset.assetId;
-        } else if (step.key === "sfx") {
-          const prompt = `A clean 1.5-second non-musical physical sound for ${story.title}: ${cast[0].sfxDesc}. One foreground event, no speech, no melody, no ambience tail.`;
-          const asset = await generatePipelineAudio({ action: "sfx", characterId: cast[0].id, prompt, durationSeconds: 1.5 });
-          output = { ...output, url: asset.url, prompt };
-          outputAssetId = asset.assetId;
-        } else if (step.key === "room-tone") {
-          const prompt = `Two seconds of clean room tone for ${firstScene?.setting ?? "the scene location"}. Stable low-level environmental ambience only, no distinct event, speech, music, melody, or dramatic rise.`;
-          const asset = await generatePipelineAudio({ action: "sfx", characterId: cast[0].id, prompt, durationSeconds: 2 });
-          output = { ...output, url: asset.url, prompt };
-          outputAssetId = asset.assetId;
-        } else if (step.key === "shot-mix") {
-          const response = await fetch("/api/pipeline/mix", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ runId: activeRun.id, characterId: cast[0].id }),
-          });
-          const data = await response.json() as { url?: string; assetId?: string; error?: string };
-          if (!response.ok || !data.url || !data.assetId) throw new Error(data.error ?? "The shot could not be mixed.");
-          output = { ...output, url: data.url, durationSeconds: 5 };
-          outputAssetId = data.assetId;
-        } else if (step.key === "technical-qc") {
-          const mixedUrl = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.output.url;
-          if (typeof mixedUrl !== "string") throw new Error("Technical QC needs a mixed shot.");
-          output = { ...output, url: mixedUrl, checks: ["picture", "audio", "duration", "delivery"] };
-          outputAssetId = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.outputAssetId ?? undefined;
-        } else if (step.key === "creative-review") {
-          const mixedUrl = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.output.url;
-          output = { ...output, url: mixedUrl, review: "human" };
-          outputAssetId = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.outputAssetId ?? undefined;
+        const stepMaxAttempts = Math.max(1, step.maxAttempts || 3);
+        let stepError: unknown = null;
+        for (let attempt = 1; attempt <= stepMaxAttempts; attempt += 1) {
+          try {
+            output = { completedAt: new Date().toISOString() };
+            outputAssetId = undefined;
+            const firstScene = story.scenes[0];
+            if (step.key === "motion-plate") {
+              const dialogueStep = activeRun.steps.find((candidate) => candidate.key === "dialogue");
+              const referenceAudio = typeof dialogueStep?.output.url === "string" ? dialogueStep.output.url : "";
+              const dialogueText = typeof dialogueStep?.output.text === "string" ? dialogueStep.output.text : "";
+              const response = await fetch("/api/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "video",
+                  characterId: cast[0].id,
+                  referenceImage: referenceImageUrl,
+                  referenceAudio,
+                  dialogueText,
+                  prompt: buildShotVideoPrompt({
+                    productionTitle: story.title, productionLogline: story.logline, scene: firstScene ?? {},
+                    sceneIndex: 0, sceneCount: story.scenes.length || 1, format: story.format,
+                    actorName: cast[0].name, actorIdentity: cast[0].personality,
+                    productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
+                    continuityNote: "Preserve the approved frame's actor, wardrobe, location, product, light, object positions, and direction of travel.",
+                  }),
+                }),
+              });
+              const data = await response.json() as { url?: string; assetId?: string; error?: string };
+              if (!response.ok || !data.url || !data.assetId) throw new Error(data.error ?? "Seedance did not return a motion plate.");
+              output = { ...output, url: data.url, referenceImageUrl };
+              outputAssetId = data.assetId;
+            } else if (step.key === "dialogue") {
+              const line = story.scenes.flatMap((scene) => scene.lines).find((candidate) => candidate.characterId === cast[0].id)?.text
+                ?? story.scenes.flatMap((scene) => scene.lines)[0]?.text
+                ?? cast[0].tagline;
+              const asset = await generatePipelineAudio({ action: "speech", characterId: cast[0].id, speechText: line });
+              output = { ...output, url: asset.url, text: line };
+              outputAssetId = asset.assetId;
+            } else if (step.key === "sfx") {
+              const prompt = `A clean 1.5-second non-musical physical sound for ${story.title}: ${cast[0].sfxDesc}. One foreground event, no speech, no melody, no ambience tail.`;
+              const asset = await generatePipelineAudio({ action: "sfx", characterId: cast[0].id, prompt, durationSeconds: 1.5 });
+              output = { ...output, url: asset.url, prompt };
+              outputAssetId = asset.assetId;
+            } else if (step.key === "room-tone") {
+              const prompt = `Two seconds of clean room tone for ${firstScene?.setting ?? "the scene location"}. Stable low-level environmental ambience only, no distinct event, speech, music, melody, or dramatic rise.`;
+              const asset = await generatePipelineAudio({ action: "sfx", characterId: cast[0].id, prompt, durationSeconds: 2 });
+              output = { ...output, url: asset.url, prompt };
+              outputAssetId = asset.assetId;
+            } else if (step.key === "shot-mix") {
+              const response = await fetch("/api/pipeline/mix", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ runId: activeRun.id, characterId: cast[0].id }),
+              });
+              const data = await response.json() as { url?: string; assetId?: string; error?: string };
+              if (!response.ok || !data.url || !data.assetId) throw new Error(data.error ?? "The shot could not be mixed.");
+              output = { ...output, url: data.url, durationSeconds: 5 };
+              outputAssetId = data.assetId;
+            } else if (step.key === "technical-qc") {
+              const mixedUrl = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.output.url;
+              if (typeof mixedUrl !== "string") throw new Error("Technical QC needs a mixed shot.");
+              output = { ...output, url: mixedUrl, checks: ["picture", "audio", "duration", "delivery"] };
+              outputAssetId = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.outputAssetId ?? undefined;
+            } else if (step.key === "creative-review") {
+              const mixedUrl = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.output.url;
+              output = { ...output, url: mixedUrl, review: "human" };
+              outputAssetId = activeRun.steps.find((candidate) => candidate.key === "shot-mix")?.outputAssetId ?? undefined;
+            }
+
+            stepError = null;
+            break;
+          } catch (attemptError) {
+            stepError = attemptError;
+            if (!isRetryableStepError(attemptError) || attempt >= stepMaxAttempts) break;
+            const retryMessage = attemptError instanceof Error ? attemptError.message : "Step failed.";
+            activeRun = await transitionStep(activeRun, activeStepKey, "fail", { errorMessage: retryMessage });
+            activeRun = await transitionStep(activeRun, activeStepKey, "retry");
+            activeRun = await transitionStep(activeRun, activeStepKey, "queue");
+            activeRun = await transitionStep(activeRun, activeStepKey, "start");
+          }
         }
+        if (stepError) throw stepError;
 
         activeRun = await transitionStep(activeRun, step.key, "complete", { output, outputAssetId });
         if (step.key === "creative-review") break;
