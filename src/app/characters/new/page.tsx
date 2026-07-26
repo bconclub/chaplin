@@ -1002,7 +1002,7 @@ export default function NewCharacterPage() {
 
               <section
                 data-magic-character-assist
-                className="mt-4 rounded-xl border border-accent/45 bg-[linear-gradient(135deg,rgba(242,78,112,0.12),rgba(21,92,83,0.15))] p-3.5 shadow-[0_14px_36px_rgba(0,0,0,0.18)]"
+                className="mt-4 rounded-xl border border-accent/45 bg-[linear-gradient(135deg,rgba(242,78,112,0.14),rgba(21,92,83,0.18))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.24)]"
                 aria-labelledby="desktop-magic-write-title"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -1040,7 +1040,7 @@ export default function NewCharacterPage() {
                     type="button"
                     onClick={() => void suggestCharacter("all")}
                     disabled={Boolean(suggestingTarget)}
-                    className="rounded-full bg-accent px-4 py-2 text-[9px] font-semibold text-white hover:bg-accent-light disabled:opacity-45"
+                    className="min-w-36 rounded-full bg-accent px-5 py-2.5 text-[11px] font-semibold text-white hover:bg-accent-light disabled:opacity-45"
                   >
                     {suggestingTarget === "all"
                       ? `Writing everything · ${progress}%`
@@ -1051,18 +1051,23 @@ export default function NewCharacterPage() {
                 </div>
 
                 {suggestingTarget === "all" && (
-                  <div className="mt-3 rounded-lg border border-accent/30 bg-black/20 p-3" role="progressbar" aria-valuenow={progress}>
-                    <div className="flex items-center justify-between text-[9px]">
-                      <span className="font-semibold text-ink">{IDENTITY_BUILD_STAGES[buildStage].label}</span>
-                      <span className="font-mono text-accent">{progress}%</span>
+                  <div className="mt-4 rounded-xl border border-accent/40 bg-black/30 p-4 shadow-[inset_0_1px_rgba(255,255,255,0.04)]" role="progressbar" aria-valuenow={progress}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-grey">
+                          Step {buildStage + 1} of {IDENTITY_BUILD_STAGES.length}
+                        </p>
+                        <span className="mt-1 block text-sm font-semibold text-ink">{IDENTITY_BUILD_STAGES[buildStage].label}</span>
+                      </div>
+                      <span className="font-mono text-2xl font-bold leading-none text-accent">{progress}%</span>
                     </div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-accent to-[#26d7c5] transition-all duration-1000"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-[9px] leading-4 text-grey">{IDENTITY_BUILD_STAGES[buildStage].detail}</p>
+                    <p className="mt-3 text-[11px] leading-5 text-grey">{IDENTITY_BUILD_STAGES[buildStage].detail}</p>
                   </div>
                 )}
 

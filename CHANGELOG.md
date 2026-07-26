@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.12 - 2026-07-26 - Clearer Magic Write progress
+
+- Enlarged the Magic Write action and active generation card in the actor
+  identity panel.
+- Added an explicit current-step counter and promoted the live percentage to a
+  large, high-contrast status.
+- Increased the progress rail and explanatory copy so generation state remains
+  readable inside the narrow desktop creation panel.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  Next.js production build.
+
 ## v0.1.11 - 2026-07-26 - Safe prompt handoffs
 
 - Replaced legacy provider-prompt nesting with one-pass named-slot composition

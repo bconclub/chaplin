@@ -116,3 +116,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.8 | `c6e8946` | 2026-07-26T07:17:15+05:30 | Refine live actor creation and homepage hero |
 | v0.1.9 | `0fb472c` | 2026-07-26T07:24:35+05:30 | Fix completed actor creation |
 | v0.1.10 | `a3c04a5` | 2026-07-26T07:42:00+05:30 | Prevent stale identity reference reuse |
+| v0.1.11 | `62df4b3` | 2026-07-26T08:21:09+05:30 | feat: lint production prompt handoffs |
