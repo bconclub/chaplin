@@ -5,6 +5,7 @@ import {
   assertDialogueFits,
   checkDialogueFit,
   estimateSpeechSeconds,
+  lintAudioScene,
   resolveAudioScene,
   type SceneAudioPlan,
 } from "@/lib/audio-scene";
@@ -165,4 +166,52 @@ test("no more than two timed effects survive into the block", () => {
   });
   assert.match(scene.block, /boot scuff at 1s; chain rattle at 2s/);
   assert.doesNotMatch(scene.block, /door slam/);
+});
+
+test("L5 rejects biography smuggled into an audio block", () => {
+  const scene = resolveAudioScene({
+    model: SEEDANCE_2,
+    generateAudio: true,
+    shotDurationSeconds: 4,
+    plan: {
+      ambience: "the room remembers his betrayal, low hum of guilt",
+      sfxMoments: [],
+    },
+  });
+  const issues = lintAudioScene({ ...scene, hasReferenceAudio: false });
+  assert.ok(issues.some((issue) => issue.rule === "L5"));
+});
+
+test("L7 forbids music tokens in a video prompt", () => {
+  const issues = lintAudioScene({
+    block: "[AUDIO SCENE]\n[AMBIENCE] rain, with a swelling orchestral score underneath",
+    mode: "native-ambient",
+    postMix: false,
+    hasReferenceAudio: false,
+  });
+  assert.ok(issues.some((issue) => issue.rule === "L7"));
+});
+
+test("L8 refuses a lip-sync direction with no locked recording attached", () => {
+  const issues = lintAudioScene({
+    block: "[AUDIO SCENE]\n[DIALOGUE] speaker=VANTA-9; speaks at 0.5-3.5s. Lip-sync to the provided audio reference, which is the actor's locked voice.",
+    mode: "native-ambient",
+    postMix: false,
+    hasReferenceAudio: false,
+  });
+  assert.ok(issues.some((issue) => issue.rule === "L8"));
+});
+
+test("a correctly resolved Path A and Path B shot both lint clean", () => {
+  const pathA = resolveAudioScene({
+    model: SEEDANCE_2, generateAudio: true, shotDurationSeconds: 4,
+    plan: vantaPlan, speakerName: "VANTA-9", referenceAudioUrl: "https://example.com/locked.mp3",
+  });
+  assert.deepEqual(lintAudioScene({ ...pathA, hasReferenceAudio: true }), []);
+
+  const pathB = resolveAudioScene({
+    model: FALLBACK, generateAudio: true, shotDurationSeconds: 4,
+    plan: vantaPlan, speakerName: "VANTA-9", referenceAudioUrl: "https://example.com/locked.mp3",
+  });
+  assert.deepEqual(lintAudioScene({ ...pathB, hasReferenceAudio: true }), []);
 });

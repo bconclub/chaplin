@@ -65,6 +65,50 @@ export const MAX_SFX_MOMENTS = 2;
 const NEGATIVE_COMMON = "no music, no invented voices, no narration, no crowd walla with intelligible words";
 const NEGATIVE_NO_SPEECH = "no speech, no dialogue, no vocal sounds";
 
+/*
+  Ambience and effects describe what the frame physically makes. Biography,
+  motive, and backstory are the same leak that sent a character's psychology to
+  the music model - a sound model cannot record a grudge.
+*/
+const NARRATIVE_IN_AUDIO = /\b(?:betray|revenge|avenge|grief|guilt|memory|memories|remembers?|regret|destiny|fate|redemption|his past|her past|their past|who (?:he|she|they) (?:is|are|was|were))\b/i;
+
+/** Music belongs to the theme stem and is mixed separately, never generated into a plate. */
+const MUSIC_TOKENS = /\b(?:soundtrack|score|musical|orchestral|melody|leitmotif|background music|theme music)\b/i;
+
+export type AudioSceneIssue = { rule: string; message: string };
+
+/**
+ * Structural checks on a resolved audio scene.
+ *
+ * The important one is the dialogue rule: a block that tells the model an actor
+ * speaks, without a locked recording attached and without being marked
+ * post-mix, is the exact shape that produces an invented voice.
+ */
+export function lintAudioScene(input: {
+  block: string;
+  mode: AudioMode;
+  postMix: boolean;
+  hasReferenceAudio: boolean;
+}): AudioSceneIssue[] {
+  const issues: AudioSceneIssue[] = [];
+  if (!input.block) return issues;
+
+  if (NARRATIVE_IN_AUDIO.test(input.block)) {
+    issues.push({ rule: "L5", message: "Biography or narrative leaked into an audio block; describe only what the frame physically makes." });
+  }
+  if (MUSIC_TOKENS.test(input.block)) {
+    issues.push({ rule: "L7", message: "Music is a separately mixed stem and must not be requested in a video prompt." });
+  }
+  const claimsSpeech = /Lip-sync to the provided audio reference/i.test(input.block);
+  if (claimsSpeech && !(input.mode === "native-ref" && input.hasReferenceAudio)) {
+    issues.push({ rule: "L8", message: "A shot that directs lip-sync must have the locked audio reference attached." });
+  }
+  if (input.mode !== "native-ref" && /\[DIALOGUE\] speaker=/i.test(input.block)) {
+    issues.push({ rule: "L8", message: "A speaking shot without an audio reference must be marked post-mix and framed off-face." });
+  }
+  return issues;
+}
+
 /**
  * Rough spoken duration of a line.
  *
