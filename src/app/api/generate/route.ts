@@ -35,6 +35,7 @@ import {
   composeSignatureSfxEventPrompt,
   isThemeDurationPreset,
   withThemeDurationDirection,
+  type CharacterIdentityInput,
 } from "@/lib/production-prompting";
 import { assembleSignatureSfx } from "@/lib/server/signature-sfx";
 import { enforceThemeDuration } from "@/lib/server/audio-postprocess";
@@ -318,14 +319,45 @@ function voiceDesignDescription(stage: PipelineStageConfig, description: string)
   return [direction, adminDirection].filter(Boolean).join(" ").slice(0, 1000).trim();
 }
 
-function voiceDesignAuditionText(previewText: string) {
+/**
+ * Pads a short audition to ElevenLabs' 100-character minimum.
+ *
+ * The padding used to be two fixed sentences, so every actor whose preview ran
+ * short auditioned with the identical words - "I know what this moment costs" -
+ * and the same line turned up in every voice Chaplin generated. Padding is now
+ * drawn from the actor's own canon, so a short preview is extended with
+ * material that belongs to them. The generic lines remain only for an actor
+ * with nothing written yet, which is the one case where there is nothing of
+ * theirs to say.
+ */
+function voiceDesignAuditionText(previewText: string, character?: CharacterIdentityInput) {
   const clean = compactVoicePreview(previewText);
   if (clean.length >= 100) return clean;
+  const own = [
+    character?.brollLine,
+    character?.tagline,
+    character?.personality,
+  ]
+    .map((value) => value?.trim() ?? "")
+    .filter((value) => Boolean(value) && !clean.includes(value));
+  let padded = [clean, ...own].join(" ").trim();
+  /*
+    An actor with a short canon still fell through to the shared lines. Their
+    own strongest line is repeated instead: hearing an actor say their own words
+    twice is a far smaller problem than every actor in the cast auditioning with
+    the same sentence.
+  */
+  const strongest = own[0] ?? clean;
+  while (padded.length < 100 && strongest) {
+    padded = `${padded} ${strongest}`.trim();
+  }
+  if (padded.length >= 100) return padded;
+  // Nothing of theirs exists yet - this is the only case with nothing to say.
   return [
-    clean,
+    padded,
     "I know what this moment costs, and I am choosing it anyway.",
     "Listen carefully; we only get one clean chance to do this right.",
-  ].join(" ");
+  ].join(" ").trim();
 }
 
 async function modelArk(pathname: string, body?: object) {
@@ -751,7 +783,7 @@ export async function POST(request: Request) {
       const voiceConfig = pipeline.stages.voice;
       requireStage(voiceConfig, "Voice");
       const description = voiceDesignDescription(voiceConfig, text(input, "description", 20, 4000));
-      const previewText = voiceDesignAuditionText(text(input, "previewText", 12, 1000));
+      const previewText = voiceDesignAuditionText(text(input, "previewText", 12, 1000), requestCharacter);
       jobId = await startGeneration({ characterId, kind: "voice-design", provider: voiceConfig.provider, model: voiceConfig.model, prompt: description });
       const response = await eleven("/text-to-voice/design?output_format=mp3_44100_128", {
         voice_description: description,
