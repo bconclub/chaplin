@@ -14,7 +14,7 @@ export default async function AdminSceneMapPage() {
   const [characters, config] = await Promise.all([listCharacters(), getPipelineConfig()]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-8 sm:px-6 sm:py-10">
+    <div className="app-width min-w-0 px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Super Admin · Production system</p>

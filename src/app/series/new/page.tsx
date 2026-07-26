@@ -129,7 +129,7 @@ export default function NewSeriesPage() {
 
   const field = "min-w-0 w-full rounded-sm border border-line bg-paper px-3 py-2 text-sm focus:border-accent focus:outline-none";
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-10">
+    <main className="app-width px-6 py-10">
       <Link href="/series" className="text-xs text-grey hover:text-accent">← Production slate</Link>
       <div className="mt-4 mb-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Series story engine</p>

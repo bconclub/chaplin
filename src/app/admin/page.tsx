@@ -58,7 +58,7 @@ export default async function AdminPage() {
     /not activated|activate the model/i.test(latestSeedanceJob.error_message ?? "");
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10 w-full min-w-0 overflow-hidden">
+    <div className="app-width px-4 sm:px-6 py-8 sm:py-10 w-full min-w-0 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-accent font-semibold mb-2">Content operations</p>

@@ -139,7 +139,7 @@ export default function CharacterProfilePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl min-w-0 overflow-x-clip px-4 py-8 sm:px-6 sm:py-10">
+    <div className="app-width min-w-0 overflow-x-clip px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href="/characters"
         className="inline-flex items-center gap-1.5 pl-2.5 pr-4 py-2 rounded-full poster-card text-sm font-semibold hover:text-accent transition-colors mb-3"

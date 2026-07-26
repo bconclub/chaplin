@@ -66,7 +66,7 @@ export default function ShelfPage() {
   }, [world.characters, query, archetypes, licenses, sort]);
 
   return (
-    <div className="shelf-stage relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="shelf-stage relative app-width px-4 py-8 sm:px-6 sm:py-10">
       <div aria-hidden="true" className="shelf-aurora shelf-aurora-pink" />
       <div aria-hidden="true" className="shelf-aurora shelf-aurora-mint" />
 

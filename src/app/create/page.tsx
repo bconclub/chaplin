@@ -24,7 +24,7 @@ export default function CreatePage() {
   const paths = rolePaths[role];
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-12">
+    <main className="app-width px-6 py-12">
       <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">{role} create desk</p>
       <h1 className="marquee-title mt-3 text-5xl sm:text-7xl">
         {role === "creator" ? "BUILD A PERFORMER. MAKE THE PROOF." : "OPERATE THE PRODUCTION SYSTEM."}

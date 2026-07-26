@@ -1249,7 +1249,7 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
+    <main className="app-width px-5 py-10 sm:px-8">
       <div className="flex items-center justify-between gap-4">
         <Link href="/studio" className="text-xs text-grey hover:text-accent">Back to My Studio</Link>
         <span className="rounded-full border border-amber-300/30 px-3 py-1 text-[9px] uppercase tracking-[0.18em] text-amber-200">

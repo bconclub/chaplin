@@ -30,7 +30,7 @@ export default async function AdminPipelinePage() {
   }));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10 w-full min-w-0">
+    <div className="app-width px-4 sm:px-6 py-8 sm:py-10 w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-accent font-semibold mb-2">Super Admin · Production system</p>

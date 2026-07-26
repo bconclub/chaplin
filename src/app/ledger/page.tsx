@@ -28,7 +28,7 @@ export default function LeaderboardPage() {
   const uniqueMakers = new Set(world.characters.map((c) => c.makerId)).size;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 w-full">
+    <div className="app-width px-6 py-10 w-full">
       <SectionHeading eyebrow="The Star System" title="Global Leaderboard" />
       <p className="text-sm text-grey -mt-2 mb-6">
         Every AI actor on the shelf, ranked by lifetime earnings. See what each actor is making.

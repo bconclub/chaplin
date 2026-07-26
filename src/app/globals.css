@@ -201,6 +201,21 @@ body:has(> main [data-home-featured]) > main {
 }
 
 /*
+  One content width for the whole product.
+
+  Every page was picking its own measure — 4xl on the ledger, 5xl on the feed
+  and series, 6xl on characters and productions, 7xl on admin — so the same app
+  rendered with a different column on every tab and left 700-1000px of dead
+  gutter on a 1920px display. This is the single knob: wide enough to use a
+  desktop, capped so an ultrawide does not stretch a line of text to the horizon.
+*/
+.app-width {
+  width: 100%;
+  margin-inline: auto;
+  max-width: min(100%, 108rem);
+}
+
+/*
   Frosted panel used across the home surface. Sits over the ambient glow rather
   than covering it: a translucent fill plus saturated blur, a bright top
   hairline for the lit edge, and a soft drop shadow so panels read as glass
@@ -285,7 +300,15 @@ body:has([data-home-shell]) > main {
   overflow: hidden;
 }
 
+/*
+  The home columns must never paint a scrollbar track. They were `overflow-y:
+  auto`, which reserves and renders a gutter in Chromium even when
+  scrollHeight === clientHeight, so a rail appeared down the right edge with
+  nothing to scroll. Content that will not fit is dropped by the rules below
+  rather than hidden behind a bar.
+*/
 [data-home-shell] [data-home-scroll] {
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 

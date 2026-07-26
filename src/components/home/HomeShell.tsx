@@ -7,7 +7,7 @@ import { ARCHETYPE_HUE, ARCHETYPE_LABEL, hsl } from "@/lib/format";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import type { HomepageBroll } from "@/components/HeroGridCard";
-import { COLLECTIONS, TRENDING_LABELS } from "@/components/home/home-nav";
+import { TRENDING_LABELS } from "@/components/home/home-nav";
 import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
@@ -50,6 +50,8 @@ export default function HomeShell() {
   // catalogue instead of showing the same six actors on every visit.
   const [shuffleTick, setShuffleTick] = useState(0);
   const [version, setVersion] = useState("");
+  const [heroMuted, setHeroMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [heroProgress, setHeroProgress] = useState(0);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -116,20 +118,6 @@ export default function HomeShell() {
     ).slice(0, 5),
     [characters],
   );
-
-  /*
-    Collection covers must not repeat the faces directly above them. Prefer
-    actors outside the ten-card trending rail, then fill from the catalogue's
-    opposite end only when a small library leaves no alternative.
-  */
-  const collectionCharacters = useMemo(() => {
-    const featuredIds = new Set(featured.map((character) => character.id));
-    const distinct = characters.filter((character) => !featuredIds.has(character.id));
-    const fallback = [...characters]
-      .reverse()
-      .filter((character) => !distinct.some((candidate) => candidate.id === character.id));
-    return [...distinct, ...fallback].slice(0, COLLECTIONS.length);
-  }, [characters, featured]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,6 +276,7 @@ export default function HomeShell() {
             {currentVideo && (
               <video
                 key={`${current.id}-${currentVideo}`}
+                ref={videoRef}
                 src={currentVideo}
                 poster={currentArtwork ?? undefined}
                 autoPlay
@@ -310,77 +299,95 @@ export default function HomeShell() {
             <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#080808]/85 to-transparent" />
 
             {/*
-              54% of a 375px screen is 200px, so the headline wrapped down the
-              frame and the buttons were clipped by the hero's overflow. The
-              copy uses the full width on a phone and only yields the right side
-              to the performance once the frame is wide enough to show both.
+              One flex column owns the whole frame. The copy and the identity
+              strip used to be independently positioned layers - the copy was
+              `h-full justify-center` while the strip was `absolute bottom-0` -
+              so once the hero began shrinking to fit the viewport they occupied
+              the same 86px and the actor's name rendered straight through the
+              Explore actors button. As siblings in one column they cannot
+              collide at any height: the copy takes the slack, the strip keeps
+              its own row.
             */}
-            <div className="relative flex h-full max-w-none flex-col justify-center px-5 py-5 sm:max-w-[62%] sm:px-7 lg:max-w-[54%] lg:px-9">
-              <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.22em] text-accent">
+            <div className="relative flex h-full flex-col justify-between px-5 py-4 sm:px-7 sm:py-5 lg:px-9">
+              {/* w-fit so the box hugs the label; full width made it share a
+                  row with the mute control in the opposite corner. */}
+              <p className="flex w-fit shrink-0 items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.22em] text-accent">
                 <span aria-hidden="true">★</span> Featured performance
               </p>
-              <h1 className="reel-title mt-3 text-[clamp(1.7rem,7vw,3.6rem)] leading-[0.94] tracking-[-0.035em] sm:text-[clamp(2.1rem,3.6vw,3.6rem)]">
-                <span className="block">The world of</span>
-                <span className="block text-accent">AI actors.</span>
-              </h1>
-              <p className="mt-3 max-w-sm text-[12.5px] leading-5 text-white/60">
-                Ready to cast AI actors for <strong className="font-semibold text-ink">UGC</strong>, ads, films,
-                microdramas and more.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                <Link
-                  href="/characters"
-                  className="rounded-full bg-accent px-5 py-2.5 text-[12.5px] font-bold text-paper shadow-[0_10px_30px_rgba(242,78,112,0.28)] transition-transform hover:-translate-y-0.5"
-                >
-                  Explore actors →
-                </Link>
-                <button
-                  type="button"
-                  onClick={advance}
-                  className="flex items-center gap-2 rounded-full border border-white/22 bg-black/25 px-5 py-2.5 text-[12.5px] font-semibold backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
-                >
-                  Watch trailer
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-current text-[7px]">▶</span>
-                </button>
-              </div>
-            </div>
 
-            {/* Glass play button, centred on the performance itself */}
-            <button
-              type="button"
-              onClick={advance}
-              aria-label={`Play ${current.name}`}
-              className="absolute left-[64%] top-1/2 z-20 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/10 text-lg backdrop-blur-md transition-all hover:scale-110 hover:border-accent hover:bg-accent/25"
-            >
-              <span className="ml-0.5">▶</span>
-            </button>
-
-            {/* Bottom overlay: identity left, integrated statistics right */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-6 px-7 pb-5 lg:px-9">
-              <div className="min-w-0">
-                <p className="marquee-title truncate text-[17px] uppercase tracking-[0.01em]">{current.name}</p>
-                <p className="mt-1 text-[10.5px] text-accent">
-                  {ARCHETYPE_LABEL[current.archetype]}
-                  <span className="text-white/40"> · {current.licenseType === "open" ? "Open licence" : `${current.royaltyRate}% royalty`}</span>
+              <div className="flex min-h-0 flex-1 flex-col justify-center py-3 sm:max-w-[62%] lg:max-w-[54%]">
+                <h1 className="reel-title text-[clamp(1.6rem,6.5vw,3.4rem)] leading-[0.94] tracking-[-0.035em] sm:text-[clamp(1.9rem,3.4vw,3.4rem)]">
+                  <span className="block">The world of</span>
+                  <span className="block text-accent">AI actors.</span>
+                </h1>
+                <p className="mt-2.5 max-w-sm text-[12.5px] leading-5 text-white/60">
+                  Ready to cast AI actors for <strong className="font-semibold text-ink">UGC</strong>, ads, films,
+                  microdramas and more.
                 </p>
-                <p className="mt-1 max-w-md truncate text-[11px] text-white/50">{current.tagline}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                  <Link
+                    href="/characters"
+                    className="rounded-full bg-accent px-5 py-2.5 text-[12.5px] font-bold text-paper shadow-[0_10px_30px_rgba(242,78,112,0.28)] transition-transform hover:-translate-y-0.5"
+                  >
+                    Explore actors →
+                  </Link>
+                  <Link
+                    href={`/characters/${current.id}`}
+                    className="rounded-full border border-white/22 bg-black/25 px-5 py-2.5 text-[12.5px] font-semibold backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+                  >
+                    Meet {current.name.split(" ")[0]}
+                  </Link>
+                </div>
               </div>
-              <dl className="hidden shrink-0 items-end gap-6 sm:flex">
-                {[
-                  [current.stats.socialImpressions, "Impressions"],
-                  [current.stats.socialViews, "Views"],
-                  [current.stats.socialLikes, "Likes"],
-                  [current.stats.castings, "Castings"],
-                ].map(([value, label]) => (
-                  <div key={String(label)} className="text-right">
-                    <dt className="text-[15px] font-semibold leading-none">
-                      <CountUp value={Number(value)} />
-                    </dt>
-                    <dd className="mt-1 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-white/40">{label}</dd>
-                  </div>
-                ))}
-              </dl>
+
+              {/* Identity and performance, on their own row rather than layered. */}
+              <div className="flex shrink-0 items-end justify-between gap-6">
+                <div className="min-w-0">
+                  <p className="marquee-title truncate text-[15px] uppercase tracking-[0.01em] sm:text-[17px]">{current.name}</p>
+                  <p className="mt-0.5 truncate text-[10.5px] text-accent">
+                    {ARCHETYPE_LABEL[current.archetype]}
+                    <span className="text-white/40"> · {current.licenseType === "open" ? "Open licence" : `${current.royaltyRate}% royalty`}</span>
+                  </p>
+                  <p className="mt-0.5 max-w-md truncate text-[11px] text-white/50">{current.tagline}</p>
+                </div>
+                <dl className="hidden shrink-0 items-end gap-5 sm:flex lg:gap-6">
+                  {[
+                    [current.stats.socialImpressions, "Impressions"],
+                    [current.stats.socialViews, "Views"],
+                    [current.stats.socialLikes, "Likes"],
+                    [current.stats.castings, "Castings"],
+                  ].map(([value, label]) => (
+                    <div key={String(label)} className="text-right">
+                      <dt className="text-[15px] font-semibold leading-none">
+                        <CountUp value={Number(value)} />
+                      </dt>
+                      <dd className="mt-1 text-[8.5px] font-semibold uppercase tracking-[0.14em] text-white/40">{label}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
             </div>
+
+            {/*
+              The clip autoplays muted, so a play button over it was a control
+              that did nothing a viewer wanted. Sound is the thing they actually
+              cannot get to.
+            */}
+            {currentVideo && (
+              <button
+                type="button"
+                onClick={() => {
+                  const video = videoRef.current;
+                  if (!video) return;
+                  video.muted = !video.muted;
+                  setHeroMuted(video.muted);
+                }}
+                aria-label={heroMuted ? `Unmute ${current.name}` : `Mute ${current.name}`}
+                className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[13px] backdrop-blur-md transition-all hover:scale-105 hover:border-accent hover:text-accent lg:right-6 lg:top-6"
+              >
+                {heroMuted ? "🔇" : "🔊"}
+              </button>
+            )}
 
             <span className="absolute inset-x-0 bottom-0 z-30 h-0.5 bg-white/10">
               <span
@@ -467,39 +474,6 @@ export default function HomeShell() {
             </div>
           </section>
 
-          {/* ── CURATED COLLECTIONS ──────────────────────────────── */}
-          <section className="shrink-0 home-frost rounded-2xl p-3 backdrop-blur-2xl backdrop-saturate-150" data-home-collections>
-            <h2 className="mb-2.5 flex items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-[0.18em]">
-              <span aria-hidden="true">◈</span> Curated collections
-            </h2>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-              {COLLECTIONS.map((collection, index) => {
-                const collectionCharacter = collectionCharacters[index % collectionCharacters.length];
-                const artwork = collectionCharacter ? cardArtworkFor(collectionCharacter) : null;
-                return (
-                  <Link
-                    key={collection.title}
-                    href={collection.href}
-                    className="group/tile relative block aspect-[16/11] overflow-hidden rounded-xl border border-[#202020] transition-all hover:-translate-y-0.5 hover:border-accent/45"
-                  >
-                    {artwork ? (
-                      <Image src={artwork} alt="" fill sizes="220px" className="object-cover transition-transform duration-500 group-hover/tile:scale-[1.07]" />
-                    ) : (
-                      <span className="absolute inset-0 bg-[#141414]" />
-                    )}
-                    <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,8,8,0.15),rgba(8,8,8,0.9))]" />
-                    <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
-                      <span className="min-w-0">
-                        <span className="block truncate text-[12px] font-semibold">{collection.title}</span>
-                        <span className="mt-0.5 block text-[9px] text-white/50">{collection.meta(characters.length, stories.length)}</span>
-                      </span>
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[9px] transition-colors group-hover/tile:border-accent group-hover/tile:text-accent">›</span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
         </div>
       </div>
 

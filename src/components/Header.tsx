@@ -73,7 +73,7 @@ export default function Header() {
         className={`fixed inset-x-0 top-0 z-[70] border-b backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-300 ${compact ? "border-line/70 bg-paper/95 shadow-lg shadow-black/10" : "border-line bg-paper/90"}`}
       >
       <HydrateStore />
-      <div className={`max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 transition-[height] duration-300 ${compact ? "h-12" : "h-16"}`}>
+      <div className={`app-width px-4 sm:px-6 flex items-center justify-between gap-3 transition-[height] duration-300 ${compact ? "h-12" : "h-16"}`}>
         <Link
           href="/"
           aria-label="Chaplin home"

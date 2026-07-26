@@ -407,7 +407,7 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
     [characters],
   );
 
-  return <main className="mx-auto grid w-full max-w-5xl gap-10 sm:px-5 sm:py-8 lg:grid-cols-[minmax(0,42rem)_17rem]">
+  return <main className="app-width grid gap-10 sm:px-5 sm:py-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
     <div className="min-w-0">
       <header className="border-b border-line px-4 pt-5 sm:px-0 sm:pt-0">
         {postId && <Link href="/feed" className="text-xs text-grey hover:text-accent">← Feed</Link>}

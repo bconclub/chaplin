@@ -11,7 +11,7 @@ export default function SiteFooter() {
 
   return (
     <footer className="border-t border-line relative z-10 pb-24">
-      <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-grey">
+      <div className="app-width px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-grey">
         <Image
           src="/brand/chaplin-logo-transparent.png"
           alt="Chaplin"
