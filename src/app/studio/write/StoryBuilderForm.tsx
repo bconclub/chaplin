@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChaplinStore } from "@/lib/store";
+import type { Character } from "@/lib/types";
 import { getClientAuthIdentity } from "@/lib/client-auth";
 import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
@@ -240,6 +241,9 @@ export default function StoryBuilderForm() {
   const [draftAccountReady, setDraftAccountReady] = useState(false);
   const [draftAccountId, setDraftAccountId] = useState<string | null>(null);
   const pendingSceneFocusRef = useRef<number | null>(null);
+  // Guards every scene render. State cannot do this job: setScenePreviewBusy is
+  // async, so two calls in the same tick both read `null` and both proceed.
+  const previewRunRef = useRef(false);
   const formatOptions = formatsForRole(activeRole);
   const formatDefinition = PRODUCTION_FORMATS[format];
   const expectedShotCount = productionShotCount(format, durationSeconds);
@@ -769,8 +773,13 @@ export default function StoryBuilderForm() {
     }
   }
 
-  async function generateScenePreview(scene: DraftScene, sceneIndex: number, lead = castCharacters[0]) {
-    if (!lead) return false;
+  /**
+   * Single entry point, guarded against overlapping runs. Callers must go
+   * through generateScenePreview or generateAllScenePreviews so that only one
+   * render is ever in flight; this core is deliberately unguarded so the batch
+   * can drive it in a loop.
+   */
+  async function runScenePreview(scene: DraftScene, sceneIndex: number, lead: Character) {
     setScenePreviewBusy(sceneIndex);
     setError("");
     try {
@@ -834,16 +843,41 @@ export default function StoryBuilderForm() {
     }
   }
 
+  async function generateScenePreview(scene: DraftScene, sceneIndex: number, lead = castCharacters[0]) {
+    if (!lead || previewRunRef.current) return false;
+    previewRunRef.current = true;
+    try {
+      return await runScenePreview(scene, sceneIndex, lead);
+    } finally {
+      previewRunRef.current = false;
+    }
+  }
+
   async function generateAllScenePreviews(nextScenes = scenes, lead = castCharacters[0]) {
-    if (!lead) return;
-    for (let index = 0; index < nextScenes.length; index += 1) {
-      await generateScenePreview(nextScenes[index], index, lead);
+    if (!lead || previewRunRef.current) return;
+    previewRunRef.current = true;
+    try {
+      for (let index = 0; index < nextScenes.length; index += 1) {
+        await runScenePreview(nextScenes[index], index, lead);
+      }
+    } finally {
+      previewRunRef.current = false;
     }
   }
 
   useEffect(() => {
     if (!autoPreviewBatch) return;
-    const lead = world.characters.find((character) => character.id === autoPreviewBatch.leadId);
+    // `autoPreviewBatch` is only cleared in .finally(), once the whole batch has
+    // finished. React StrictMode invokes this effect twice, so without a ref
+    // guard a second batch starts while the first is still running and every
+    // scene renders twice. The ref survives both invocations of the same mount.
+    if (previewRunRef.current) return;
+    // The batch captured its lead when Magic Writer ran. If the cast has changed
+    // since, that actor may no longer be in the story at all — prefer the current
+    // cast so a recast actually repaints the scenes.
+    const lead = castCharacters.find((character) => character.id === autoPreviewBatch.leadId)
+      ?? castCharacters[0]
+      ?? world.characters.find((character) => character.id === autoPreviewBatch.leadId);
     if (lead) {
       void generateAllScenePreviews(autoPreviewBatch.scenes, lead)
         .finally(() => setAutoPreviewBatch(null));
