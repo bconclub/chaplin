@@ -161,6 +161,53 @@ export async function persistStory(input: {
   return data;
 }
 
+
+/**
+ * Publishes a delivered production to the creator feed.
+ *
+ * Individual stills and shots reach the feed through the generation-job path,
+ * but the assembled master is written straight to storage - so the finished
+ * Punch, the only thing an audience actually watches, was the one asset that
+ * never got posted. Called when a creator approves the final cut, which is the
+ * moment it becomes something to show.
+ */
+export async function publishDeliveredCutToFeed(input: {
+  assetId: string;
+  characterId: string;
+  title?: string;
+}) {
+  const supabase = adminClient();
+  const [assetResult, characterResult] = await Promise.all([
+    supabase.from("media_assets").select("id,url,created_at").eq("id", input.assetId).maybeSingle(),
+    supabase.from("characters").select("name,maker_id").eq("id", input.characterId).maybeSingle(),
+  ]);
+  const asset = assetResult.data;
+  const character = characterResult.data;
+  if (!asset?.url || !character?.maker_id) return;
+
+  const existing = await supabase
+    .from("feed_posts")
+    .select("id")
+    .eq("source_asset_id", input.assetId)
+    .maybeSingle();
+  if (existing.data?.id) return;
+
+  const body = input.title?.trim()
+    ? `${input.title.trim()} is finished. Watch the cut with ${character.name}.`
+    : `A new cut with ${character.name} is finished.`;
+  const insert = await supabase.from("feed_posts").insert({
+    author_id: character.maker_id,
+    body,
+    media_kind: "video",
+    media_url: asset.url,
+    source_asset_id: input.assetId,
+    created_at: new Date().toISOString(),
+  });
+  if (insert.error && insert.error.code !== "23505") {
+    throw new Error(`Publish delivered cut: ${insert.error.message}`);
+  }
+}
+
 export async function ensureCharacter(character: Character) {
   const { error } = await adminClient()
     .from("characters")

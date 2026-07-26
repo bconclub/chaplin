@@ -9,7 +9,7 @@ import type {
   PipelineStepAction,
   PipelineStepStatus,
 } from "@/lib/media-pipeline-types";
-import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
+import { getSupabaseAdminClient, publishDeliveredCutToFeed } from "@/lib/server/supabase-admin";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -264,7 +264,7 @@ export async function transitionMediaPipelineStep(input: {
   const [currentResult, runContextResult] = await Promise.all([
     supabase
       .from("media_pipeline_steps")
-      .select("id,position,status,requires_review,attempt,max_attempts")
+      .select("id,position,status,requires_review,attempt,max_attempts,output_asset_id")
       .eq("run_id", input.runId)
       .eq("step_key", input.stepKey)
       .maybeSingle(),
@@ -324,6 +324,23 @@ export async function transitionMediaPipelineStep(input: {
 
   const update = await supabase.from("media_pipeline_steps").update(patch).eq("id", current.id);
   fail(update.error, "Update pipeline step");
+
+  /*
+    Approving the final review is the moment a production becomes something to
+    show. The assembled master is written straight to storage rather than
+    through the generation-job path, so nothing published it - a creator could
+    accept a finished cut and never see it reach the feed. Failures here are
+    swallowed: a feed post must never undo an approval that already succeeded.
+  */
+  if (input.stepKey === "creative-review" && input.action === "approve") {
+    const deliveredAssetId = input.outputAssetId ?? current.output_asset_id;
+    if (deliveredAssetId && runContext.scope_id) {
+      await publishDeliveredCutToFeed({
+        assetId: deliveredAssetId,
+        characterId: runContext.scope_id,
+      }).catch(() => undefined);
+    }
+  }
 
   if (runContext.output_type === "shot") {
     const takePatch: Record<string, unknown> = { updated_at: now };
