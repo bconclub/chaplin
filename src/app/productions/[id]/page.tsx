@@ -737,6 +737,9 @@ export default function ProductionDetailPage() {
       setError("Approve or attach one actor identity frame before rendering the Punch.");
       return;
     }
+    // Bounds the variable parts of provider briefs so fixed constraints survive
+    // the downstream clamp.
+    const clamp = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit);
     const authoredScenes = story.scenes.slice(0, contract.shotCount);
     const sequenceValidation = validateShotSequence(authoredScenes, contract.shotCount);
     if (!sequenceValidation.valid) {
@@ -862,7 +865,6 @@ export default function ProductionDetailPage() {
           and score. The variable parts are bounded here so the constraints
           always survive the clamp.
         */
-        const clamp = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit);
         const sfxPrompt = [
           `One distinctive non-musical foreground sound for scene ${index + 1}.`,
           "Create one physically plausible event caused by the visible action, different from the other scene sounds. No speech, melody, score, generic cinematic boom, or ambience bed.",
@@ -930,8 +932,22 @@ export default function ProductionDetailPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "video",
-            characterId: cast[0].id,
+            // The scene's own lead, so the actor context matches who is on screen.
+            characterId: resolveSceneActors(directedScene, cast).lead.id,
             referenceImage: frameData.frameUrl,
+            /*
+              The audio plan is what engages the AUDIO SCENE grammar. Without it
+              the shot rendered mute: the locked line and the location sound had
+              nowhere to be declared, so a scene with a speaking actor came back
+              silent. Ambience is the location, the effect is the visible action,
+              and the spoken line rides the locked recording below.
+            */
+            audioPlan: {
+              ambience: clamp(directedScene.setting || "the established location", 110),
+              sfxMoments: directedScene.action
+                ? [{ description: clamp(directedScene.action, 90), atSeconds: 2 }]
+                : [],
+            },
             referenceAudio: audioResults[index]?.dialogueUrl,
             dialogueText: audioResults[index]?.dialogueText,
             prompt: motionPrompt,
