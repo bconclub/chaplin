@@ -1167,6 +1167,30 @@ export default function CharacterProductionStudio({
         });
       }
       if (!requests.length) throw new Error("Connect an image provider before generating a still.");
+      /*
+        Show each still the moment its provider returns.
+
+        Waiting on Promise.allSettled meant nothing appeared until the slowest
+        provider finished: an image that existed after eight seconds stayed
+        hidden for as long as the other took, and the feed - which reads the
+        saved asset - was showing it while the studio still displayed a
+        placeholder. Each result is now published to the canvas as it lands; the
+        settled pass below still decides the final message and error state.
+      */
+      requests.forEach((request) => {
+        void request.result
+          .then((candidate) => {
+            setImageCandidates((current) => (
+              current.some((existing) => existing.assetId === candidate.assetId)
+                ? current
+                : [...current, candidate]
+            ));
+            addCharacterImage(character.id, candidate.url);
+          })
+          .catch(() => {
+            // The settled pass reports this provider's failure.
+          });
+      });
       const settled = await Promise.allSettled(requests.map((request) => request.result));
       const results: ImageCandidate[] = [];
       const failures: Partial<Record<ImageProviderKey, string>> = {};
@@ -1184,8 +1208,12 @@ export default function CharacterProductionStudio({
       if (!results.length) {
         throw new Error(Object.values(failures).join(" ") || "Neither image provider returned a still.");
       }
-      setImageCandidates(results);
-      results.forEach((candidate) => addCharacterImage(character.id, candidate.url));
+      // Candidates were already streamed in above; merge rather than replace so
+      // a still that arrived early is not dropped and never duplicated.
+      setImageCandidates((current) => {
+        const seen = new Set(current.map((candidate) => candidate.assetId));
+        return [...current, ...results.filter((candidate) => !seen.has(candidate.assetId))];
+      });
       await refreshHistory();
       const providers = results.map((candidate) => imageProviderLabel(candidate.provider)).join(", ");
       const comparisonStatus = Object.keys(failures).length
@@ -1620,6 +1648,22 @@ export default function CharacterProductionStudio({
         if (dolaImageReady) {
           requests.push({ provider: "byteplus", result: jsonAction("image", imageRequest("dola-seedream-5")) as Promise<ImageCandidate> });
         }
+        // Same streaming as the manual path: a still reaches the canvas when its
+        // provider returns, not when the slowest one does.
+        requests.forEach((request) => {
+          void request.result
+            .then((candidate) => {
+              setImageCandidates((current) => (
+                current.some((existing) => existing.assetId === candidate.assetId)
+                  ? current
+                  : [...current, candidate]
+              ));
+              addCharacterImage(character.id, candidate.url);
+            })
+            .catch(() => {
+              // The settled pass below reports provider failures.
+            });
+        });
         const settled = await Promise.allSettled(requests.map((request) => request.result));
         const candidates = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
         if (!candidates.length) {
@@ -1630,8 +1674,10 @@ export default function CharacterProductionStudio({
           );
           throw new Error(failures.join(" ") || "No image provider returned a visual.");
         }
-        setImageCandidates(candidates);
-        candidates.forEach((candidate) => addCharacterImage(character.id, candidate.url));
+        setImageCandidates((current) => {
+          const seen = new Set(current.map((candidate) => candidate.assetId));
+          return [...current, ...candidates.filter((candidate) => !seen.has(candidate.assetId))];
+        });
         const selected = candidates[0];
         const selectResponse = await fetch("/api/characters/profile-media", {
           method: "POST",
