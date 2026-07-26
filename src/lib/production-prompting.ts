@@ -1388,8 +1388,26 @@ const SCENE_BLUEPRINTS: Array<Omit<ShotBlueprint, "dialogue"> & { dialogue: (nam
   },
 ];
 
+/**
+ * Which blueprint a character starts from. Callers ask for take 0, 1, 2… and
+ * every character used to land on blueprint 0 — the projection-corridor door —
+ * so its setting and its "If that door wanted me gone" line bled into every
+ * actor's dialogue, SFX, theme, and scene-still card. Offsetting the take by a
+ * stable hash of the actor's identity spreads characters across all 18
+ * blueprints while keeping each actor's own takes deterministic and repeatable.
+ */
+export function characterSceneOffset(character: CharacterIdentityInput) {
+  const seed = `${character.name ?? ""}|${character.archetype ?? ""}|${character.tagline ?? ""}`;
+  let hash = 0;
+  for (let position = 0; position < seed.length; position += 1) {
+    hash = (Math.imul(hash, 31) + seed.charCodeAt(position)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 export function buildScenePackage(character: CharacterIdentityInput, index = 0): ScenePackage {
-  const shotTemplate = SCENE_BLUEPRINTS[((index % SCENE_BLUEPRINTS.length) + SCENE_BLUEPRINTS.length) % SCENE_BLUEPRINTS.length];
+  const slot = characterSceneOffset(character) + index;
+  const shotTemplate = SCENE_BLUEPRINTS[((slot % SCENE_BLUEPRINTS.length) + SCENE_BLUEPRINTS.length) % SCENE_BLUEPRINTS.length];
   const shot: ShotBlueprint = {
     ...shotTemplate,
     setting: character.brollScene?.trim() || shotTemplate.setting,
