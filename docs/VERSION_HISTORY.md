@@ -144,3 +144,6 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.36 | `8f941b7` | 2026-07-26T10:02:37+05:30 | fix: show homepage video on mobile |
 | v0.1.37 | `c31057a` | 2026-07-26T10:04:57+05:30 | Stop rejecting prompts the route was about to compact anyway |
 | v0.1.38 | `96409c2` | 2026-07-26T10:17:12+05:30 | fix: keep Magic Write identity gender coherent |
+| v0.1.39 | `2cda38f` | 2026-07-26T10:25:24+05:30 | fix: prevent stale Magic Write identity reuse |
+| v0.1.40 | `cb80b19` | 2026-07-26T10:26:53+05:30 | Give scenes diegetic audio without losing the locked voice |
+| v0.1.41 | `200fb99` | 2026-07-26T10:26:54+05:30 | Keep casting seeds and borrowed frames out of the public gallery |
