@@ -220,6 +220,16 @@ export function buildThemePlan(
     "single-chord vamp",
     "repetitive loop",
     "fade-out",
+    /*
+      The legacy prompt carried these and the plan did not, so a plan could
+      return a few isolated chimes and satisfy every other rule. A theme is an
+      arrangement, not a handful of hits.
+    */
+    "sparse arrangement",
+    "isolated single hits",
+    "empty intro",
+    "thin percussion",
+    "solo demo take",
   ], character.name);
   const moods = sceneMoodTags(sceneBrief);
   const chunk = (
@@ -230,9 +240,19 @@ export function buildThemePlan(
   ) => ({
     section_name: sectionName,
     duration_ms: durationMilliseconds,
-    // Local styles stay local: the identity palette is declared once in the
-    // plan's global fields rather than repeated into every section.
-    positive_local_styles: uniqueStyles(positiveLocalStyles).slice(0, 50),
+    /*
+      Every section names what actually plays in it. Local styles used to be
+      shape words alone - "core motif reduction", "hard clean final hit" - which
+      describe a gesture without an instrument, so the model returned a few bare
+      chimes. The identity palette stays global; these are the voices carrying
+      this section, plus a standing instruction that it be a full arrangement.
+    */
+    positive_local_styles: uniqueStyles([
+      ...positiveLocalStyles,
+      ...palette.instruments.slice(0, 3),
+      "full arrangement",
+      "sustained low end",
+    ]).slice(0, 50),
     negative_local_styles: uniqueStyles(negativeLocalStyles).slice(0, 50),
     lines: [],
   });

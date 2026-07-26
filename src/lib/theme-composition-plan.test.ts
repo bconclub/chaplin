@@ -151,3 +151,21 @@ test("a description already written as a tag list is still used", () => {
   } as CharacterIdentityInput, "ident_8s");
   assert.match(plan.positive_global_styles.join(" "), /muted trumpet/i);
 });
+
+test("every section names what actually plays in it", () => {
+  // Sections used to carry shape words alone - "core motif reduction", "hard
+  // clean final hit" - which describe a gesture with no instrument, so the
+  // model returned a few bare chimes instead of a theme.
+  const plan = buildThemePlan(ruAnsari, "ident_8s");
+  for (const section of plan.sections) {
+    const styles = section.positive_local_styles.join(" ").toLowerCase();
+    assert.match(styles, /full arrangement/);
+    assert.ok(
+      section.positive_local_styles.length >= 4,
+      `${section.section_name} carries too little to play`,
+    );
+  }
+  const negatives = plan.negative_global_styles.join(" ").toLowerCase();
+  assert.match(negatives, /sparse arrangement/);
+  assert.match(negatives, /isolated single hits/);
+});
