@@ -35,7 +35,7 @@ export default function SceneStudioAssets({
 
   return (
     <aside className="studio-asset-panel flex flex-col gap-3 border-l border-line/70 p-3" data-scene-studio-assets>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <div>
           <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-accent-secondary">Asset canvas</p>
           <p className="mt-0.5 text-[10px] text-grey">{ready} of {assets.length} frames rendered</p>
@@ -50,7 +50,13 @@ export default function SceneStudioAssets({
         </button>
       </div>
 
-      <ul className="flex flex-col gap-2">
+      {/*
+        The panel is a fixed-height flex column, so a shrinkable list is
+        compressed to fit instead of overflowing - `overflow-y: auto` then has
+        nothing to scroll and the canvas is stuck no matter how many scenes are
+        rendered. Holding natural height is what produces the scrollbar.
+      */}
+      <ul className="flex shrink-0 flex-col gap-2">
         {assets.map((asset) => {
           const busy = busyIndex === asset.index;
           const state = busy ? "rendering" : asset.previewImageUrl ? "ready" : asset.authored ? "queued" : "empty";
