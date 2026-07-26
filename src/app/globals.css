@@ -201,14 +201,50 @@ body:has(> main [data-home-featured]) > main {
 }
 
 /*
+  Frosted panel used across the home surface. Sits over the ambient glow rather
+  than covering it: a translucent fill plus saturated blur, a bright top
+  hairline for the lit edge, and a soft drop shadow so panels read as glass
+  sitting above the page instead of flat cards punched into it.
+*/
+.home-frost {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 55%),
+    rgba(17, 17, 17, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 18px 44px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.home-frost::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.07), transparent 26%, transparent 74%, rgba(7, 210, 190, 0.045));
+}
+
+/*
   The home shell is a full-viewport application surface with its own rail, top
   bar, and sidebar, so the global site chrome would double up on it. It owns
   100dvh and never scrolls the page; its three columns scroll internally.
 */
 body:has([data-home-shell]) > header,
 body:has([data-home-shell]) > footer,
-body:has([data-home-shell]) [data-bottom-nav] {
+body:has([data-home-shell]) [data-bottom-nav],
+/* The header is fixed, so the layout renders a 64px spacer to reserve its
+   room. Hiding the header alone left that spacer in flow and pushed the page
+   to 1088px, which is what broke the no-scroll requirement. */
+body:has([data-home-shell]) > header + div {
   display: none;
+}
+
+html:has([data-home-shell]) {
+  overflow: hidden;
 }
 
 body:has([data-home-shell]) > main {

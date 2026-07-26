@@ -348,7 +348,7 @@ export default function HomeShell() {
           </section>
 
           {/* ── TRENDING NOW ─────────────────────────────────────── */}
-          <section className="shrink-0 rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+          <section className="shrink-0 home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
             <div className="mb-3 flex items-center justify-between px-0.5">
               <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
                 <span aria-hidden="true">🔥</span> Trending now
@@ -420,7 +420,7 @@ export default function HomeShell() {
           </section>
 
           {/* ── CURATED COLLECTIONS ──────────────────────────────── */}
-          <section className="shrink-0 rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+          <section className="shrink-0 home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
             <h2 className="mb-3 flex items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-[0.18em]">
               <span aria-hidden="true">◈</span> Curated collections
             </h2>
@@ -456,7 +456,7 @@ export default function HomeShell() {
 
       {/* ── RIGHT SIDEBAR ───────────────────────────────────────────── */}
       <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-3 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-3 xl:flex">
-        <section className="rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Platform highlights</h2>
             <span className="flex items-center gap-1.5 text-[9px] font-semibold text-emerald-400">
@@ -481,7 +481,7 @@ export default function HomeShell() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Top performers</h2>
             <Link href="/characters" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
@@ -515,7 +515,7 @@ export default function HomeShell() {
           </ol>
         </section>
 
-        <section className="rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <h2 className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Trending</h2>
           <div className="flex flex-wrap gap-1.5">
             {TRENDING_LABELS.map((tag) => (
@@ -530,7 +530,7 @@ export default function HomeShell() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#202020] bg-[#111111] p-3.5">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Live productions</h2>
             <Link href="/studio/pipelines" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
