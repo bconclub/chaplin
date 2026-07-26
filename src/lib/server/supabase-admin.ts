@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isGenerationVisibleInFeed } from "@/lib/feed-visibility";
 import { createClient } from "@supabase/supabase-js";
 import { buildProductionBible } from "@/lib/production-prompting";
 import { readCharacterCardV2 } from "@/lib/character-card";
@@ -927,7 +928,7 @@ function generationFeedCopy(kind: string, characterName: string, prompt: string 
 async function publishGenerationToFeed(jobId: string, assetId: string) {
   const supabase = adminClient();
   const [jobResult, assetResult] = await Promise.all([
-    supabase.from("generation_jobs").select("character_id,kind,pipeline_experiment_id").eq("id", jobId).maybeSingle(),
+    supabase.from("generation_jobs").select("character_id,kind,pipeline_experiment_id,video_type,metadata").eq("id", jobId).maybeSingle(),
     supabase.from("media_assets").select("id,kind,url,prompt,created_at").eq("id", assetId).maybeSingle(),
   ]);
   assert(jobResult.error, "Load feed generation");
@@ -960,6 +961,13 @@ async function publishGenerationToFeed(jobId: string, assetId: string) {
     : kind === "video"
       ? "video"
       : "image";
+  if (!isGenerationVisibleInFeed({
+    sourceAssetId: assetId,
+    assetKind: kind,
+    mediaKind,
+    videoType: job.video_type,
+    jobMetadata: job.metadata,
+  })) return;
   const insert = await supabase.from("feed_posts").insert({
     author_id: character.maker_id,
     body: generationFeedCopy(kind, character.name, asset.prompt),

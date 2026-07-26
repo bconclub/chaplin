@@ -3,6 +3,20 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.47 - 2026-07-26 - Curated creator feed and full-viewport home
+
+- Integrated the pending homepage shell and its full-viewport entertainment
+  follow-up from the outstanding feature branch into `main`.
+- Limited automatic generation posts to themes, verified Character Punch
+  dialogue, images, and videos; voice auditions and SFX remain available in
+  Studio and Admin logs without appearing in the public feed.
+- Applied the same policy while reading existing posts, so older raw voice and
+  SFX entries disappear from Feed without deleting their source assets.
+- Removed generic audio uploads from the feed composer because public audio
+  must now come from a finished theme or Character Punch dialogue generation.
+- Added focused policy tests and passed TypeScript, ESLint with one pre-existing
+  test warning, all test suites (50 tests), and the production build.
+
 ## v0.1.42 - 2026-07-26 - Scene audio and public-gallery safeguards
 
 - Enabled Seedance diegetic location audio for room tone, Foley, machinery, and

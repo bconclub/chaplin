@@ -1,7 +1,14 @@
 import "server-only";
 
+import { isGenerationVisibleInFeed } from "@/lib/feed-visibility";
 import { getSupabaseAdminClient } from "@/lib/server/supabase-admin";
 import type { FeedAuthor, FeedMediaKind, FeedPost, FeedReply, SharedFeedPost } from "@/lib/feed-types";
+
+type FeedVisibilityRow = {
+  media_kind: string | null;
+  shared_post_id: string | null;
+  source_asset_id: string | null;
+};
 
 function fail(error: { message: string } | null, label: string) {
   if (error) throw new Error(`${label}: ${error.message}`);
@@ -22,13 +29,47 @@ export async function listFeedPosts(input: { viewerId?: string; postId?: string;
   const supabase = getSupabaseAdminClient();
   let postsQuery = supabase
     .from("feed_posts")
-    .select("id,author_id,body,media_kind,media_url,shared_post_id,series_id,episode_id,created_at")
+    .select("id,author_id,body,media_kind,media_url,shared_post_id,series_id,episode_id,source_asset_id,created_at")
     .order("created_at", { ascending: false })
-    .limit(Math.min(100, Math.max(1, input.limit ?? 40)));
+    .limit(100);
   if (input.postId) postsQuery = postsQuery.eq("id", input.postId);
   const postsResult = await postsQuery;
   fail(postsResult.error, "Load feed");
-  const posts = postsResult.data ?? [];
+  const candidatePosts = postsResult.data ?? [];
+  const candidateSharedIds = candidatePosts.map((post) => post.shared_post_id).filter((id): id is string => Boolean(id));
+  const visibilitySharedResult = candidateSharedIds.length
+    ? await supabase.from("feed_posts").select("id,media_kind,source_asset_id,shared_post_id").in("id", candidateSharedIds)
+    : { data: [], error: null };
+  fail(visibilitySharedResult.error, "Load shared feed visibility");
+  const visibilityRows = [...candidatePosts, ...(visibilitySharedResult.data ?? [])];
+  const sourceAssetIds = [...new Set(visibilityRows
+    .map((post) => post.source_asset_id)
+    .filter((id): id is string => Boolean(id)))];
+  const [assetsResult, jobsResult] = sourceAssetIds.length
+    ? await Promise.all([
+      supabase.from("media_assets").select("id,kind").in("id", sourceAssetIds),
+      supabase.from("generation_jobs").select("output_asset_id,video_type,metadata").in("output_asset_id", sourceAssetIds),
+    ])
+    : [{ data: [], error: null }, { data: [], error: null }];
+  fail(assetsResult.error, "Load feed asset kinds");
+  fail(jobsResult.error, "Load feed generation kinds");
+  const assetKinds = new Map((assetsResult.data ?? []).map((asset) => [asset.id, asset.kind]));
+  const generationJobs = new Map((jobsResult.data ?? []).map((job) => [job.output_asset_id, job]));
+  const sharedVisibilityRows = new Map((visibilitySharedResult.data ?? []).map((post) => [post.id, post]));
+  const visible = (post: FeedVisibilityRow) => {
+    const sourceAssetId = post.source_asset_id;
+    const job = sourceAssetId ? generationJobs.get(sourceAssetId) : undefined;
+    return isGenerationVisibleInFeed({
+      sourceAssetId,
+      assetKind: sourceAssetId ? assetKinds.get(sourceAssetId) : null,
+      mediaKind: post.media_kind,
+      videoType: job?.video_type,
+      jobMetadata: job?.metadata,
+    });
+  };
+  const posts = candidatePosts
+    .filter((post) => visible(post) && (!post.shared_post_id || visible(sharedVisibilityRows.get(post.shared_post_id) ?? post)))
+    .slice(0, Math.min(100, Math.max(1, input.limit ?? 40)));
   if (!posts.length) return [];
 
   const postIds = posts.map((post) => post.id);
@@ -151,4 +192,3 @@ export async function toggleFeedReaction(input: { postId: string; userId: string
   fail(added.error, "Add reaction");
   return true;
 }
-

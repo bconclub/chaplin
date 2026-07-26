@@ -147,3 +147,9 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.39 | `2cda38f` | 2026-07-26T10:25:24+05:30 | fix: prevent stale Magic Write identity reuse |
 | v0.1.40 | `cb80b19` | 2026-07-26T10:26:53+05:30 | Give scenes diegetic audio without losing the locked voice |
 | v0.1.41 | `200fb99` | 2026-07-26T10:26:54+05:30 | Keep casting seeds and borrowed frames out of the public gallery |
+| v0.1.42 | `bd429fc` | 2026-07-26T10:28:31+05:30 | chore: synchronize Chaplin v0.1.42 |
+| v0.1.43 | `719ff22` | 2026-07-26T10:34:45+05:30 | WIP: Chaplin homepage shell (rail, hero, trending, collections, sidebar) |
+| v0.1.44 | `4e6b65f` | 2026-07-26T10:34:45+05:30 | Rebuild the homepage as a full-viewport entertainment surface |
+| v0.1.45 | `f17cc99` | 2026-07-26T10:41:40+05:30 | Use the real logo and real navigation on the home rail |
+| v0.1.46 | `73db07a` | 2026-07-26T10:42:36+05:30 | Add showcase platform figures to the home sidebar |
+| v0.1.47 | `8082394` | 2026-07-26T10:46:07+05:30 | Curate generation media in the creator feed |
