@@ -167,6 +167,27 @@ function assertPlanDevelopmentRules(plan: ThemeCompositionPlan, characterName: s
   if (leaked) throw new Error("Theme composition styles contain a character-name story token.");
 }
 
+
+/*
+  A style tag is a descriptor, not a sentence.
+
+  themeDesc is free text, and Magic Write writes it as prose. Splitting prose on
+  commas produced fragments that read as broken English and were sent to the
+  music model as styles - "bold brass fanfare over", "rising four-note motif
+  answered bright metallic chime" - which also imposed an orchestral fanfare on
+  a character whose palette is nothing of the kind. A description is only mined
+  for tags when it is already written as a list; otherwise the palette and the
+  character card decide the styles.
+*/
+function looksLikeTagList(value: string | undefined) {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  if (!text.includes(",")) return false;
+  // Prose gives itself away with connective and verb-shaped words.
+  if (/\b(?:with|over|under|then|while|answered|resolving|followed|before|after|that|which|as)\b/i.test(text)) return false;
+  return text.split(",").every((part) => part.trim().split(/\s+/).length <= 5);
+}
+
 export function buildThemePlan(
   character: CharacterIdentityInput,
   kind: ThemePlanKind,
@@ -183,7 +204,9 @@ export function buildThemePlan(
   ].filter(Boolean).join(" ");
   const positiveGlobal = uniqueStyles([
     profile?.style_anchor,
-    character.themeDesc && character.themeDesc.length <= 240 ? character.themeDesc : undefined,
+    looksLikeTagList(character.themeDesc) && (character.themeDesc?.length ?? 0) <= 240
+      ? character.themeDesc
+      : undefined,
     palette.genres,
     ...(profile?.instruments ?? palette.instruments.slice(0, 3)),
     profile?.mood,

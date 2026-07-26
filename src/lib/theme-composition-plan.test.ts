@@ -118,3 +118,36 @@ test("ElevenLabs plan and legacy payloads remain mutually exclusive", () => {
   assert.ok("force_instrumental" in legacy);
   assert.ok(!("composition_plan" in legacy));
 });
+
+test("a prose theme description is not shredded into style tags", () => {
+  // Magic Write writes themeDesc as prose. Splitting it on commas produced
+  // fragments like "bold brass fanfare over" and imposed an orchestral fanfare
+  // on a character whose palette is nothing of the kind.
+  const plan = buildThemePlan({
+    name: "Sprocket",
+    archetype: "hero",
+    tagline: "Salvage android with a borrowed conscience.",
+    personality: "An alien salvage android, watchful and mechanical.",
+    voiceGender: "androgynous",
+    themeDesc: "12-second orchestral-synth hybrid theme with bold brass fanfare over a rising four-note motif answered by bright metallic chime, resolving to a steady percussive heartbeat pulse",
+    sfxDesc: "a servo lock engages",
+  } as CharacterIdentityInput, "ident_8s");
+
+  const styles = plan.positive_global_styles.join(" | ");
+  assert.doesNotMatch(styles, /fanfare over|answered bright|resolving steady/i);
+  // The palette decides instead.
+  assert.match(styles, /future garage|cyber-industrial/i);
+});
+
+test("a description already written as a tag list is still used", () => {
+  const plan = buildThemePlan({
+    name: "Ru",
+    archetype: "rebel",
+    tagline: "Keeps the city moving.",
+    personality: "Defiant and watchful.",
+    voiceGender: "feminine",
+    themeDesc: "future garage, muted trumpet, sub-bass",
+    sfxDesc: "a scale clicks shut",
+  } as CharacterIdentityInput, "ident_8s");
+  assert.match(plan.positive_global_styles.join(" "), /muted trumpet/i);
+});
