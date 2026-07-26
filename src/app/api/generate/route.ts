@@ -1452,7 +1452,13 @@ export async function POST(request: Request) {
                 : [],
             },
             speakerName: requestCharacter?.name,
-            referenceAudioUrl: referenceAudio || undefined,
+            /*
+              Only claim the reference when it can actually be attached. A first
+              frame excludes reference media on ModelArk, so a shot with an
+              approved still resolves to post-mix and off-face framing rather
+              than directing lip-sync to a recording the request cannot carry.
+            */
+            referenceAudioUrl: reference ? undefined : (referenceAudio || undefined),
           })
         : null;
       const prompt = audioScene?.block ? `${basePrompt}\n${audioScene.block}` : basePrompt;
@@ -1486,10 +1492,22 @@ export async function POST(request: Request) {
 
       const runVideoTask = async (model: string) => {
         const taskContent = [...content];
-        // Audio references are a Seedance 2.0 multimodal capability. They guide
-        // mouth timing and performance, while Chaplin still masters the exact
-        // locked ElevenLabs file into the delivery so the voice cannot drift.
-        if (referenceAudio && seedanceSupportsAudioReference(model)) {
+        /*
+          ModelArk rejects a request that carries both, with
+          "first/last frame content cannot be mixed with reference media
+          content" - so the approved still and the locked-voice reference are
+          mutually exclusive, and asking for both failed the shot outright.
+
+          The still wins. It is the identity lock and the exact frame the shot
+          animates from; losing it would let the actor's face drift, which is a
+          worse failure than mixing the line in afterwards. A shot that keeps
+          its first frame therefore renders without the audio reference and is
+          post-mixed, which is the path resolveAudioScene already describes.
+        */
+        const canAttachAudio = Boolean(referenceAudio)
+          && seedanceSupportsAudioReference(model)
+          && !reference;
+        if (canAttachAudio) {
           taskContent.push({
             type: "audio_url",
             audio_url: { url: referenceAudio },

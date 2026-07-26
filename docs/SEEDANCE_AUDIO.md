@@ -51,6 +51,26 @@ lip-sync — with no error and no flag on the job. Path A needs an explicit
 decision here: either refuse the fallback for dialogue shots, or mark the
 delivered shot post-mix so the FFmpeg path attaches the line instead.
 
+## Confirmed in production: a first frame excludes reference media
+
+ModelArk rejects a request carrying both with:
+
+```
+400 The parameter `content` specified in the request is not valid:
+first/last frame content cannot be mixed with reference media content.
+```
+
+So the approved still and the locked-voice audio reference are **mutually
+exclusive**, and Path A as originally specified - approved still as first frame
+*plus* TTS audio reference - is not possible on this API.
+
+Chaplin keeps the still. It is the identity lock and the exact frame the shot
+animates from; losing it would let the actor's face drift, which is worse than
+mixing the line in afterwards. A shot with an approved first frame therefore
+renders ambient-only and is marked post-mix with off-face framing - the Path B
+behaviour `resolveAudioScene` already describes. Path A remains available for a
+shot generated without a first frame.
+
 ## Conclusion
 
 Path A is unblocked on transport (a and b are supported). Two things gate it:
