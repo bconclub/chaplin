@@ -14,6 +14,7 @@
     "verify:ui": "node scripts/verify-current-ui.mjs",
     "verify:pipeline": "node scripts/verify-pipeline.mjs",
     "verify:mobile": "node scripts/verify-mobile.mjs",
+    "test:character-graph": "node --import tsx --test src/lib/character-graph.test.ts",
     "test:character-card": "node --import tsx --test src/lib/character-card.test.ts src/lib/character-coherence.test.ts",
     "test:prompt-lint": "node --import tsx --test src/lib/prompt-lint.test.ts",
     "test:feed": "node --import tsx --test src/lib/feed-mentions.test.ts",
