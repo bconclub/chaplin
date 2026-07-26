@@ -8,6 +8,7 @@ import { castForStory, getUser } from "@/lib/selectors";
 import Carousel from "@/components/Carousel";
 import PosterCard from "@/components/PosterCard";
 import type { HomepageBroll } from "@/components/HeroGridCard";
+import MediaPlayer from "@/components/MediaPlayer";
 import type { SeriesSummary } from "@/lib/series-types";
 import type { Character } from "@/lib/types";
 import { ARCHETYPE_LABEL, hsl } from "@/lib/format";
@@ -55,12 +56,25 @@ function Row({ title, hint, children }: { title: string; hint?: string; children
 export default function WatchBrowse({ series }: { series: SeriesSummary[] }) {
   const world = useChaplinStore((state) => state);
   const [brolls, setBrolls] = useState<HomepageBroll[]>([]);
+  /*
+    Finished productions had nowhere to be watched. The assembled master is
+    written straight to storage, so a delivered cut appeared on no page at all -
+    a creator could produce one and never see it again.
+  */
+  const [cuts, setCuts] = useState<Array<{ assetId: string; url: string; characterId: string; characterName: string }>>([]);
 
   useEffect(() => {
     fetch("/api/broll", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : { characters: [] }))
       .then((data: { characters?: HomepageBroll[] }) => setBrolls(data.characters ?? []))
       .catch(() => setBrolls([]));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/deliveries", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { cuts: [] }))
+      .then((data: { cuts?: typeof cuts }) => setCuts(data.cuts ?? []))
+      .catch(() => setCuts([]));
   }, []);
 
   const brollByCharacter = useMemo(() => new Map(brolls.map((b) => [b.characterId, b])), [brolls]);
@@ -111,6 +125,19 @@ export default function WatchBrowse({ series }: { series: SeriesSummary[] }) {
             </div>
           </div>
         </section>
+      )}
+
+      {cuts.length > 0 && (
+        <Row title="Finished cuts" hint="Delivered productions, newest first">
+          {cuts.map((cut) => (
+            <div key={cut.assetId} className="w-64 shrink-0 snap-start overflow-hidden rounded-md border border-line sm:w-72">
+              <MediaPlayer src={cut.url} label={`${cut.characterName} cut`} kind="video" compact />
+              <Link href={`/characters/${cut.characterId}`} className="block truncate px-2.5 py-2 text-[11px] font-semibold hover:text-accent">
+                {cut.characterName}
+              </Link>
+            </div>
+          ))}
+        </Row>
       )}
 
       {sparks.length > 0 && (

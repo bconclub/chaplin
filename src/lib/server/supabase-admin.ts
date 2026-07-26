@@ -208,6 +208,58 @@ export async function publishDeliveredCutToFeed(input: {
   }
 }
 
+
+export type DeliveredCut = {
+  assetId: string;
+  url: string;
+  characterId: string;
+  characterName: string;
+  durationSeconds: number | null;
+  createdAt: string;
+};
+
+/**
+ * Finished productions, newest first.
+ *
+ * An assembled master is written straight to storage with its pipeline run
+ * recorded in metadata, so nothing listed it anywhere: a creator could deliver
+ * a cut and then have no way to watch it back. This is the query that makes a
+ * delivered production findable.
+ */
+export async function listDeliveredCuts(limit = 24): Promise<DeliveredCut[]> {
+  const supabase = adminClient();
+  const assets = await supabase
+    .from("media_assets")
+    .select("id,url,character_id,duration_seconds,metadata,created_at")
+    .eq("kind", "video")
+    .eq("provider", "ffmpeg")
+    .not("character_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  assert(assets.error, "Load delivered cuts");
+  const rows = (assets.data ?? []).filter((asset) => {
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    return Boolean(metadata?.pipelineRunId);
+  });
+  if (!rows.length) return [];
+
+  const names = await supabase
+    .from("characters")
+    .select("id,name")
+    .in("id", [...new Set(rows.map((row) => row.character_id as string))]);
+  assert(names.error, "Load delivered cut actors");
+  const nameById = new Map((names.data ?? []).map((row) => [row.id as string, row.name as string]));
+
+  return rows.map((row) => ({
+    assetId: row.id as string,
+    url: row.url as string,
+    characterId: row.character_id as string,
+    characterName: nameById.get(row.character_id as string) ?? "Unknown actor",
+    durationSeconds: typeof row.duration_seconds === "number" ? row.duration_seconds : null,
+    createdAt: row.created_at as string,
+  }));
+}
+
 export async function ensureCharacter(character: Character) {
   const { error } = await adminClient()
     .from("characters")
