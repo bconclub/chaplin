@@ -250,7 +250,7 @@ test("super-admin master prompt contains the complete Magic Write canon and deri
   assert.match(prompt, /### Layered signature SFX plan/);
 });
 
-test("pipeline defaults and legacy settings resolve to Music v2 and richer SFX adherence", () => {
+test("pipeline defaults keep Music v2 while music_v1 stays a valid choice", () => {
   assert.equal(DEFAULT_PIPELINE_CONFIG.stages.theme.model, "music_v2");
   assert.equal(DEFAULT_PIPELINE_CONFIG.stages.sfx.settings.promptInfluence, 0.55);
   const upgraded = normalizePipelineConfig({
@@ -259,6 +259,11 @@ test("pipeline defaults and legacy settings resolve to Music v2 and richer SFX a
       sfx: { settings: { promptInfluence: 0.35 } },
     },
   });
-  assert.equal(upgraded.stages.theme.model, "music_v2");
+  /*
+    music_v1 used to be rewritten to music_v2 here. It is not an obsolete
+    setting: composition plans are a music_v1 feature, so coercing it made a
+    valid configuration impossible to express and every plan request failed.
+  */
+  assert.equal(upgraded.stages.theme.model, "music_v1");
   assert.equal(upgraded.stages.sfx.settings.promptInfluence, 0.55);
 });

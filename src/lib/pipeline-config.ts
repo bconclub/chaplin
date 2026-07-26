@@ -241,9 +241,13 @@ export function normalizePipelineConfig(input: unknown, metadata?: {
     const requestedModel = typeof raw.model === "string" && raw.model.trim()
       ? raw.model.trim().slice(0, 120)
       : defaults.model;
-    const model = id === "theme" && requestedModel === "music_v1"
-      ? "music_v2"
-      : requestedModel;
+    /*
+      music_v1 used to be rewritten to music_v2 here, on the assumption that v2
+      superseded it. It does not for this purpose: composition plans are a
+      music_v1 feature, so the coercion made a valid configuration impossible to
+      express and every plan request was refused.
+    */
+    const model = requestedModel;
     stages[id] = {
       enabled: typeof raw.enabled === "boolean" ? raw.enabled : defaults.enabled,
       provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider.trim().slice(0, 80) : defaults.provider,

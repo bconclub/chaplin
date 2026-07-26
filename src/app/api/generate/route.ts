@@ -1061,7 +1061,10 @@ export async function POST(request: Request) {
       const compositionPlan = compositionPlanEnabled && requestCharacter
         ? buildThemePlan(requestCharacter, themeKind, sceneBrief)
         : undefined;
-      const outputFormat = themeConfig.model === "music_v2" ? "mp3_48000_192" : "mp3_44100_128";
+      // A composition plan is always addressed to music_v1, so the ledger, the
+      // output format and the request all have to agree on that.
+      const themeModel = compositionPlanEnabled ? "music_v1" : themeConfig.model;
+      const outputFormat = themeModel === "music_v2" ? "mp3_48000_192" : "mp3_44100_128";
       const generationMetadata = {
         grammarVersion: compositionPlanEnabled ? "plan-v2" : "v3-legacy",
         generationMode: compositionPlanEnabled ? "composition-plan" : "legacy-prompt",
@@ -1072,14 +1075,14 @@ export async function POST(request: Request) {
           : "music_length_ms",
         providerDurationMilliseconds: durationSeconds * 1000,
         providerOutputFormat: outputFormat,
-        providerEnforcesChunkDurations: compositionPlanEnabled && themeConfig.model === "music_v2",
+        providerEnforcesChunkDurations: false,
         compositionPlan,
       };
       jobId = await startGeneration({
         characterId,
         kind: "theme",
         provider: themeConfig.provider,
-        model: themeConfig.model,
+        model: themeModel,
         prompt,
         metadata: generationMetadata,
       });
@@ -1088,7 +1091,13 @@ export async function POST(request: Request) {
         plan: compositionPlan,
         prompt,
         durationMilliseconds: durationSeconds * 1000,
-        modelId: themeConfig.model,
+        /*
+          The mode decides the model. ElevenLabs accepts composition plans on
+          music_v1 only, so a plan request must go to music_v1 whatever the
+          stage is configured with - otherwise a correct plan was refused for
+          being addressed to the wrong model.
+        */
+        modelId: themeModel,
         forceInstrumental: settingBoolean(themeConfig, "forceInstrumental", true),
         signWithC2pa: settingBoolean(themeConfig, "signWithC2pa", false),
       }));
