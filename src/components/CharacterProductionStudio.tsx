@@ -1230,10 +1230,14 @@ export default function CharacterProductionStudio({
         }),
       });
       if (!response.ok) throw new Error(await errorFrom(response));
-      const data = await response.json() as { scene?: ScenePackage; provider?: string; warning?: string };
+      const data = await response.json() as { scene?: ScenePackage; provider?: string; warning?: string; fallback?: boolean };
       if (!data.scene) throw new Error("Magic Scene returned no directed scene.");
       applyScenePackage(data.scene);
-      setMessage(data.warning || `Magic Scene directed: ${data.scene.sceneName}. Each medium now has its own production instructions.`);
+      // A stock scene is a degraded result, not a success. Saying so plainly is
+      // what stops the same built-in scene quietly spreading across every actor.
+      setMessage(data.fallback
+        ? `Stock scene used — not written for ${character.name}. ${data.warning ?? ""}`.trim()
+        : `Magic Scene directed: ${data.scene.sceneName}. Each medium now has its own production instructions.`);
     });
   }
 

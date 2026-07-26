@@ -180,11 +180,25 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Magic Scene failed.";
     if (jobId) await failGeneration(jobId, message);
     if (fallbackCharacter) {
+      /*
+        The local director draws from only four authored blueprints, so when this
+        path runs often every actor ends up playing the same scene — the reason
+        one projection-corridor door kept appearing across unrelated characters.
+        The response stays 200 with a usable scene so the creator is never left
+        with nothing, but it is now explicitly flagged as a fallback and carries
+        the real provider error, instead of reading like a normal success with a
+        soft note. Callers must treat `fallback: true` as a degraded result.
+      */
+      const configured = Boolean(process.env.ANTHROPIC_API_KEY);
       return Response.json({
         scene: buildScenePackage(fallbackCharacter, fallbackVariation),
         provider: "chaplin-local",
-        configured: Boolean(process.env.ANTHROPIC_API_KEY),
-        warning: "Chaplin used the local director for this scene. Everything remains editable, and you can try another take.",
+        configured,
+        fallback: true,
+        reason: message,
+        warning: configured
+          ? `Magic Scene could not reach the writer, so Chaplin used a stock scene. This is one of only a few built-in scenes, so it will repeat across actors. Try another take. (${message})`
+          : "AI writing is not configured, so Chaplin used a stock scene. These repeat across actors until a writer is connected.",
       });
     }
     return Response.json({ error: message }, { status: 502 });
