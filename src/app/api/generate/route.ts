@@ -144,6 +144,11 @@ const MAX_IMAGE_ATTEMPTS = 3;
 
 const REPLICATE_API = "https://api.replicate.com/v1";
 
+/** Replicate's own docs call this a token; the deployment stores it as a key. */
+function replicateToken() {
+  return process.env.REPLICATE_API_KEY ?? process.env.REPLICATE_API_TOKEN;
+}
+
 /**
  * Open-weights video fallbacks. Every commercial image-to-video vendor
  * (Seedance, Kling, Runway, Veo, Sora) sits behind a face-detection layer that
@@ -162,8 +167,23 @@ type ReplicateFallback = {
   input?: Record<string, unknown>;
 };
 
+/*
+  Field names verified against each model's live OpenAPI schema, not guessed.
+  Duration is expressed in FRAMES, not seconds, and differs per model:
+    wan-2.2-i2v-fast  num_frames  81-121 (81 recommended)  resolution 480p|720p
+    ltx-video         length      default 97               target_size 640
+  480p keeps the rescue path cheaper than the primary provider; raise it in the
+  video stage's `replicateFallbacks` setting if quality matters more than cost.
+  Deliberately excludes tencent/hunyuan-video (text-to-video only, no image
+  input) and kwaivgi/kling-* (same vendor face filter this path exists to avoid).
+*/
 const DEFAULT_REPLICATE_FALLBACKS: ReplicateFallback[] = [
-  { model: "wan-video/wan-2.2-i2v-fast", imageField: "image", promptField: "prompt", input: { resolution: "720p" } },
+  {
+    model: "wan-video/wan-2.2-i2v-fast",
+    imageField: "image",
+    promptField: "prompt",
+    input: { resolution: "480p", num_frames: 81 },
+  },
   { model: "lightricks/ltx-video", imageField: "image", promptField: "prompt" },
 ];
 
@@ -189,8 +209,8 @@ async function replicateVideo(input: {
   pollIntervalMs: number;
   maximumPolls: number;
 }) {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) throw new Error("REPLICATE_API_TOKEN is not configured.");
+  const token = replicateToken();
+  if (!token) throw new Error("REPLICATE_API_KEY (or REPLICATE_API_TOKEN) is not configured.");
   const body: Record<string, unknown> = {
     [input.entry.promptField ?? "prompt"]: input.prompt,
     ...(input.entry.input ?? {}),
@@ -1388,7 +1408,7 @@ export async function POST(request: Request) {
       // have no likeness filter and so cannot refuse a photoreal seed image.
       const videoAttempts: Array<{ provider: "byteplus" | "replicate"; model: string; entry?: ReplicateFallback }> = [
         ...seedanceCandidates.map((model) => ({ provider: "byteplus" as const, model })),
-        ...(process.env.REPLICATE_API_TOKEN
+        ...(replicateToken()
           ? replicateFallbacks(videoConfig).map((entry) => ({ provider: "replicate" as const, model: entry.model, entry }))
           : []),
       ];
