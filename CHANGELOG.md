@@ -3,7 +3,7 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
-## v0.1.47 - 2026-07-26 - Curated creator feed and full-viewport home
+## v0.1.48 - 2026-07-26 - Curated creator feed and full-viewport home
 
 - Integrated the pending homepage shell and its full-viewport entertainment
   follow-up from the outstanding feature branch into `main`.
