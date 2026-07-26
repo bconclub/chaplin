@@ -49,7 +49,7 @@ function FeaturedLandscapeCard({
     <button
       type="button"
       onClick={onActivate}
-      className={`group relative aspect-[4/5] min-w-[44vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[11rem] lg:aspect-auto lg:h-[13.5rem] lg:min-w-0 ${
+      className={`group relative aspect-[3/4] min-w-[36vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[10rem] lg:aspect-auto lg:h-[13.5rem] lg:min-w-0 ${
         active
           ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,0.28),0_14px_38px_rgba(0,0,0,0.32)]"
           : "border-white/10 hover:-translate-y-0.5 hover:border-white/30"
@@ -64,7 +64,7 @@ function FeaturedLandscapeCard({
           src={artwork}
           alt=""
           fill
-          sizes="(max-width: 640px) 44vw, (max-width: 1024px) 11rem, 15vw"
+          sizes="(max-width: 640px) 36vw, (max-width: 1024px) 10rem, 15vw"
           className="object-cover transition-transform duration-700 group-hover:scale-[1.035]"
         />
       ) : (
@@ -185,13 +185,13 @@ export default function InfiniteCharacterGallery() {
 
   return (
     <main
-      className="relative h-[calc(100dvh-4rem)] min-h-0 overflow-hidden"
+      className="relative h-[calc(100dvh-4rem)] min-h-0 overflow-hidden max-[700px]:h-auto max-[700px]:min-h-[calc(100dvh-4rem)] max-[700px]:overflow-visible"
       data-home-featured
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_16%,rgba(242,78,112,0.13),transparent_27%),radial-gradient(circle_at_90%_8%,rgba(7,210,190,0.12),transparent_31%)]" />
 
       <section
-        className="relative mx-auto grid h-full min-h-0 w-full max-w-[100rem] grid-rows-[minmax(0,1fr)_auto] gap-3 px-3 pb-[6.5rem] pt-3 sm:px-5 sm:pb-[6.75rem] sm:pt-4 lg:px-7 lg:pb-5 lg:pt-5"
+        className="relative mx-auto grid h-full min-h-0 w-full max-w-[100rem] grid-rows-[minmax(0,1fr)_auto] gap-3 px-3 pb-[6.5rem] pt-3 max-[700px]:h-auto sm:px-5 sm:pb-[6.75rem] sm:pt-4 lg:px-7 lg:pb-5 lg:pt-5"
         aria-label="Featured AI actors"
       >
         <article
@@ -199,21 +199,21 @@ export default function InfiniteCharacterGallery() {
           data-featured-stage
           data-featured-character={currentCharacter.id}
         >
-          <div className="relative min-h-0 overflow-hidden lg:grid lg:grid-cols-[minmax(21rem,0.76fr)_minmax(0,1.42fr)]">
-            <div className="relative z-20 flex h-full min-h-0 max-w-[40rem] flex-col justify-center px-6 pb-8 pt-8 sm:px-10 sm:py-10 lg:max-w-none lg:px-12 xl:px-14">
+          <div className="relative flex min-h-0 flex-col overflow-hidden lg:grid lg:grid-cols-[minmax(21rem,0.76fr)_minmax(0,1.42fr)]">
+            <div className="relative z-20 order-2 flex min-h-0 max-w-[40rem] shrink-0 flex-col justify-center px-5 pb-4 pt-4 sm:px-8 sm:pb-5 sm:pt-5 lg:order-none lg:h-full lg:max-w-none lg:px-12 lg:py-10 xl:px-14">
               <div
-                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_28%,rgba(242,78,112,0.12),transparent_36%),linear-gradient(145deg,#07100d_0%,#030605_100%)] max-lg:bg-[linear-gradient(90deg,rgba(2,7,6,0.94)_0%,rgba(2,7,6,0.78)_58%,rgba(2,7,6,0.16)_100%)]"
+                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_28%,rgba(242,78,112,0.12),transparent_36%),linear-gradient(145deg,#07100d_0%,#030605_100%)]"
                 aria-hidden="true"
               />
               <p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-accent">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent shadow-[0_0_12px_rgba(242,78,112,0.9)]" />
                 Featured performance
               </p>
-              <h1 className="reel-title mt-4 text-[clamp(2.8rem,4.4vw,5.25rem)] leading-[0.88] tracking-[-0.05em] text-white">
+              <h1 className="reel-title mt-2 text-[clamp(2.1rem,10vw,3rem)] leading-[0.88] tracking-[-0.05em] text-white lg:mt-4 lg:text-[clamp(2.8rem,4.4vw,5.25rem)]">
                 <span className="block lg:whitespace-nowrap">The world of</span>
                 <span className="mt-1 block text-accent">AI actors.</span>
               </h1>
-              <p className="mt-4 max-w-md text-xs leading-5 text-white/70 sm:text-sm sm:leading-6">
+              <p className="mt-2 max-w-md text-[11px] leading-4 text-white/70 sm:text-xs sm:leading-5 lg:mt-4 lg:text-sm lg:leading-6">
                 Ready to cast AI actors for{" "}
                 <span
                   key={CASTING_FORMATS[castingFormatIndex]}
@@ -222,16 +222,16 @@ export default function InfiniteCharacterGallery() {
                   {CASTING_FORMATS[castingFormatIndex]}.
                 </span>
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="mt-3 flex flex-wrap gap-2.5 lg:mt-5 lg:gap-3">
                 <Link
                   href="/characters"
-                  className="rounded-md bg-accent px-5 py-3 text-sm font-bold text-paper shadow-[0_12px_32px_rgba(242,78,112,0.24)] transition-transform hover:-translate-y-0.5"
+                  className="rounded-md bg-accent px-4 py-2.5 text-xs font-bold text-paper shadow-[0_12px_32px_rgba(242,78,112,0.24)] transition-transform hover:-translate-y-0.5 lg:px-5 lg:py-3 lg:text-sm"
                 >
                   Explore actors →
                 </Link>
                 <Link
                   href={`/characters/${currentCharacter.id}`}
-                  className="rounded-md border border-white/25 bg-black/15 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+                  className="rounded-md border border-white/25 bg-black/15 px-4 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:border-accent hover:text-accent lg:px-5 lg:py-3 lg:text-sm"
                 >
                   Meet {currentCharacter.name.split(" ")[0]} →
                 </Link>
@@ -239,15 +239,12 @@ export default function InfiniteCharacterGallery() {
             </div>
 
             {/*
-              Desktop shows the performance inside a real 16:9 frame rather than
-              bleeding it across the panel. Filling the full width forced a
-              landscape source into a tall box and cropped the shot to a
-              close-up; the framed version letterboxes instead, so the whole
-              composition stays visible and nothing is distorted. Mobile keeps
-              the full-bleed backdrop that the overlaid text is designed for.
+              Mobile and desktop both show a real performance frame. On mobile
+              it sits above the copy so the video cannot disappear behind the
+              hero overlay; desktop retains the split composition.
             */}
             <div
-              className="absolute inset-0 min-h-0 overflow-hidden bg-black lg:relative lg:inset-auto lg:flex lg:items-center lg:justify-center lg:bg-transparent lg:p-5 xl:p-7"
+              className="relative order-1 h-[clamp(9.5rem,22dvh,12rem)] min-h-0 shrink-0 overflow-hidden bg-black lg:order-none lg:flex lg:h-auto lg:items-center lg:justify-center lg:bg-transparent lg:p-5 xl:p-7"
               data-featured-media
             >
               {currentArtwork && (
@@ -263,7 +260,7 @@ export default function InfiniteCharacterGallery() {
                 </div>
               )}
 
-              <div className="relative h-full w-full overflow-hidden lg:aspect-video lg:h-full lg:w-auto lg:max-w-full lg:rounded-lg lg:border lg:border-white/12 lg:bg-black lg:shadow-[0_24px_70px_rgba(0,0,0,0.55)]">
+              <div className="relative h-full w-full overflow-hidden bg-black lg:aspect-video lg:h-full lg:w-auto lg:max-w-full lg:rounded-lg lg:border lg:border-white/12 lg:shadow-[0_24px_70px_rgba(0,0,0,0.55)]">
                 {currentArtwork ? (
                   <Image
                     key={currentArtwork}
@@ -309,7 +306,7 @@ export default function InfiniteCharacterGallery() {
                   />
                 )}
 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10 lg:hidden" />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-black/5 lg:hidden" />
               </div>
 
               <div className="absolute inset-y-0 left-0 hidden w-20 bg-gradient-to-r from-[#030605] to-transparent lg:block" />

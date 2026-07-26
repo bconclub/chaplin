@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.36 - 2026-07-26 - Visible mobile hero performance
+
+- Separated the homepage performance video from the mobile copy overlay so the
+  active video is always visible as its own frame.
+- Moved the headline, rotating format, and calls to action beneath the mobile
+  video while preserving the desktop split-screen composition.
+- Made featured actor thumbnails narrower and taller for a denser horizontal
+  carousel, with scrolling fallback on short phone screens instead of clipping.
+- Passed TypeScript, ESLint with one pre-existing test warning, all four test
+  suites (40 tests), and the complete Next.js production build.
+
 ## v0.1.34 - 2026-07-26 - Selectable video seed images
 
 - Added an explicit seed-image picker to the Video stage with compact

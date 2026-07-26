@@ -139,3 +139,5 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.31 | `720bdfd` | 2026-07-26T09:45:01+05:30 | Restore image quality on the character hero |
 | v0.1.32 | `dc62ab7` | 2026-07-26T09:46:26+05:30 | Surface stock scenes instead of passing them off as written |
 | v0.1.33 | `ca2e65f` | 2026-07-26T09:47:30+05:30 | fix: add selectable video seed images |
+| v0.1.34 | `b1dc821` | 2026-07-26T09:48:10+05:30 | chore: synchronize Chaplin v0.1.34 |
+| v0.1.35 | `1b32a67` | 2026-07-26T09:57:24+05:30 | Make the character room a spoken conversation with memory |
