@@ -106,7 +106,13 @@ export async function POST(request: Request) {
       durationSeconds: 5,
       metadata: {
         pipelineRunId: run.id,
-        sourceSteps: ["motion-plate", "dialogue", "sfx", "room-tone"],
+        sourceSteps: ["motion-plate", "dialogue", "sfx", "room-tone", ...(themePath ? ["character-theme"] : [])],
+        audioManifest: {
+          lockedVoice: stepUrl(run, "dialogue"),
+          sceneEffects: stepUrl(run, "sfx"),
+          roomTone: stepUrl(run, "room-tone"),
+          themeUrl: themeUrl || null,
+        },
       },
     });
     return Response.json({ url: asset.url, assetId: asset.id });

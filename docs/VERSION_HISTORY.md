@@ -156,3 +156,6 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.48 | `20d7486` | 2026-07-26T10:47:55+05:30 | chore: synchronize Chaplin v0.1.48 |
 | v0.1.49 | `e7f1795` | 2026-07-26T10:50:36+05:30 | Restore the app's own rail and unfreeze the home page |
 | v0.1.50 | `050e330` | 2026-07-26T10:56:05+05:30 | Add the Scene Studio canvas |
+| v0.1.51 | `5afc7c0` | 2026-07-26T11:05:37+05:30 | Add actor social performance stats |
+| v0.1.52 | `c333fc5` | 2026-07-26T11:08:37+05:30 | Give the delivered cut a voice and a theme |
+| v0.1.53 | `e279b37` | 2026-07-26T11:20:11+05:30 | Feed tabs, clickable cast mentions, and admin-curated featuring |

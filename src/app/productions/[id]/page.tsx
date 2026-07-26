@@ -31,6 +31,10 @@ type ShotRenderState = {
   frameAssetId?: string;
   videoUrl?: string;
   videoAssetId?: string;
+  dialogueUrl?: string;
+  dialogueAssetId?: string;
+  sfxUrl?: string;
+  sfxAssetId?: string;
   status: ShotRenderStatus;
   error?: string;
 };
@@ -49,7 +53,7 @@ const LIVE_STEP_COPY: Record<string, string> = {
   "plan-lock": "Chaplin is checking the script, cast, duration, and shot requirements before generation begins.",
   "reference-frame": "Seedream is composing the actor, performance, camera, set, and motivated light into the first frame.",
   "reference-review": "The generated identity frame is ready for a human check of face, wardrobe, composition, and continuity.",
-  "motion-plate": "Seedance is preserving the approved first frame while animating performance and camera movement.",
+  "motion-plate": "Seedance is preserving the approved first frame while synchronizing performance to the locked voice and visible action.",
   dialogue: "ElevenLabs is performing the approved dialogue with the actor's locked voice identity.",
   sfx: "ElevenLabs is creating the scene's short physical sound effects.",
   "room-tone": "ElevenLabs is building the location's clean ambient room tone.",
@@ -598,6 +602,9 @@ export default function ProductionDetailPage() {
         let outputAssetId: string | undefined;
         const firstScene = story.scenes[0];
         if (step.key === "motion-plate") {
+          const dialogueStep = activeRun.steps.find((candidate) => candidate.key === "dialogue");
+          const referenceAudio = typeof dialogueStep?.output.url === "string" ? dialogueStep.output.url : "";
+          const dialogueText = typeof dialogueStep?.output.text === "string" ? dialogueStep.output.text : "";
           const response = await fetch("/api/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -605,6 +612,8 @@ export default function ProductionDetailPage() {
               action: "video",
               characterId: cast[0].id,
               referenceImage: referenceImageUrl,
+              referenceAudio,
+              dialogueText,
               prompt: buildShotVideoPrompt({
                 productionTitle: story.title, productionLogline: story.logline, scene: firstScene ?? {},
                 sceneIndex: 0, sceneCount: story.scenes.length || 1, format: story.format,
@@ -778,6 +787,68 @@ export default function ProductionDetailPage() {
         frameResults.push({ frameUrl: frameData.url, frameAssetId: frameData.assetId });
       }
 
+      /*
+        Build every authored scene's soundtrack before motion. Seedance 2.0 can
+        use the locked-voice file as a multimodal timing reference, but the same
+        original ElevenLabs asset is still mastered into the final cut so actor
+        identity never depends on a model's re-performance.
+      */
+      const audioResults: Array<{
+        dialogueText: string;
+        dialogueUrl?: string;
+        dialogueAssetId?: string;
+        sfxUrl: string;
+        sfxAssetId: string;
+      }> = [];
+      for (let index = 0; index < contract.shotCount; index += 1) {
+        activeShotIndex = index;
+        const directedScene = authoredScenes[index];
+        const dialogueLine = directedScene.lines.find((line) => line.text.trim());
+        const dialogueSpeaker = cast.find((character) => character.id === dialogueLine?.characterId) ?? cast[0];
+        const dialogueText = dialogueLine?.text.trim() ?? "";
+        setRenderProgress(`Recording voice and sound for scene ${index + 1} of ${contract.shotCount}`);
+        const sfxPrompt = [
+          `One distinctive non-musical foreground sound for scene ${index + 1} of "${story.title}".`,
+          `Location: ${directedScene.setting || "the established scene"}.`,
+          `Visible action: ${directedScene.action || directedScene.objective || "one concise physical action"}.`,
+          `Character sound identity: ${cast[0].sfxDesc}.`,
+          "Create one physically plausible event caused by the visible action, different from the other scene sounds. No speech, melody, score, generic cinematic boom, or ambience bed.",
+        ].join(" ");
+        const [dialogueAsset, sfxAsset] = await Promise.all([
+          dialogueText
+            ? generatePipelineAudio({
+                action: "speech",
+                characterId: dialogueSpeaker.id,
+                speechText: dialogueText,
+              })
+            : Promise.resolve(null),
+          generatePipelineAudio({
+            action: "sfx",
+            characterId: cast[0].id,
+            prompt: sfxPrompt,
+            durationSeconds: Math.min(3, Math.max(1, directedScene.durationSeconds ?? 2)),
+          }),
+        ]);
+        audioResults.push({
+          dialogueText,
+          dialogueUrl: dialogueAsset?.url,
+          dialogueAssetId: dialogueAsset?.assetId,
+          sfxUrl: sfxAsset.url,
+          sfxAssetId: sfxAsset.assetId,
+        });
+        setRenderShots((shots) => shots.map((shot, shotIndex) => (
+          shotIndex === index
+            ? {
+                ...shot,
+                dialogueUrl: dialogueAsset?.url,
+                dialogueAssetId: dialogueAsset?.assetId,
+                sfxUrl: sfxAsset.url,
+                sfxAssetId: sfxAsset.assetId,
+              }
+            : shot
+        )));
+      }
+
       const shotResults: Array<{ frameUrl: string; frameAssetId?: string; url: string; assetId: string }> = [];
       for (let index = 0; index < contract.shotCount; index += 1) {
         activeShotIndex = index;
@@ -803,6 +874,8 @@ export default function ProductionDetailPage() {
             action: "video",
             characterId: cast[0].id,
             referenceImage: frameData.frameUrl,
+            referenceAudio: audioResults[index]?.dialogueUrl,
+            dialogueText: audioResults[index]?.dialogueText,
             prompt: motionPrompt,
           }),
         });
@@ -836,6 +909,10 @@ export default function ProductionDetailPage() {
           shotAssetIds: shotResults.map((shot) => shot.assetId),
           frameUrls: shotResults.map((shot) => shot.frameUrl),
           frameAssetIds: shotResults.map((shot) => shot.frameAssetId).filter(Boolean),
+          dialogueUrls: audioResults.map((audio) => audio.dialogueUrl ?? ""),
+          dialogueAssetIds: audioResults.map((audio) => audio.dialogueAssetId).filter(Boolean),
+          sfxUrls: audioResults.map((audio) => audio.sfxUrl),
+          sfxAssetIds: audioResults.map((audio) => audio.sfxAssetId),
           sceneDurationSeconds: 4,
           completedAt: new Date().toISOString(),
         },
@@ -868,6 +945,8 @@ export default function ProductionDetailPage() {
           characterId: cast[0].id,
           shotUrls: shotResults.map((shot) => shot.url),
           frameUrls: shotResults.map((shot) => shot.frameUrl),
+          dialogueUrls: audioResults.map((audio) => audio.dialogueUrl ?? ""),
+          sfxUrls: audioResults.map((audio) => audio.sfxUrl),
           sceneDurationSeconds: 4,
           finalDurationSeconds: contract.duration,
         }),
@@ -1565,7 +1644,7 @@ export default function ProductionDetailPage() {
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-[9px] uppercase tracking-[0.16em] text-emerald-300">
-                    {contract.duration}s · {contract.shotCount} shots · attached to this production
+                    {contract.duration}s · {contract.shotCount} shots · locked voice · scene effects · character theme
                   </p>
                   <a
                     href={finalVideoUrl}
@@ -1633,7 +1712,7 @@ export default function ProductionDetailPage() {
                   className="aspect-video w-full rounded-xl bg-black object-contain"
                   aria-label={`Final mixed shot for ${story.title}`}
                 />
-                <p className="mt-2 text-[9px] uppercase tracking-[0.16em] text-emerald-300">Final picture, locked voice, effects, and room tone</p>
+                <p className="mt-2 text-[9px] uppercase tracking-[0.16em] text-emerald-300">Final picture, locked voice, effects, room tone, and character theme</p>
               </div>
             )}
 

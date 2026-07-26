@@ -3,6 +3,20 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.54 - 2026-07-26 - Locked-voice audiovisual scene delivery
+
+- Added the actor's locked ElevenLabs performance as a Seedance 2.0 audio
+  reference so mouth, breath, expression, and pauses follow the real voice
+  recording instead of an invented model voice.
+- Added one action-derived SFX stem per authored scene and placed every dialogue
+  and effect at its corresponding scene timestamp in the finished Punch.
+- Preserved each scene's speaking character when selecting the locked voice,
+  while keeping the character theme as a controlled music bed beneath dialogue.
+- Extended final media manifests and production UI copy to identify locked
+  voice, scene effects, room tone, and character theme as delivered audio.
+- Kept Seedance 1.5 and open-weight video fallbacks intact; unsupported models
+  continue without the multimodal audio-reference field.
+
 ## v0.1.51 - 2026-07-26 - Actor social performance stats
 
 - Added per-character social impressions, views, and likes to actor cards,

@@ -158,7 +158,7 @@ export default function MediaPipelineExperience() {
                 <span className="absolute -top-7 text-[8px] uppercase tracking-[0.2em] text-grey">Parallel production</span>
                 <div className="flex items-center gap-3 border-b border-cyan-300/20 pb-3">
                   <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.8)]" />
-                  <div><p className="text-xs font-semibold">Silent motion plate</p><p className="text-[9px] text-cyan-200">Seedance · image to video</p></div>
+                  <div><p className="text-xs font-semibold">Synchronized performance</p><p className="text-[9px] text-cyan-200">Seedance · image + locked voice to video</p></div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-0.5">

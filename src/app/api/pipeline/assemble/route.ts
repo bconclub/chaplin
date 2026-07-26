@@ -23,6 +23,11 @@ async function download(url: string, destination: string) {
   await writeFile(destination, Buffer.from(await response.arrayBuffer()));
 }
 
+function urlSlots(value: unknown, maximum = 20) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, maximum).map((item) => typeof item === "string" ? item.trim() : "");
+}
+
 export async function POST(request: Request) {
   let workDirectory = "";
   try {
@@ -35,7 +40,10 @@ export async function POST(request: Request) {
     const frameUrls = Array.isArray(input.frameUrls)
       ? input.frameUrls.filter((value): value is string => typeof value === "string" && Boolean(value))
       : [];
+    const requestedDialogueUrls = urlSlots(input.dialogueUrls);
+    const requestedSfxUrls = urlSlots(input.sfxUrls);
     const requestedDialogueUrl = typeof input.dialogueUrl === "string" ? input.dialogueUrl : "";
+    const requestedSfxUrl = typeof input.sfxUrl === "string" ? input.sfxUrl : "";
     const requestedThemeUrl = typeof input.themeUrl === "string" ? input.themeUrl : "";
     const sceneDurationSeconds = Math.min(5, Math.max(1, Number(input.sceneDurationSeconds) || 4));
     const finalDurationSeconds = Math.min(120, Math.max(1, Number(input.finalDurationSeconds) || shotUrls.length * sceneDurationSeconds));
@@ -74,12 +82,33 @@ export async function POST(request: Request) {
       || (typeof runDialogueUrl === "string" ? runDialogueUrl : "")
       || production?.latestDialogueUrl
       || "";
+    const sfxUrl = requestedSfxUrl || production?.latestSfxUrl || "";
     const themeUrl = requestedThemeUrl || production?.latestThemeUrl || "";
 
-    const dialoguePath = dialogueUrl ? path.join(workDirectory, "dialogue.mp3") : "";
+    const dialogueSources = requestedDialogueUrls.some(Boolean)
+      ? requestedDialogueUrls
+      : dialogueUrl
+        ? [dialogueUrl]
+        : [];
+    const sfxSources = requestedSfxUrls.some(Boolean)
+      ? requestedSfxUrls
+      : sfxUrl
+        ? [sfxUrl]
+        : [];
+    const dialogueFiles = dialogueSources.map((url, sceneIndex) => ({
+      url,
+      sceneIndex,
+      path: url ? path.join(workDirectory, `dialogue-${sceneIndex + 1}.mp3`) : "",
+    })).filter((source) => source.url);
+    const sfxFiles = sfxSources.map((url, sceneIndex) => ({
+      url,
+      sceneIndex,
+      path: url ? path.join(workDirectory, `sfx-${sceneIndex + 1}.mp3`) : "",
+    })).filter((source) => source.url);
     const themePath = themeUrl ? path.join(workDirectory, "theme.mp3") : "";
     await Promise.all([
-      dialoguePath ? download(dialogueUrl, dialoguePath) : Promise.resolve(),
+      ...dialogueFiles.map((source) => download(source.url, source.path)),
+      ...sfxFiles.map((source) => download(source.url, source.path)),
       themePath ? download(themeUrl, themePath) : Promise.resolve(),
     ]);
 
@@ -92,10 +121,20 @@ export async function POST(request: Request) {
     const audioFilters = [`[${bedIndex}:a]atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[abed]`];
     stemLabels.push("[abed]");
 
-    if (dialoguePath) {
-      stemInputs.push("-i", dialoguePath);
-      audioFilters.push(`[${inputIndex}:a]volume=1.0,apad,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[adlg]`);
-      stemLabels.push("[adlg]");
+    for (const source of dialogueFiles) {
+      const label = `adlg${source.sceneIndex}`;
+      const delay = Math.round(source.sceneIndex * sceneDurationSeconds * 1000);
+      stemInputs.push("-i", source.path);
+      audioFilters.push(`[${inputIndex}:a]volume=1.0,adelay=${delay}|${delay},apad,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[${label}]`);
+      stemLabels.push(`[${label}]`);
+      inputIndex += 1;
+    }
+    for (const source of sfxFiles) {
+      const label = `asfx${source.sceneIndex}`;
+      const delay = Math.round(source.sceneIndex * sceneDurationSeconds * 1000 + 180);
+      stemInputs.push("-i", source.path);
+      audioFilters.push(`[${inputIndex}:a]volume=0.7,adelay=${delay}|${delay},apad,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[${label}]`);
+      stemLabels.push(`[${label}]`);
       inputIndex += 1;
     }
     if (themePath) {
@@ -149,6 +188,11 @@ export async function POST(request: Request) {
         sourceFrameUrls: frameUrls,
         sceneDurationSeconds,
         finalDurationSeconds,
+        audioManifest: {
+          lockedVoice: dialogueFiles.map((source) => ({ sceneIndex: source.sceneIndex, url: source.url })),
+          sceneEffects: sfxFiles.map((source) => ({ sceneIndex: source.sceneIndex, url: source.url })),
+          themeUrl: themeUrl || null,
+        },
       },
     });
     const renderedOutput = {
@@ -157,6 +201,12 @@ export async function POST(request: Request) {
       shotUrls,
       frameUrls,
       sceneDurationSeconds,
+      audioManifest: {
+        lockedVoiceCount: dialogueFiles.length,
+        sceneEffectCount: sfxFiles.length,
+        hasTheme: Boolean(themeUrl),
+        mix: "locked voice + scene effects + character theme",
+      },
       renderedAt: new Date().toISOString(),
     };
     const updatedRun = await attachMediaPipelineOutput({

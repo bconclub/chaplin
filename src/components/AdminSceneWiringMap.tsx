@@ -293,7 +293,7 @@ export default function AdminSceneWiringMap({ characters, config }: { characters
         <div className="mt-5 grid gap-3 md:grid-cols-4">
           {[
             ["1", "Approved scene still", "Becomes the exact first frame for motion."],
-            ["2", "Silent motion plate", "Seedance animates the frame without audio or identity changes."],
+            ["2", "Synchronized performance", "Seedance animates the approved frame against the locked-voice reference and physically visible location sound."],
             ["3", "Independent audio stems", "Locked-voice dialogue, SFX, and theme remain separate until mix."],
             ["4", "Reviewable final shot", "FFmpeg aligns approved stems to the five-second motion plate for QC and approval."],
           ].map(([number, title, copy]) => (

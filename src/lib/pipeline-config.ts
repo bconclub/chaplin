@@ -181,9 +181,9 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
         durationSeconds: 5,
         resolution: "720p",
         ratio: "16:9",
-        // Seedance supplies diegetic location sound (room tone, foley, weather).
-        // Dialogue and theme are still separate stems in the actor's locked
-        // voice, so the video prompt asks for sound without speech or score.
+        // Seedance receives locked dialogue as a timing/lip-performance
+        // reference and supplies diegetic location sound. Chaplin still masters
+        // the exact voice, scene effects, and theme stems into delivery.
         generateAudio: true,
         watermark: false,
         pollIntervalSeconds: 5,

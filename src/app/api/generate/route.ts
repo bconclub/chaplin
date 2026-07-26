@@ -38,6 +38,10 @@ import {
 } from "@/lib/production-prompting";
 import { assembleSignatureSfx } from "@/lib/server/signature-sfx";
 import { enforceThemeDuration } from "@/lib/server/audio-postprocess";
+import {
+  prepareSeedanceAudioPrompt,
+  seedanceSupportsAudioReference,
+} from "@/lib/seedance-audio";
 import { compactVisualDirection, requestsStylizedImage } from "@/lib/prompt-compaction";
 import { buildPromptHandoff } from "@/lib/prompt-handoff";
 import { PromptLintError } from "@/lib/prompt-lint";
@@ -156,14 +160,6 @@ const MAX_IMAGE_ATTEMPTS = 3;
  * diegetic-only brief: the model supplies room tone, foley, and weather, while
  * spoken words and score stay with the locked voice and character theme.
  */
-const SILENT_PLATE_LINE = /^AUDIO:.*$/gm;
-const SILENT_PLATE_CLAUSE = /\s*Silent visual plate[^.]*\./gi;
-
-function withSceneAudioDirection(prompt: string) {
-  const cleaned = prompt.replace(SILENT_PLATE_LINE, "").replace(SILENT_PLATE_CLAUSE, "").trim();
-  return `${cleaned}\nAUDIO: Record the location, not a soundtrack. Generate only diegetic sound that the visible frame would actually make — room tone, footsteps, cloth movement, handled objects, machinery, and weather. No spoken words, no lip-sync, no singing, and no musical score: the actor's locked voice and the character theme are recorded separately and mixed over this plate.`;
-}
-
 const REPLICATE_API = "https://api.replicate.com/v1";
 
 /** Replicate's own docs call this a token; the deployment stores it as a key. */
@@ -1365,6 +1361,8 @@ export async function POST(request: Request) {
       const requestedPrompt = text(input, "prompt", 10, 12000);
       const silentPrompt = requestedPrompt;
       const requestedReference = typeof input.referenceImage === "string" ? input.referenceImage : "";
+      const referenceAudio = typeof input.referenceAudio === "string" ? input.referenceAudio.trim() : "";
+      const dialogueText = typeof input.dialogueText === "string" ? input.dialogueText.trim() : "";
       const production = await getCharacterProductionState(characterId);
       const canonicalReference = production.visualReference;
       // A production-approved frame is more specific than the actor's general
@@ -1373,7 +1371,12 @@ export async function POST(request: Request) {
       // Applied after compaction so the audio brief is never trimmed away.
       const wantsSceneAudio = settingBoolean(videoConfig, "generateAudio", true);
       const composedPrompt = visualGenerationPrompt(videoConfig, silentPrompt, "video");
-      const prompt = wantsSceneAudio ? withSceneAudioDirection(composedPrompt) : composedPrompt;
+      const prompt = prepareSeedanceAudioPrompt({
+        prompt: composedPrompt,
+        generateAudio: wantsSceneAudio,
+        referenceAudioUrl: referenceAudio,
+        dialogueText,
+      });
       const referenceMetadata = {
         referenceImage: reference || null,
         referenceAssetId: requestedReference ? null : canonicalReference?.assetId ?? null,
@@ -1397,9 +1400,20 @@ export async function POST(request: Request) {
       const maximumPolls = settingNumber(videoConfig, "maximumPolls", 55);
 
       const runVideoTask = async (model: string) => {
+        const taskContent = [...content];
+        // Audio references are a Seedance 2.0 multimodal capability. They guide
+        // mouth timing and performance, while Chaplin still masters the exact
+        // locked ElevenLabs file into the delivery so the voice cannot drift.
+        if (referenceAudio && seedanceSupportsAudioReference(model)) {
+          taskContent.push({
+            type: "audio_url",
+            audio_url: { url: referenceAudio },
+            role: "reference_audio",
+          });
+        }
         const createdResponse = await modelArk("/contents/generations/tasks", {
           model,
-          content,
+          content: taskContent,
           resolution: settingString(videoConfig, "resolution", "720p"),
           duration: durationSeconds,
           ratio: settingString(videoConfig, "ratio", "16:9"),
