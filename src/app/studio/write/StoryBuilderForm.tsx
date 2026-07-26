@@ -232,6 +232,7 @@ export default function StoryBuilderForm() {
   const [sceneAssistBusy, setSceneAssistBusy] = useState<number | null>(null);
   const [sceneAssistMessage, setSceneAssistMessage] = useState<{ index: number; text: string } | null>(null);
   const [scenePreviewBusy, setScenePreviewBusy] = useState<number | null>(null);
+  const [productionBusy, setProductionBusy] = useState(false);
   const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [claudeConfigured, setClaudeConfigured] = useState<boolean | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -920,7 +921,9 @@ export default function StoryBuilderForm() {
   }
 
   async function handleStartProduction() {
-    if (startingProduction) return;
+    // Two buttons can start a production - the rail action and the step-3
+    // submit - so both busy flags gate it and both are set together.
+    if (startingProduction || productionBusy) return;
     if (format === "spot" && !productImageUrl) {
       setError("Upload the product image before starting an ad production.");
       setStep(1);
@@ -988,6 +991,7 @@ export default function StoryBuilderForm() {
 
     setError("");
     setStartingProduction(true);
+    setProductionBusy(true);
     const story = addStory({
       title: title.trim(),
       logline: logline.trim(),
@@ -1048,6 +1052,7 @@ export default function StoryBuilderForm() {
   const authoredScenes = scenes.filter((scene) => scene.setting.trim() || scene.action.trim()).length;
   const scriptLocked = authoredScenes === scenes.length && scenes.length > 0;
   const framesReady = scenes.filter((scene) => Boolean(scene.previewImageUrl)).length;
+  const productionReady = conceptLocked && castLocked && scriptLocked;
   const sceneStages: SceneStage[] = [
     {
       id: 1, label: "Concept", hint: "Title, logline and format.",
@@ -1213,6 +1218,40 @@ export default function StoryBuilderForm() {
       </div>
 
       <h1 className="reel-title mb-5 text-2xl sm:text-3xl">Create a shootable story</h1>
+
+      {step === 3 && (
+        <div
+          className="sticky top-0 z-40 -mx-2 mb-5 flex flex-col gap-3 rounded-xl border border-accent/45 bg-[#080c0a]/95 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between"
+          data-production-handoff
+        >
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-accent">
+              {productionReady ? "Script ready" : "Complete the scene plan"}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {productionReady
+                ? `${scenes.length} scenes are locked. Continue whenever you are ready.`
+                : `${authoredScenes} of ${scenes.length} scenes are written.`}
+            </p>
+            <p className="mt-1 text-[10px] text-grey" aria-live="polite">
+              {scenePreviewBusy !== null
+                ? `Scene ${scenePreviewBusy + 1} is rendering in the background. You do not need to wait.`
+                : framesReady > 0
+                  ? `${framesReady} of ${scenes.length} preview frames ready. Missing frames can finish in production.`
+                  : "Preview frames are optional here and can be generated in production."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleStartProduction()}
+            disabled={!productionReady || productionBusy}
+            className="shrink-0 rounded-full bg-accent px-5 py-3 text-xs font-semibold text-paper shadow-[0_0_28px_rgba(244,70,112,0.2)] transition hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+            data-action="continue-to-production"
+          >
+            {productionBusy ? "Opening production…" : "Next: Production →"}
+          </button>
+        </div>
+      )}
 
       {format === "spot" && (
         <section
@@ -2124,8 +2163,8 @@ export default function StoryBuilderForm() {
             </button>
             <button
               onClick={() => void handleStartProduction()}
-              disabled={startingProduction}
-              className="bg-accent text-paper font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-light transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={startingProduction || productionBusy}
+              className="bg-accent text-paper font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-light transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {startingProduction ? "Starting…" : `${formatDefinition.finalAction} →`}
             </button>
