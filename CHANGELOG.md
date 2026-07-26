@@ -3,6 +3,25 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.11 - 2026-07-26 - Safe prompt handoffs
+
+- Replaced legacy provider-prompt nesting with one-pass named-slot composition
+  for voice, signature SFX, and theme generation.
+- Added a deterministic Zod prompt linter for duplicated renders, unresolved
+  defaults, medium conflicts, visibility-aware identity locks, closed wardrobe
+  sets, narrative leakage, atomic SFX, and voice-presentation mismatches.
+- Blocked paid provider jobs when their affected prompt card has a lint failure
+  and stored the complete lint report in generation-job metadata.
+- Added per-card failures, warnings, lint timing, and persisted presentation
+  confirmation to the Super Admin Scene Handoff Map.
+- Made recognition locks conditional on expression and framing, prevented
+  non-canonical garment motion, and corrected legacy runtime first-person
+  identity grammar.
+- Added a Rukhsar "Ru" Ansari regression fixture, golden handoff assertions,
+  malformed-prompt rule coverage, and prompt-lint operating documentation.
+- Passed the prompt-lint suite, 22 production/video tests, TypeScript, and the
+  complete Next.js production build.
+
 ## v0.1.10 - 2026-07-26 - Reference-free fresh identity casting
 
 - Removed the existing actor cover and older scene stills from the live Asset

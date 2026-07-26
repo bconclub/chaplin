@@ -15,6 +15,7 @@ import {
   resolveVoiceLanguageDirection,
   sanitizeVoicePerformanceDirection,
 } from "@/lib/voice-language";
+import { composePromptSlots, joinPromptList, unwrapLegacyDirection } from "@/lib/prompt-composer";
 
 export type CharacterIdentityInput = Pick<Character, "name" | "archetype" | "tagline" | "personality" | "voiceGender"> &
   Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "cardV2" | "brollLine" | "brollScene">> & {
@@ -461,6 +462,14 @@ function recognitionLocks(bible: CharacterProductionBible, appearance?: string) 
   }
   return unique;
 }
+
+function visibleRecognitionLocks(locks: string[], framing: string, expression: string) {
+  return locks.filter((lock) => {
+    if (/\b(grin|smile|teeth|canine)\b/i.test(lock)) return /\b(grin|smile|teeth)\b/i.test(expression);
+    if (/\b(hip|belt|feet|shoe|flip-flop)\b/i.test(lock)) return /\b(full.body|chest.to.knee|waist|wide|long)\b/i.test(framing);
+    return true;
+  });
+}
 function identityNegative(medium: string) {
   return STYLIZED_MEDIUM.test(medium)
     ? "photoreal, live-action, 3D, CGI, unrelated art style, generic face, costume drift, extra person, text, logo, watermark"
@@ -562,13 +571,21 @@ export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
     voiceDirection: source?.voiceDirection || character.voiceDesc,
   };
   const languageDirection = resolveVoiceLanguageDirection(voiceContext);
-  const performanceDirection = sanitizeVoicePerformanceDirection(voiceContext);
-  return [
-    `${languageDirection} ${character.voiceGender}, adult. Studio quality.`,
-    `Persona: ${persona}. Emotion: controlled, alert, emotionally specific.`,
-    `${sentence(performanceDirection || "Clear mid-register resonance")}`,
-    `Conversational delivery with ${bible.performance.tempo}; under pressure, ${bible.performance.underPressure}. Clean close-mic signal without reverb, echo, telephone, tape, or synthetic FX.`
-  ].join(" ");
+  const performanceDirection = unwrapLegacyDirection(
+    sanitizeVoicePerformanceDirection(voiceContext),
+    "voice",
+  );
+  return composePromptSlots(
+    ["language", "presentation", "persona", "performance", "recording"],
+    {
+      language: languageDirection,
+      presentation: `${character.voiceGender}, adult voice.`,
+      persona: `Persona: ${persona}. Emotion: controlled, alert, emotionally specific.`,
+      performance: sentence(performanceDirection || `Clear mid-register resonance with ${bible.performance.tempo}`),
+      recording: `Under pressure: ${bible.performance.underPressure}. Clean studio close-mic signal without reverb, echo, telephone, tape, or synthetic FX.`,
+    },
+    { separator: " " },
+  );
 }
 
 /**
@@ -694,10 +711,20 @@ export function composeCharacterMasterPrompt(character: Character) {
   ].join("\n");
 }
 
-export function composeSfxPrompt(character: CharacterIdentityInput, sceneTexture?: string) {
-  const source = character.sfxDesc || "one tactile signature action";
-  if (/^Premium cinematic Foley one-shot\b/i.test(source.trim())) return source.trim();
-  return `Premium cinematic Foley one-shot for ${character.name}: ${source}. ${sceneTexture ? `The acoustic material subtly reflects ${sceneTexture}.` : "One immediate physical action with a precise attack, weighty material body, and short controlled room tail."} Blend close and room-mic detail into one coherent event; full-spectrum, high dynamic range, polished, center-safe, and recognizable at low volume. No repeated variations, sequence, ambience bed, speech, melody, generic whoosh, riser, or trailer braam.`;
+export function composeSfxPrompt(character: CharacterIdentityInput, _sceneTexture?: string) {
+  void _sceneTexture;
+  const source = unwrapLegacyDirection(character.sfxDesc, "sfx") || "one tactile signature action";
+  return composePromptSlots(
+    ["identity", "event", "acoustics", "finish", "exclude"],
+    {
+      identity: `Premium cinematic Foley one-shot for ${character.name}.`,
+      event: `One atomic physical event: ${source}.`,
+      acoustics: "Precise attack, weighty material body, microscopic texture, and a short controlled natural tail.",
+      finish: "Blend close and room-mic detail into one coherent, full-spectrum, polished event recognizable at low volume.",
+      exclude: "No repeated variations, sequence, ambience bed, speech, melody, generic whoosh, riser, or trailer braam.",
+    },
+    { separator: " " },
+  );
 }
 
 export function signatureSfxPromptIssues(prompt: string) {
@@ -963,12 +990,6 @@ function themeClause(value: string | undefined) {
     .replace(/[.,;:\s]+$/, "");
 }
 
-function naturalList(values: string[]) {
-  if (values.length < 2) return values[0] ?? "";
-  if (values.length === 2) return `${values[0]} and ${values[1]}`;
-  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
-}
-
 function sentenceStart(value: string) {
   return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
@@ -1010,26 +1031,19 @@ export function composeThemePrompt(
   if (!isThemeDurationPreset(durationSeconds)) {
     throw new Error(`Theme duration must be one of ${THEME_DURATION_PRESETS.join(", ")} seconds.`);
   }
-  const existingTheme = character.themeDesc?.trim();
-  if (
-    existingTheme
-    && /^Original 2020s\b/i.test(existingTheme)
-    && /\bFully arranged and mastered\b/i.test(existingTheme)
-  ) {
-    const prompt = withThemeDurationDirection(existingTheme, durationSeconds);
-    if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
-    return prompt;
-  }
   const card = readCharacterCardV2(character.cardV2);
   const bible = buildProductionBible(character);
   const profile = card?.theme_profile;
   const modern = resolveModernThemePalette(character);
-  const turn = themeClause(dramaticBeat) || profile?.emotional_turn || themeClause(bible.story.payoffPattern);
-  const legacyColor = themeClause(profile?.style_anchor) || themeClause(character.themeDesc);
+  const turn = profile?.emotional_turn || themeClause(dramaticBeat);
+  const legacyColor = themeClause(profile?.style_anchor)
+    || themeClause(unwrapLegacyDirection(character.themeDesc, "theme"));
   const profileInstruments = profile?.instruments
     .map((instrument) => themeClause(instrument))
     .filter(Boolean) ?? [];
-  const instruments = [...new Set([...profileInstruments, ...modern.instruments])].slice(0, 4);
+  const instruments = profileInstruments.length
+    ? [...new Set(profileInstruments)].slice(0, 4)
+    : [...modern.instruments];
   const opening = themeClause(profile?.opening)
     || `the ${instruments[0]} states a concise, recognizable motif immediately`;
   const build = themeClause(profile?.build)
@@ -1041,14 +1055,18 @@ export function composeThemePrompt(
   const mood = themeClause(profile?.mood)
     || themeClause(bible.dramatic.contradiction)
     || "emotionally specific, dimensional, and alert";
-  const productionBrief = [
-    `Original ${modern.genres} character theme for ${character.name}; ${mood}.`,
-    legacyColor ? `Retain this character-specific cultural or acoustic color inside the contemporary production: ${legacyColor}.` : "",
-    `Core palette: ${naturalList(instruments)}.`,
-    `Arrangement: ${sentenceStart(opening)}. ${sentenceStart(build)}. ${sentenceStart(emotionalTurn)}. ${sentenceStart(ending)}.`,
-    `Production and mix: ${modern.production}. Fully arranged and mastered with foreground motif, supporting rhythm, bass movement, harmonic development, layered depth, polished transients, and a complete beginning-middle-end arc.`,
-    "Avoid sparse single-chord noodling, isolated solo demo playing, a stock orchestral trailer bed, generic corporate music, repetitive placeholder loops, muddy low end, thin percussion, or an empty intro.",
-  ].filter(Boolean).join(" ");
+  const productionBrief = composePromptSlots(
+    ["identity", "color", "palette", "arrangement", "production", "avoid"],
+    {
+      identity: `Original ${modern.genres} character theme for ${character.name}; ${mood}.`,
+      color: legacyColor ? `Character-specific acoustic color: ${legacyColor}.` : "",
+      palette: `Core palette: ${joinPromptList(instruments)}.`,
+      arrangement: `Arrangement: ${sentenceStart(opening)}. ${sentenceStart(build)}. ${sentenceStart(emotionalTurn)}. ${sentenceStart(ending)}.`,
+      production: `Production and mix: ${modern.production}. Fully arranged and mastered with foreground motif, supporting rhythm, bass movement, harmonic development, layered depth, polished transients, and a complete beginning-middle-end arc.`,
+      avoid: "Avoid sparse single-chord noodling, isolated solo demo playing, a stock orchestral trailer bed, generic corporate music, repetitive placeholder loops, muddy low end, thin percussion, or an empty intro.",
+    },
+    { separator: " " },
+  );
   const prompt = withThemeDurationDirection(
     `${productionBrief} No imitation of an existing composition. Instrumental only, no vocals.`,
     durationSeconds,
@@ -1073,7 +1091,11 @@ export function composeImagePrompt(character: CharacterIdentityInput, shot: Shot
   }
   const bible = buildProductionBible(character);
   const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
-  const locks = recognitionLocks(bible, character.appearanceBrief);
+  const locks = visibleRecognitionLocks(
+    recognitionLocks(bible, character.appearanceBrief),
+    shot.framing,
+    shot.facialBeat,
+  );
   return [
     `${medium}. 16:9. ${shot.framing} of ${character.name}. ${visibleIdentity(character, bible)}.`,
     `Scene: ${concise(shot.dramaticBeat, 120)}. ${concise(shot.subjectStart, 100)}. ${concise(shot.facialBeat, 80)}. ${concise(shot.setting, 110)}.`,
@@ -1105,7 +1127,11 @@ export function composeIdentityImagePrompt(character: CharacterIdentityInput) {
   if (card) return buildCardIdentitySeedPrompt(card);
   const bible = buildProductionBible(character);
   const medium = bible.visual.medium || visualMedium(character.appearanceBrief, bible.visual.faceAnchors.join(" "), bible.cinematography.worldTexture);
-  const locks = recognitionLocks(bible, character.appearanceBrief);
+  const locks = visibleRecognitionLocks(
+    recognitionLocks(bible, character.appearanceBrief),
+    "chest-to-knee casting portrait",
+    "neutral expression",
+  );
   return [
     `IDENTITY FEED SEED. ${medium}. One original fictional actor only: ${character.name}. ${visibleIdentity(character, bible)}.`,
     "CASTING COMPOSITION: calm chest-to-knee editorial casting portrait with face, hairline, shoulders, hands, and silhouette clearly readable. Direct but relaxed eyeline; neutral expression; no performance beat.",
@@ -1161,11 +1187,13 @@ export function composeVideoPrompt(_character: CharacterIdentityInput, shot: Sho
   const ending = closeFrame
     ? "Ends on stillness, gaze fixed, camera fully stopped"
     : `Ends on ${concise(shot.finalFrame, 120)}`;
-  return [
+  const prompt = [
     `${camera}. ${subjectMotion}. ${secondaryMotion}. ${ending}.`,
     "Negative: warped face, lip movement, camera cut, invented objects.",
     "--duration 5",
   ].join("\n");
+  const wardrobe = buildProductionBible(_character).visual.wardrobe;
+  return /\bcoat\b/i.test(wardrobe) ? prompt : prompt.replace(/\bcoat hem\b/gi, "garment edge");
 }
 export function composeLegacyVideoPrompt(_character: CharacterIdentityInput, shot: ShotBlueprint) {
   return [

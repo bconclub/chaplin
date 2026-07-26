@@ -38,6 +38,8 @@ import {
 } from "@/lib/production-prompting";
 import { assembleSignatureSfx } from "@/lib/server/signature-sfx";
 import { enforceThemeDuration } from "@/lib/server/audio-postprocess";
+import { buildPromptHandoff } from "@/lib/prompt-handoff";
+import { PromptLintError } from "@/lib/prompt-lint";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -595,11 +597,39 @@ export async function POST(request: Request) {
       model: string;
       prompt?: string;
       metadata?: Record<string, unknown>;
-    }) => beginGeneration({
-      ...details,
-      experimentId,
-      experimentVariantId,
-    });
+    }) => {
+      const handoff = requestCharacter ? buildPromptHandoff(requestCharacter) : null;
+      const cardByKind: Record<string, string[]> = {
+        "voice-design": ["voice"],
+        "voice-lock": ["voice"],
+        dialogue: ["dialogue"],
+        sfx: ["sfx"],
+        theme: ["theme"],
+        gallery: ["scene-still", "identity-still", "sheet"],
+        avatar: ["identity-still", "sheet"],
+        banner: ["identity-still", "sheet"],
+        video: ["motion"],
+      };
+      const relevantCards = cardByKind[details.kind] ?? [];
+      const blockingResult = handoff && relevantCards.length
+        ? {
+            ...handoff.lint,
+            failures: handoff.lint.failures.filter((issue) => relevantCards.includes(issue.cardId)),
+          }
+        : null;
+      if (blockingResult?.failures.length) {
+        throw new PromptLintError({ ...blockingResult, pass: false });
+      }
+      return beginGeneration({
+        ...details,
+        metadata: {
+          ...(details.metadata ?? {}),
+          ...(handoff ? { prompt_lint: handoff.lint } : {}),
+        },
+        experimentId,
+        experimentVariantId,
+      });
+    };
 
     if (action === "voice-design") {
       const voiceConfig = pipeline.stages.voice;

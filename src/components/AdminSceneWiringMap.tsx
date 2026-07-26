@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
+import { buildPromptHandoff, type HandoffPromptCard } from "@/lib/prompt-handoff";
 import { composeCharacterInteractionPrompt, composeCharacterSheetPrompt } from "@/lib/character-system";
 import {
   buildProductionBible,
@@ -13,24 +14,17 @@ import {
   composeVoiceDesignPrompt,
 } from "@/lib/production-prompting";
 import { PIPELINE_STAGE_META, pipelineModelLabel, type PipelineConfig, type PipelineStageId } from "@/lib/pipeline-config";
+import type { PromptLintIssue } from "@/lib/prompt-lint";
 import type { Character } from "@/lib/types";
 
-type PromptCard = {
-  id: string;
-  step: string;
-  title: string;
-  destination: string;
-  note: string;
-  prompt: string;
-  stage?: PipelineStageId;
-};
+type PromptCard = Omit<HandoffPromptCard, "consumer">;
 
 function stageLabel(config: PipelineConfig, stage: PipelineStageId) {
   const current = config.stages[stage];
   return `${PIPELINE_STAGE_META[stage].label} · ${current.provider} · ${pipelineModelLabel(current.model)}`;
 }
 
-function PromptCardView({ card, config }: { card: PromptCard; config: PipelineConfig }) {
+function PromptCardView({ card, config, issues = [] }: { card: PromptCard; config: PipelineConfig; issues?: PromptLintIssue[] }) {
   const [copied, setCopied] = useState(false);
   const stage = card.stage ? config.stages[card.stage] : null;
 
@@ -50,6 +44,15 @@ function PromptCardView({ card, config }: { card: PromptCard; config: PipelineCo
         <span className="rounded-full border border-line px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-grey">{card.destination}</span>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-grey">{card.note}</p>
+      {issues.length > 0 && (
+        <div className="mt-3 space-y-1 rounded-sm border border-[#ff5b67]/45 bg-[#ff5b67]/10 p-3">
+          {issues.map((issue) => (
+            <p key={`${issue.rule}-${issue.message}`} className="text-[11px] leading-5 text-[#ff8d95]">
+              <strong>{issue.rule}</strong> · {issue.message}
+            </p>
+          ))}
+        </div>
+      )}
       {stage && (
         <p className="mt-3 text-[10px] uppercase tracking-[0.12em] text-[#36e0cd]">
           Active route · {stageLabel(config, card.stage!)}
@@ -76,14 +79,22 @@ function PromptCardView({ card, config }: { card: PromptCard; config: PipelineCo
 
 export default function AdminSceneWiringMap({ characters, config }: { characters: Character[]; config: PipelineConfig }) {
   const [characterId, setCharacterId] = useState(characters[0]?.id ?? "");
+  const [presentationConfirmed, setPresentationConfirmed] = useState(() => (
+    typeof window !== "undefined"
+      && window.localStorage.getItem(`chaplin:prompt-lint:presentation:${characters[0]?.id ?? ""}`) === "confirmed"
+  ));
   const character = characters.find((item) => item.id === characterId) ?? characters[0];
   const bible = useMemo(() => character ? buildProductionBible(character) : null, [character]);
   const scene = useMemo(
     () => character ? buildScenePackage({ ...character, brollLine: undefined }, 0) : null,
     [character],
   );
+  const handoff = useMemo(
+    () => character ? buildPromptHandoff(character, { presentationConfirmed }) : null,
+    [character, presentationConfirmed],
+  );
 
-  if (!character || !bible || !scene) {
+  if (!character || !bible || !scene || !handoff) {
     return <div className="poster-card rounded-md p-6 text-sm text-grey">No saved actor is available to map yet.</div>;
   }
 
@@ -193,7 +204,13 @@ export default function AdminSceneWiringMap({ characters, config }: { characters
               </div>
               <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-grey">
                 Map actor
-                <select value={character.id} onChange={(event) => setCharacterId(event.target.value)} className="mt-1 block min-w-48 rounded-sm border border-line bg-paper px-3 py-2 text-xs font-medium normal-case tracking-normal text-ink">
+                <select value={character.id} onChange={(event) => {
+                  const nextId = event.target.value;
+                  setCharacterId(nextId);
+                  setPresentationConfirmed(
+                    window.localStorage.getItem(`chaplin:prompt-lint:presentation:${nextId}`) === "confirmed",
+                  );
+                }} className="mt-1 block min-w-48 rounded-sm border border-line bg-paper px-3 py-2 text-xs font-medium normal-case tracking-normal text-ink">
                   {characters.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
               </label>
@@ -230,8 +247,43 @@ export default function AdminSceneWiringMap({ characters, config }: { characters
           </div>
           <span className="rounded-full border border-line px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-grey">Scene · {scene.sceneName}</span>
         </div>
+        <div className={`mt-5 rounded-md border p-4 ${handoff.lint.pass ? "border-[#26d6aa]/40 bg-[#26d6aa]/8" : "border-[#ff5b67]/45 bg-[#ff5b67]/10"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-grey">Pre-generation prompt lint · {handoff.lint.durationMs}ms</p>
+              <p className="mt-1 text-sm font-semibold">
+                {handoff.lint.pass ? "Provider handoff is structurally safe" : `${handoff.lint.failures.length} failures block generation`}
+              </p>
+              <p className="mt-1 text-xs text-grey">{handoff.lint.warnings.length} warnings require review.</p>
+            </div>
+            {handoff.lint.warnings.some((issue) => issue.rule === "L7") && (
+              <label className="flex items-center gap-2 text-xs text-grey">
+                <input
+                  type="checkbox"
+                  checked={presentationConfirmed}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setPresentationConfirmed(checked);
+                    window.localStorage.setItem(
+                      `chaplin:prompt-lint:presentation:${character.id}`,
+                      checked ? "confirmed" : "pending",
+                    );
+                  }}
+                />
+                Confirm voice presentation mismatch
+              </label>
+            )}
+          </div>
+        </div>
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
-          {promptCards.map((card) => <PromptCardView key={card.id} card={card} config={config} />)}
+          {promptCards.map((card) => (
+            <PromptCardView
+              key={card.id}
+              card={card}
+              config={config}
+              issues={[...handoff.lint.failures, ...handoff.lint.warnings].filter((issue) => issue.cardId === card.id)}
+            />
+          ))}
         </div>
       </section>
 

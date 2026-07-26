@@ -73,7 +73,7 @@ const LANGUAGE_DIRECTIONS: Array<{ match: RegExp; direction: string }> = [
   {
     match: /\b(british english|english accent|received pronunciation|cockney|scottish|welsh|irish)\b/i,
     direction:
-      "Primary spoken language: English in the character's explicitly stated UK or Irish dialect. Preserve its regional pronunciation without exaggerating it.",
+      "Primary spoken language: English in the regional dialect named in the character canon. Preserve its pronunciation without exaggerating it.",
   },
   {
     match: /\b(american english|american accent|united states|southern drawl|new york accent)\b/i,
