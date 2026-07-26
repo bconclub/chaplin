@@ -1005,8 +1005,15 @@ function generationFeedCopy(kind: string, characterName: string, prompt: string 
   const productionTitle = prompt?.match(/(?:first production frame|scene|production)\s+for\s+["“]([^"”]+)["”]/i)?.[1]?.trim();
   const production = productionTitle ? `“${productionTitle}”` : null;
   if (kind === "dialogue") return `${characterName} is finding the voice of a new scene.${cleanPrompt ? `\n“${cleanPrompt}”` : ""}`;
-  if (kind === "sfx") return `Sound building for ${characterName}.${cleanPrompt ? ` ${cleanPrompt}` : ""}`;
-  if (kind === "theme") return `${characterName}’s world has a new theme.${cleanPrompt ? ` ${cleanPrompt}` : ""}`;
+  /*
+    Audio-design prompts are production instructions, not captions. Publishing
+    them put a character's entire theme brief - genre, palette, arrangement, the
+    whole recipe - into the public feed, where anyone could lift it. The post
+    names the actor and lets the card carry the identity; the brief stays in
+    Studio and the admin logs.
+  */
+  if (kind === "sfx") return `Sound building for ${characterName}.`;
+  if (kind === "theme") return `${characterName}’s world has a new theme.`;
   if (kind === "video") return production
     ? `A new scene from ${production} is coming alive with ${characterName}.`
     : `A new scene with ${characterName} is coming alive.`;
