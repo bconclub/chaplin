@@ -491,6 +491,9 @@ export default function NewCharacterPage() {
   const sfxDesc = isCustomSfx ? customSfx : sfxPreset;
   const isCustomScore = scorePreset === SCORE_PRESETS[SCORE_PRESETS.length - 1];
   const themeDesc = isCustomScore ? customScore : scorePreset;
+  const showCustomVoice = isCustomVoice || Boolean(customVoice.trim());
+  const showCustomSfx = isCustomSfx || Boolean(customSfx.trim());
+  const showCustomScore = isCustomScore || Boolean(customScore.trim());
   const requiredCreationFields = [
     ["name", name],
     ["character promise", tagline],
@@ -1163,14 +1166,18 @@ export default function NewCharacterPage() {
                     <select value={voicePreset} onChange={(event) => setVoicePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {VOICE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
-                    {isCustomVoice && (
-                      <textarea
-                        value={customVoice}
-                        onChange={(event) => setCustomVoice(event.target.value)}
-                        rows={4}
-                        placeholder="Magic Write will place the complete language, accent, timbre, and performance direction here."
-                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
-                      />
+                    {showCustomVoice && (
+                      <span className="mt-2 block">
+                        <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.14em] text-accent">Custom voice direction</span>
+                        <textarea
+                          data-character-field="voice"
+                          value={customVoice}
+                          onChange={(event) => setCustomVoice(event.target.value)}
+                          rows={5}
+                          placeholder="Magic Write will place the complete language, accent, timbre, and performance direction here."
+                          className="w-full resize-y rounded-md border border-accent/35 bg-black/30 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                        />
+                      </span>
                     )}
                   </label>
                   <label className="block text-[9px] text-grey">
@@ -1178,14 +1185,18 @@ export default function NewCharacterPage() {
                     <select value={sfxPreset} onChange={(event) => setSfxPreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {SFX_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
-                    {isCustomSfx && (
-                      <textarea
-                        value={customSfx}
-                        onChange={(event) => setCustomSfx(event.target.value)}
-                        rows={3}
-                        placeholder="The generated physical sound identity appears here."
-                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
-                      />
+                    {showCustomSfx && (
+                      <span className="mt-2 block">
+                        <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.14em] text-accent">Custom sound identity</span>
+                        <textarea
+                          data-character-field="sfx"
+                          value={customSfx}
+                          onChange={(event) => setCustomSfx(event.target.value)}
+                          rows={3}
+                          placeholder="The generated physical sound identity appears here."
+                          className="w-full resize-y rounded-md border border-accent/35 bg-black/30 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                        />
+                      </span>
                     )}
                   </label>
                   <label className="block text-[9px] text-grey">
@@ -1193,14 +1204,18 @@ export default function NewCharacterPage() {
                     <select value={scorePreset} onChange={(event) => setScorePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {SCORE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
-                    {isCustomScore && (
-                      <textarea
-                        value={customScore}
-                        onChange={(event) => setCustomScore(event.target.value)}
-                        rows={3}
-                        placeholder="The generated musical identity appears here."
-                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
-                      />
+                    {showCustomScore && (
+                      <span className="mt-2 block">
+                        <span className="mb-1 block text-[8px] font-semibold uppercase tracking-[0.14em] text-accent">Custom musical identity</span>
+                        <textarea
+                          data-character-field="theme"
+                          value={customScore}
+                          onChange={(event) => setCustomScore(event.target.value)}
+                          rows={3}
+                          placeholder="The generated musical identity appears here."
+                          className="w-full resize-y rounded-md border border-accent/35 bg-black/30 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                        />
+                      </span>
                     )}
                   </label>
                 </div>
@@ -1552,7 +1567,7 @@ export default function NewCharacterPage() {
               </option>
             ))}
           </select>
-          {isCustomVoice && (
+          {showCustomVoice && (
             <input
               data-character-field="voice"
               value={customVoice}
@@ -1582,7 +1597,7 @@ export default function NewCharacterPage() {
               </option>
             ))}
           </select>
-          {isCustomSfx && (
+          {showCustomSfx && (
             <input
               data-character-field="sfx"
               value={customSfx}
@@ -1609,7 +1624,7 @@ export default function NewCharacterPage() {
               </option>
             ))}
           </select>
-          {isCustomScore && (
+          {showCustomScore && (
             <input
               data-character-field="theme"
               value={customScore}

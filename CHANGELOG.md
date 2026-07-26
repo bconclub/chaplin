@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.13 - 2026-07-26 - Visible custom sound directions
+
+- Restored saved and Magic Write custom voice, signature-SFX, and theme
+  descriptions beneath their selectors instead of hiding retained content.
+- Added explicit custom-direction labels and larger editable voice space in the
+  desktop actor identity panel.
+- Applied the same retained-content visibility rule to the responsive actor
+  creation form.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  Next.js production build.
+
 ## v0.1.12 - 2026-07-26 - Clearer Magic Write progress
 
 - Enlarged the Magic Write action and active generation card in the actor
