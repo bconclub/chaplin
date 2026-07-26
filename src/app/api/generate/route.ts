@@ -1227,35 +1227,74 @@ export async function POST(request: Request) {
       if (reference) {
         content.push({ type: "image_url", image_url: { url: await imageInput(reference) } });
       }
-      const createdResponse = await modelArk("/contents/generations/tasks", {
-        model: videoConfig.model,
-        content,
-        resolution: settingString(videoConfig, "resolution", "720p"),
-        duration: durationSeconds,
-        ratio: settingString(videoConfig, "ratio", "16:9"),
-        generate_audio: settingBoolean(videoConfig, "generateAudio", false),
-        watermark: settingBoolean(videoConfig, "watermark", false),
-      });
-      const created = createdResponse.data;
-      const taskId = created.id;
-      if (typeof taskId !== "string") throw new Error("Seedance did not return a task ID.");
-
-      let task: Record<string, unknown> = {};
       const pollIntervalMs = settingNumber(videoConfig, "pollIntervalSeconds", 5) * 1000;
       const maximumPolls = settingNumber(videoConfig, "maximumPolls", 55);
-      for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-        task = (await modelArk(`/contents/generations/tasks/${encodeURIComponent(taskId)}`)).data;
-        if (task.status === "succeeded") break;
-        if (["failed", "cancelled", "expired"].includes(String(task.status))) {
-          const providerError = task.error as { message?: string } | undefined;
-          throw new Error(providerError?.message ?? `Seedance task ${task.status}.`);
+
+      const runVideoTask = async (model: string) => {
+        const createdResponse = await modelArk("/contents/generations/tasks", {
+          model,
+          content,
+          resolution: settingString(videoConfig, "resolution", "720p"),
+          duration: durationSeconds,
+          ratio: settingString(videoConfig, "ratio", "16:9"),
+          generate_audio: settingBoolean(videoConfig, "generateAudio", false),
+          watermark: settingBoolean(videoConfig, "watermark", false),
+        });
+        const taskId = createdResponse.data.id;
+        if (typeof taskId !== "string") throw new Error("Seedance did not return a task ID.");
+        let task: Record<string, unknown> = {};
+        for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          task = (await modelArk(`/contents/generations/tasks/${encodeURIComponent(taskId)}`)).data;
+          if (task.status === "succeeded") break;
+          if (["failed", "cancelled", "expired"].includes(String(task.status))) {
+            const providerError = task.error as { message?: string } | undefined;
+            throw new Error(providerError?.message ?? `Seedance task ${task.status}.`);
+          }
+        }
+        if (task.status !== "succeeded") throw new Error("Seedance timed out before completion.");
+        const generated = task.content as { video_url?: string } | undefined;
+        if (!generated?.video_url) throw new Error("Seedance completed without returning a video.");
+        return {
+          videoUrl: generated.video_url,
+          taskId,
+          usage: task.usage as Record<string, unknown> | undefined,
+          requestId: createdResponse.requestId,
+        };
+      };
+
+      /*
+        The Dreamina line refuses image-to-video whenever the seed still reads as
+        a photograph of a real person — which is exactly what Chaplin's identity
+        stills are designed to look like, so the better the still, the more
+        reliably the shot is rejected. Softening the prompt cannot help: the
+        refusal is about the input image, not the text. Fall back to the raw
+        ByteDance model, which carries a different policy, before losing the shot.
+      */
+      const fallbackVideoModel = settingString(videoConfig, "fallbackModel", "seedance-1-5-pro-251215");
+      const videoModelCandidates = [videoConfig.model, fallbackVideoModel]
+        .filter((model, index, models) => model && models.indexOf(model) === index);
+      let videoUrl = "";
+      let taskId = "";
+      let videoModelUsed = videoConfig.model;
+      let videoUsage: Record<string, unknown> | undefined;
+      let videoRequestId: string | null | undefined;
+      const rejectedModels: string[] = [];
+      for (const model of videoModelCandidates) {
+        try {
+          const result = await runVideoTask(model);
+          videoUrl = result.videoUrl;
+          taskId = result.taskId;
+          videoUsage = result.usage;
+          videoRequestId = result.requestId;
+          videoModelUsed = model;
+          break;
+        } catch (error) {
+          const isLastCandidate = model === videoModelCandidates[videoModelCandidates.length - 1];
+          if (!isSafetyRejection(error) || isLastCandidate) throw error;
+          rejectedModels.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
-      if (task.status !== "succeeded") throw new Error("Seedance timed out before completion.");
-      const generated = task.content as { video_url?: string } | undefined;
-      const videoUrl = generated?.video_url;
-      if (!videoUrl) throw new Error("Seedance completed without returning a video.");
       const asset = await saveRemoteMediaAsset({
         characterId,
         kind: "video",
@@ -1263,19 +1302,31 @@ export async function POST(request: Request) {
         remoteUrl: videoUrl,
         prompt,
         durationSeconds,
-        metadata: { taskId, ...referenceMetadata, ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}) },
+        metadata: {
+          taskId,
+          videoModel: videoModelUsed,
+          ...(rejectedModels.length ? { safetyRejectedModels: rejectedModels } : {}),
+          ...referenceMetadata,
+          ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
+        },
       });
-      const providerUsage = task.usage as Record<string, unknown> | undefined;
+      const providerUsage = videoUsage;
       await completeGeneration(
         jobId,
         asset.id,
-        { taskId, ...referenceMetadata, ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}) },
+        {
+          taskId,
+          videoModel: videoModelUsed,
+          ...(rejectedModels.length ? { safetyRejectedModels: rejectedModels } : {}),
+          ...referenceMetadata,
+          ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
+        },
         await calculateGenerationBilling({
           kind: "video",
           usage: { durationSeconds, providerUsage, providerTokens: recordNumber(providerUsage, "total_tokens", "output_tokens") },
           providerCostUsd: recordNumber(providerUsage, "cost_usd", "cost"),
         }),
-        createdResponse.requestId ?? taskId
+        videoRequestId ?? taskId
       );
       return Response.json({ url: asset.url, assetId: asset.id, taskId });
     }
