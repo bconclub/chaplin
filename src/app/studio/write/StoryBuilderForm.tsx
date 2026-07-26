@@ -681,9 +681,33 @@ export default function StoryBuilderForm() {
           lines: [],
         }]).map((scene) => ({ ...scene, durationSeconds: 4 }));
         setScenes(nextScenes);
-        // This script is about these actors; that binding is what later detects
-        // a cast swap leaving the script naming someone who is no longer cast.
-        setScriptCastIds(nextCastIds);
+        /*
+          The script belongs to the actors it is about, which is not always the
+          actors it cast. When nothing was chosen up front the model picks both,
+          and it can pick them inconsistently - a Punch came back titled "Ash
+          Reaper: Burn Slow" and cast with an entirely different actor, so the
+          cover named someone the audience would never see.
+
+          Any actor the concept names but did not cast is recorded here, which
+          makes the mismatch the same detectable drift as swapping a cast out:
+          production is refused until the script and its performers agree.
+        */
+        const conceptText = `${draft.title} ${draft.logline}`;
+        const namedButUncast = world.characters
+          .filter((character) => (
+            !nextCastIds.includes(character.id)
+            && character.name.trim().length > 2
+            && new RegExp(`(?<![\\w])${character.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`, "i").test(conceptText)
+          ))
+          .map((character) => character.id);
+        setScriptCastIds([...nextCastIds, ...namedButUncast]);
+        if (namedButUncast.length) {
+          const names = namedButUncast
+            .map((id) => world.characters.find((character) => character.id === id)?.name)
+            .filter(Boolean)
+            .join(", ");
+          setError(`This concept is written about ${names}, who ${namedButUncast.length === 1 ? "is" : "are"} not in the cast. Add ${namedButUncast.length === 1 ? "them" : "those actors"} or rewrite the concept for the cast you have.`);
+        }
         setActiveSceneIndex(0);
         setStep(3);
         /*
