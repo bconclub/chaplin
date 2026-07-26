@@ -41,14 +41,19 @@ function FeedMedia({
   characters?: Character[];
 }) {
   const subject = segmentBody(body, characters).find((segment) => segment.character)?.character ?? null;
+  /*
+    Media in the feed plays where it sits. Wrapping the player in a link made a
+    click navigate away instead of starting playback, which is the opposite of
+    what a feed is for - the actor is reachable from the name in the post body,
+    which is already a link.
+  */
   if (kind === "video") {
-    const player = <MediaPlayer src={url} label={subject ? `${subject.name} scene` : "Creator video"} kind="video" compact />;
-    // The whole card opens the actor it belongs to, matching the body mention.
-    return subject ? <Link href={`/characters/${subject.id}`} className="block">{player}</Link> : player;
+    return <MediaPlayer src={url} label={subject ? `${subject.name} scene` : "Creator video"} kind="video" compact />;
   }
   if (kind === "audio") {
     return <MediaPlayer src={url} label={subject ? `${subject.name} audio` : "Creator audio"} kind="audio" compact />;
   }
+  // A still has nothing to play, so it stays a link to the actor it shows.
   const image = (
     // User-posted media can come from any HTTPS host, so it cannot use a static Next Image allowlist.
     // eslint-disable-next-line @next/next/no-img-element

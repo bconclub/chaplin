@@ -112,6 +112,13 @@ export const SHOT_KNOWLEDGE_BASE = {
     "No floating props, detached hands, extra fingers, merged bodies, disappearing products, relabeled packaging, or background rebuild.",
     "No held poster, sign, placard, banner, card, or any object that was not already in the actor's hand in the first frame.",
     "No robotic or mechanical motion, no puppet-like joints, no evenly-timed looping gestures, no slow-motion drift, and no physically impossible movement.",
+    /*
+      Reverse motion was prohibited only in the default continuity note, and
+      every caller passes its own - so the rule was dropped in production and
+      shots came back with bikes and people travelling backwards. It belongs
+      here, where a caller cannot displace it.
+    */
+    "No reversed, rewound, or time-inverted motion. People walk forward, wheels roll in the direction of travel, thrown and falling objects continue along their arc, and nothing retraces its own path unless the written action explicitly says so.",
     "No subtitles, captions, UI, logo, watermark, unintended speech, lip-sync, music, or new sound source.",
   ],
   review: [
@@ -324,7 +331,7 @@ export function buildShotVideoPrompt(input: ShotPromptInput): string {
     */
     `PERFORMANCE: ${actors[0].name} is alive and occupied throughout. Head turns, eyeline changes, and hand movement are motivated by the action and carry human timing - uneven, weighted, with a settle at the end rather than a mechanical ease. Include continuous secondary life: breath, a weight shift, a small adjustment of grip or posture. Do not open on the actor idling, staring into the distance, or visibly waiting to speak; the action is already underway by the end of the establish beat.`,
     `DYNAMICS: Match the energy to the beat - ${input.scene.objective || "the situation changes"}. A tense beat is tight and contained; an urgent beat moves. Something visible must change between the first and last frame.`,
-    "PHYSICS: Natural blink, breath, grounded weight, cloth inertia, plausible hand contact, and restrained environmental motion. Every moving object must have an explicit owner, support, or contact point.",
+    "PHYSICS: Natural blink, breath, grounded weight, cloth inertia, plausible hand contact, and restrained environmental motion. Every moving object must have an explicit owner, support, or contact point. Motion runs forward in time: gait, wheels, and momentum all read in the direction the subject is actually going.",
     `CONTINUITY: ${input.continuityNote || "Do not reverse travel direction, swap positions, rebuild the background, add people, or change object count."}`,
     ...(risks.length ? [`SIMPLIFY BEFORE RENDER: ${risks.map((risk) => risk.message).join(" ")}`] : []),
     `NEGATIVE: ${SHOT_KNOWLEDGE_BASE.negative.join(" ")}`,

@@ -121,3 +121,23 @@ test("a shot is directed to perform, not to stand and wait", () => {
   assert.match(prompt, /No held poster, sign, placard/i);
   assert.match(prompt, /No robotic or mechanical motion/i);
 });
+
+test("reverse motion is prohibited even when the caller supplies its own continuity note", () => {
+  // The rule used to live only in the default continuity note, and every real
+  // caller passes its own - so shots came back with bikes and people moving
+  // backwards.
+  const prompt = buildShotVideoPrompt({
+    productionTitle: "Burn Slow",
+    scene: { setting: "EXT. HIGHWAY - DUSK", objective: "Outrun the convoy", action: "She twists the throttle and pulls away" },
+    sceneIndex: 1,
+    sceneCount: 4,
+    actorName: "Agni Maya",
+    continuityNote: "Preserve the approved frame's actor, wardrobe, location, light, and object positions.",
+  } as Parameters<typeof buildShotVideoPrompt>[0]);
+
+  assert.match(prompt, /No reversed, rewound, or time-inverted motion/i);
+  assert.match(prompt, /wheels roll in the direction of travel/i);
+  assert.match(prompt, /Motion runs forward in time/i);
+  // The caller's own note is still honoured.
+  assert.match(prompt, /Preserve the approved frame's actor/);
+});
