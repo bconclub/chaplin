@@ -33,7 +33,25 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       cache: "no-store",
     },
   );
-  if (!response.ok || !response.body) return Response.json({ error: "Live voice playback is temporarily unavailable." }, { status: 502 });
+  if (!response.ok || !response.body) {
+    /*
+      The provider's reason was swallowed behind one generic message, so a voice
+      that simply does not exist on this account looked identical to a network
+      blip and took a database query to identify.
+
+      ElevenLabs voices belong to the account that created them. Swapping the
+      API key therefore orphans every locked voice designed under the old one,
+      which is the failure this most often is.
+    */
+    const detail = await response.text().catch(() => "");
+    const orphaned = response.status === 404
+      || /voice_not_found|does not exist|not found/i.test(detail);
+    return Response.json({
+      error: orphaned
+        ? `${character.name}'s locked voice does not exist on the current ElevenLabs account. Voices belong to the account that created them, so re-lock this actor's voice to restore playback.`
+        : `Live voice playback failed (${response.status}). ${detail.slice(0, 200)}`.trim(),
+    }, { status: orphaned ? 409 : 502 });
+  }
 
   return new Response(response.body, {
     headers: { "content-type": response.headers.get("content-type") ?? "audio/mpeg", "cache-control": "no-store" },
