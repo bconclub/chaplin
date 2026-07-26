@@ -49,7 +49,7 @@ function FeaturedLandscapeCard({
     <button
       type="button"
       onClick={onActivate}
-      className={`group relative aspect-[16/10] min-w-[68vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[16rem] lg:min-w-0 ${
+      className={`group relative aspect-video min-w-[68vw] snap-start overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,transform] duration-300 sm:min-w-[16rem] lg:min-w-0 ${
         active
           ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,0.28),0_14px_38px_rgba(0,0,0,0.32)]"
           : "border-white/10 hover:-translate-y-0.5 hover:border-white/30"
@@ -185,97 +185,114 @@ export default function InfiniteCharacterGallery() {
 
   return (
     <main
-      className="relative min-h-[calc(100dvh-4rem)] overflow-hidden pb-28 pt-16"
+      className="relative h-[calc(100dvh-4rem)] min-h-0 overflow-hidden"
       data-home-featured
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_16%,rgba(242,78,112,0.13),transparent_27%),radial-gradient(circle_at_90%_8%,rgba(7,210,190,0.12),transparent_31%)]" />
 
       <section
-        className="relative mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-[96rem] flex-col gap-3 px-3 py-3 sm:px-5 sm:py-5 lg:px-7"
+        className="relative mx-auto grid h-full min-h-0 w-full max-w-[100rem] grid-rows-[minmax(0,1fr)_auto] gap-3 px-3 pb-[6.5rem] pt-3 sm:px-5 sm:pb-[6.75rem] sm:pt-4 lg:px-7 lg:pb-5 lg:pt-5"
         aria-label="Featured AI actors"
       >
         <article
-          className="group relative min-h-[31rem] flex-1 overflow-hidden rounded-xl border border-white/10 bg-[#060b09] shadow-[0_30px_90px_rgba(0,0,0,0.34)] sm:min-h-[34rem] lg:min-h-[32rem]"
+          className="group relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-white/10 bg-[#060b09] shadow-[0_30px_90px_rgba(0,0,0,0.34)]"
           data-featured-stage
           data-featured-character={currentCharacter.id}
         >
-          {currentArtwork ? (
-            <Image
-              key={currentArtwork}
-              src={currentArtwork}
-              alt={currentCharacter.name}
-              fill
-              priority
-              quality={90}
-              sizes="100vw"
-              className="object-cover object-center"
-            />
-          ) : (
+          <div className="relative min-h-0 overflow-hidden lg:grid lg:grid-cols-[minmax(21rem,0.76fr)_minmax(0,1.42fr)]">
+            <div className="relative z-20 flex h-full min-h-0 max-w-[40rem] flex-col justify-center px-6 pb-8 pt-8 sm:px-10 sm:py-10 lg:max-w-none lg:px-12 xl:px-14">
+              <div
+                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_28%,rgba(242,78,112,0.12),transparent_36%),linear-gradient(145deg,#07100d_0%,#030605_100%)] max-lg:bg-[linear-gradient(90deg,rgba(2,7,6,0.94)_0%,rgba(2,7,6,0.78)_58%,rgba(2,7,6,0.16)_100%)]"
+                aria-hidden="true"
+              />
+              <p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-accent">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent shadow-[0_0_12px_rgba(242,78,112,0.9)]" />
+                Featured performance
+              </p>
+              <h1 className="reel-title mt-4 text-[clamp(2.8rem,4.4vw,5.25rem)] leading-[0.88] tracking-[-0.05em] text-white">
+                <span className="block lg:whitespace-nowrap">The world of</span>
+                <span className="mt-1 block text-accent">AI actors.</span>
+              </h1>
+              <p className="mt-4 max-w-md text-xs leading-5 text-white/70 sm:text-sm sm:leading-6">
+                Original actors with locked faces, voices, and worlds—ready for your next{" "}
+                <span
+                  key={CASTING_FORMATS[castingFormatIndex]}
+                  className="font-semibold text-accent-secondary motion-safe:animate-[chaplin-format-enter_400ms_ease-out]"
+                >
+                  {CASTING_FORMATS[castingFormatIndex]}.
+                </span>
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/characters"
+                  className="rounded-md bg-accent px-5 py-3 text-sm font-bold text-paper shadow-[0_12px_32px_rgba(242,78,112,0.24)] transition-transform hover:-translate-y-0.5"
+                >
+                  Explore actors →
+                </Link>
+                <Link
+                  href={`/characters/${currentCharacter.id}`}
+                  className="rounded-md border border-white/25 bg-black/15 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+                >
+                  Meet {currentCharacter.name.split(" ")[0]} →
+                </Link>
+              </div>
+            </div>
+
             <div
-              className="absolute inset-0"
-              style={{
-                background: `linear-gradient(120deg, ${hsl(ARCHETYPE_HUE[currentCharacter.archetype], 52, 20)}, #050807 72%)`,
-              }}
-            />
-          )}
+              className="absolute inset-0 min-h-0 overflow-hidden bg-black lg:relative lg:inset-auto"
+              data-featured-media
+            >
+              {currentArtwork ? (
+                <Image
+                  key={currentArtwork}
+                  src={currentArtwork}
+                  alt={currentCharacter.name}
+                  fill
+                  priority
+                  quality={90}
+                  sizes="(min-width: 1024px) 66vw, 100vw"
+                  className="object-cover object-center"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: `linear-gradient(120deg, ${hsl(ARCHETYPE_HUE[currentCharacter.archetype], 52, 20)}, #050807 72%)`,
+                  }}
+                />
+              )}
 
-          {currentVideo && (
-            <video
-              key={`${currentCharacter.id}-${currentVideo}`}
-              src={currentVideo}
-              poster={currentArtwork ?? undefined}
-              autoPlay
-              muted
-              playsInline
-              preload="auto"
-              onLoadedMetadata={() => setHeroProgress(0)}
-              onTimeUpdate={(event) => {
-                const video = event.currentTarget;
-                setHeroProgress(video.duration ? video.currentTime / video.duration : 0);
-              }}
-              onEnded={playNext}
-              className="absolute inset-0 h-full w-full object-cover motion-reduce:hidden"
-            />
-          )}
+              {currentVideo && (
+                <video
+                  key={`${currentCharacter.id}-${currentVideo}`}
+                  src={currentVideo}
+                  poster={currentArtwork ?? undefined}
+                  autoPlay
+                  muted
+                  playsInline
+                  preload="auto"
+                  onLoadedMetadata={() => setHeroProgress(0)}
+                  onTimeUpdate={(event) => {
+                    const video = event.currentTarget;
+                    setHeroProgress(video.duration ? video.currentTime / video.duration : 0);
+                  }}
+                  onCanPlay={(event) => {
+                    void event.currentTarget.play().catch(() => {
+                      // The poster remains visible if a browser blocks muted autoplay.
+                    });
+                  }}
+                  onEnded={playNext}
+                  className="absolute inset-0 h-full w-full object-cover object-center"
+                  data-featured-video
+                />
+              )}
 
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,7,6,0.94)_0%,rgba(2,7,6,0.72)_30%,rgba(2,7,6,0.16)_64%,rgba(2,7,6,0.12)_100%)]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/25" />
-
-          <div className="relative z-10 flex h-full min-h-[31rem] max-w-[40rem] flex-col justify-center px-6 py-12 sm:min-h-[34rem] sm:px-10 lg:min-h-[32rem] lg:px-14">
-            <p className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-accent">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent shadow-[0_0_12px_rgba(242,78,112,0.9)]" />
-              Featured performance
-            </p>
-            <h1 className="reel-title mt-5 text-[clamp(3.2rem,6.5vw,7rem)] leading-[0.82] tracking-[-0.055em] text-white">
-              The world of
-              <span className="mt-2 block text-accent">AI actors.</span>
-            </h1>
-            <p className="mt-6 max-w-md text-sm leading-6 text-white/65 sm:text-base sm:leading-7">
-              Original actors with locked faces, voices, and worlds—ready for your next{" "}
-              <span
-                key={CASTING_FORMATS[castingFormatIndex]}
-                className="font-semibold text-accent-secondary motion-safe:animate-[chaplin-format-enter_400ms_ease-out]"
-              >
-                {CASTING_FORMATS[castingFormatIndex]}.
-              </span>
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                href="/characters"
-                className="rounded-md bg-accent px-5 py-3 text-sm font-bold text-paper shadow-[0_12px_32px_rgba(242,78,112,0.24)] transition-transform hover:-translate-y-0.5"
-              >
-                Explore actors →
-              </Link>
-              <Link
-                href={`/characters/${currentCharacter.id}`}
-                className="rounded-md border border-white/25 bg-black/15 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
-              >
-                Meet {currentCharacter.name.split(" ")[0]} →
-              </Link>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
+              <div className="absolute inset-y-0 left-0 hidden w-20 bg-gradient-to-r from-[#030605] to-transparent lg:block" />
             </div>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-4 border-t border-white/10 bg-black/30 px-5 py-4 backdrop-blur-md sm:px-8">
+          <div className="relative z-20 flex items-end justify-between gap-4 border-t border-white/10 bg-[linear-gradient(90deg,rgba(4,8,7,0.98),rgba(12,8,7,0.94),rgba(4,8,7,0.98))] px-5 py-3 sm:px-8">
             <div className="min-w-0">
               <p className="marquee-title truncate text-lg uppercase leading-none text-white sm:text-xl">
                 {currentCharacter.name}

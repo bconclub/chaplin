@@ -9,6 +9,7 @@ export default function SmoothScroll() {
   const pathname = usePathname();
   const usesNativeWorkspaceScroll =
     pathname === "/studio" ||
+    pathname === "/characters/new" ||
     (pathname.startsWith("/characters/") && pathname.endsWith("/studio"));
 
   useEffect(() => {

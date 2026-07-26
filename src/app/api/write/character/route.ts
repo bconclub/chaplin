@@ -285,6 +285,13 @@ export async function POST(request: Request) {
       worldBrief: clean(body.worldBrief, 1200),
     };
     fallbackInput = input;
+    if (body.draftOnly === true) {
+      return Response.json({
+        suggestion: localSuggestion(input),
+        provider: "chaplin-draft",
+        configured: Boolean(process.env.ANTHROPIC_API_KEY),
+      });
+    }
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return Response.json({ suggestion: localSuggestion(input), provider: "chaplin-local", configured: false });

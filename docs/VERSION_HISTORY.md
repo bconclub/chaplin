@@ -112,3 +112,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.4 | `17c72ba` | 2026-07-25T22:47:25+05:30 | Move Magic Scene into studio header |
 | v0.1.5 | `be195dc` | 2026-07-26T01:45:51+05:30 | Version Chaplin production workflow as v0.1.5 |
 | v0.1.6 | `01d80fe` | 2026-07-26T02:56:09+05:30 | Refine creator access and production workflows |
+| v0.1.7 | `5eb281e` | 2026-07-26T04:28:23+05:30 | Refine actor creation and production workflows |

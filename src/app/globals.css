@@ -189,6 +189,17 @@ body {
   box-shadow: 0 16px 40px rgba(28, 37, 28, 0.1);
 }
 
+/*
+  Home is a self-contained app viewport. The root layout normally reserves
+  space below every route for the floating navigation; the home gallery
+  reserves that space inside its own grid instead.
+*/
+body:has(> main [data-home-featured]) > main {
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
 [data-create-toggle] {
   left: 50%;
   top: 0;
@@ -781,12 +792,22 @@ button:hover .frost-chip,
   scrollbar-gutter: stable;
 }
 
-.scrollbar-thin::-webkit-scrollbar {
+.scrollbar-thin::-webkit-scrollbar,
+.chaplin-scrollbar::-webkit-scrollbar {
   height: 6px;
   width: 6px;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb {
+
+.scrollbar-thin::-webkit-scrollbar-track,
+.chaplin-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb,
+.chaplin-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--accent), #26d7c5);
   border-width: 1px;
+  border-radius: 999px;
 }
 
 .no-scrollbar::-webkit-scrollbar {

@@ -3,6 +3,24 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.8 - 2026-07-26 - Live actor creation and split performance hero
+
+- Rebuilt the homepage feature stage as a clear split composition with editorial
+  copy on the left, a taller autoplay performance canvas on the right, and the
+  active actor seal plus featured shelf underneath.
+- Moved the complete Magic Write control to the top of the desktop Write Panel
+  and connected its idea field to the full actor identity generation flow.
+- Added an instant local identity draft that begins filling name, promise,
+  personality, look, voice, SFX, and theme while Claude refines the final output.
+- Exposed generated custom voice, signature-SFX, and theme directions as visible,
+  editable fields instead of hiding them behind a Custom dropdown.
+- Made Create readiness depend on the completed actor fields rather than a delayed
+  production-bible reveal, restoring the header and panel Create actions.
+- Added constrained native scrolling, branded scrollbars, touch overscroll
+  containment, and route-level smooth-scroll isolation to the actor workspace.
+- Passed TypeScript, ESLint with one pre-existing test warning, production build,
+  local homepage/actor-route HTTP checks, and the instant-draft API smoke test.
+
 ## v0.1.5 - 2026-07-26 - Versioned production editor
 
 - Established commit-ordinal Chaplin versions with the initial scaffold at

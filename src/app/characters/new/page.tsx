@@ -301,6 +301,7 @@ export default function NewCharacterPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [revealingField, setRevealingField] = useState("");
   const suggestStartedAt = useRef<number | null>(null);
+  const magicWriteRunRef = useRef(0);
   const restoredDraftKey = useRef<string | null>(null);
   const draftStorageKey = `chaplin-character-builder:${currentUserId}`;
   const progress = suggestingTarget ? estimatedBuildProgress(suggestingTarget, elapsedSeconds) : 0;
@@ -490,6 +491,14 @@ export default function NewCharacterPage() {
   const sfxDesc = isCustomSfx ? customSfx : sfxPreset;
   const isCustomScore = scorePreset === SCORE_PRESETS[SCORE_PRESETS.length - 1];
   const themeDesc = isCustomScore ? customScore : scorePreset;
+  const canCreateActor = [
+    name,
+    tagline,
+    personality,
+    voiceDesc,
+    sfxDesc,
+    themeDesc,
+  ].every((value) => value.trim().length > 0);
   const selectedVisualFormat = CHARACTER_FORMATS.find((format) => format.id === visualFormat);
   const previewImages = visualFormat === "live-action"
     ? CHARACTER_PREVIEW_VARIANTS
@@ -529,26 +538,65 @@ export default function NewCharacterPage() {
     setSuggestingTarget(target);
     setError("");
     setSuggestionMessage("");
+    const magicWriteRun = ++magicWriteRunRef.current;
+    const requestPayload = {
+      target,
+      name: effectiveName,
+      archetype: effectiveArchetypes[0] ?? "hero",
+      archetypes: effectiveArchetypes,
+      characterBrief: effectiveBrief,
+      tagline,
+      personality,
+      appearanceBrief,
+      worldBrief,
+      voiceGender,
+      voiceDescription: voiceDesc,
+      signatureSfx: sfxDesc,
+      themeScore: themeDesc,
+      visualFormat: selectedVisualFormat?.direction,
+    };
     try {
+      if (target === "all") {
+        void fetch("/api/write/character", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...requestPayload, draftOnly: true }),
+        })
+          .then(async (draftResponse) => {
+            const draftData = await draftResponse.json() as { suggestion?: CharacterSuggestion };
+            if (
+              !draftResponse.ok ||
+              !draftData.suggestion ||
+              magicWriteRunRef.current !== magicWriteRun
+            ) return;
+            const draft = draftData.suggestion;
+            const draftVoiceGender = explicitVoiceGender(
+              `${effectiveBrief} ${draft.personality}`,
+            ) ?? draft.voiceGender;
+            setName(effectiveName.trim() || draft.name.trim());
+            setTagline(draft.tagline);
+            setPersonality(draft.personality);
+            setAppearanceBrief((current) => current.trim() || appearanceDirectionFromBible(draft.productionBible));
+            setWorldBrief((current) => current.trim() || worldDirectionFromBible(draft.productionBible));
+            setVoiceGender(draftVoiceGender);
+            setVoicePreset(VOICE_PRESETS[VOICE_PRESETS.length - 1]);
+            setCustomVoice(alignVoiceDescription(draft.voiceDescription, draftVoiceGender));
+            setSfxPreset(SFX_PRESETS[SFX_PRESETS.length - 1]);
+            setCustomSfx(draft.signatureSfx);
+            setScorePreset(SCORE_PRESETS[SCORE_PRESETS.length - 1]);
+            setCustomScore(draft.themeScore);
+            setRevealingField("draft");
+            setSuggestionMessage("The first identity draft is on the page. Claude is refining the details now…");
+          })
+          .catch(() => {
+            // The full AI request remains authoritative if the instant draft fails.
+          });
+      }
+
       const response = await fetch("/api/write/character", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target,
-          name: effectiveName,
-          archetype: effectiveArchetypes[0] ?? "hero",
-          archetypes: effectiveArchetypes,
-          characterBrief: effectiveBrief,
-          tagline,
-          personality,
-          appearanceBrief,
-          worldBrief,
-          voiceGender,
-          voiceDescription: voiceDesc,
-          signatureSfx: sfxDesc,
-          themeScore: themeDesc,
-          visualFormat: selectedVisualFormat?.direction,
-        }),
+        body: JSON.stringify(requestPayload),
       });
       const data = await response.json() as {
         suggestion?: CharacterSuggestion;
@@ -799,18 +847,21 @@ export default function NewCharacterPage() {
                 Save draft
               </button>
               <button
-                type={productionBible ? "submit" : "button"}
-                onClick={productionBible ? undefined : () => void suggestCharacter("all")}
+                type={canCreateActor ? "submit" : "button"}
+                onClick={canCreateActor ? undefined : () => void suggestCharacter("all")}
                 disabled={saving || Boolean(suggestingTarget)}
                 className="rounded-lg bg-accent px-5 py-2.5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(242,78,112,0.22)] hover:bg-accent-light disabled:opacity-45"
               >
-                {saving ? "Saving…" : productionBible ? "Create actor →" : "✦ Magic Write →"}
+                {saving ? "Creating actor…" : canCreateActor ? "Create actor →" : "✦ Magic Write →"}
               </button>
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[20.5rem_minmax(25rem,1fr)_25rem]">
-            <aside className="min-h-0 overflow-y-auto border-r border-white/10 bg-[#0a0e0c] p-5">
+          <div className="grid min-h-0 flex-1 grid-cols-[20.5rem_minmax(25rem,1fr)_25rem] grid-rows-[minmax(0,1fr)] overflow-hidden">
+            <aside
+              data-lenis-prevent
+              className="chaplin-scrollbar h-full min-h-0 touch-pan-y overflow-y-auto overscroll-contain border-r border-white/10 bg-[#0a0e0c] p-5"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-lg font-semibold">Create AI Actor</p>
@@ -880,41 +931,6 @@ export default function NewCharacterPage() {
                 </div>
               </div>
 
-              <div className="mt-5 border-t border-white/10 pt-4">
-                <label htmlFor="desktop-character-brief" className="text-xs font-semibold">Write one thought about the actor</label>
-                <p className="mt-1 text-[10px] text-grey">Magic Write turns it into an editable name, promise, personality, look, voice, and actor bible.</p>
-                <textarea
-                  id="desktop-character-brief"
-                  data-character-field="brief"
-                  value={characterBrief}
-                  onChange={(event) => setCharacterBrief(event.target.value)}
-                  rows={4}
-                  placeholder="e.g. A fearless woman in her 30s, street smart, intense eyes, Mumbai setting."
-                  className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-xs leading-5 outline-none placeholder:text-grey/60 focus:border-accent"
-                />
-                <button
-                  type="button"
-                  onClick={() => void suggestCharacter("all")}
-                  disabled={Boolean(suggestingTarget)}
-                  className="mt-2.5 w-full rounded-lg bg-accent px-4 py-3 text-xs font-semibold text-white hover:bg-accent-light disabled:opacity-45"
-                >
-                  {suggestingTarget === "all" ? `Magic writing actor · ${progress}%` : "✦ Magic Write actor"}
-                </button>
-
-                {suggestingTarget && (
-                  <div className="mt-3 rounded-lg border border-accent/30 bg-accent/[0.06] p-3" role="progressbar" aria-valuenow={progress}>
-                    <div className="flex items-center justify-between text-[9px]">
-                      <span className="font-semibold text-ink">{IDENTITY_BUILD_STAGES[buildStage].label}</span>
-                      <span className="font-mono text-accent">{progress}%</span>
-                    </div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-gradient-to-r from-accent to-[#26d7c5] transition-all duration-1000" style={{ width: `${progress}%` }} />
-                    </div>
-                    <p className="mt-2 text-[9px] leading-4 text-grey">{IDENTITY_BUILD_STAGES[buildStage].detail}</p>
-                  </div>
-                )}
-                {suggestionMessage && <p className="mt-2 text-[9px] leading-4 text-grey">{suggestionMessage}</p>}
-              </div>
             </aside>
 
             <main className="relative flex min-h-0 flex-col overflow-hidden bg-[#060908] p-4">
@@ -971,10 +987,88 @@ export default function NewCharacterPage() {
               </div>
             </main>
 
-            <aside className="min-h-0 overflow-y-auto border-l border-white/10 bg-[#0a0e0c] p-5">
+            <aside
+              data-lenis-prevent
+              data-write-panel
+              className="chaplin-scrollbar h-full min-h-0 touch-pan-y overflow-y-auto overscroll-contain border-l border-white/10 bg-[#0a0e0c] p-5"
+            >
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Actor identity</p>
               <h1 className="reel-title mt-1 text-2xl">Define the core</h1>
               <p className="mt-1 text-[10px] leading-4 text-grey">Make the decisions that should survive every scene. Chaplin builds the rest.</p>
+
+              <section
+                data-magic-character-assist
+                className="mt-4 rounded-xl border border-accent/45 bg-[linear-gradient(135deg,rgba(242,78,112,0.12),rgba(21,92,83,0.15))] p-3.5 shadow-[0_14px_36px_rgba(0,0,0,0.18)]"
+                aria-labelledby="desktop-magic-write-title"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p id="desktop-magic-write-title" className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
+                      ✦ Magic Write
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-grey">
+                      Start with one thought. Chaplin writes the complete editable identity.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-white/10 px-2 py-1 text-[8px] font-semibold text-grey">
+                    20+ characters
+                  </span>
+                </div>
+
+                <textarea
+                  id="desktop-magic-character-brief"
+                  data-character-field="brief"
+                  value={characterBrief}
+                  onChange={(event) => {
+                    setCharacterBrief(event.target.value);
+                    if (error) setError("");
+                  }}
+                  rows={3}
+                  placeholder="e.g. A disgraced Russian cosmonaut who hears messages from a mission that never launched."
+                  className="mt-3 w-full resize-y rounded-lg border border-white/10 bg-black/25 px-3 py-2.5 text-xs leading-5 outline-none placeholder:text-grey/60 focus:border-accent"
+                />
+
+                <div className="mt-2.5 flex items-center justify-between gap-3">
+                  <span className={`text-[9px] ${characterBrief.trim().length >= 20 ? "text-[#36dbbe]" : "text-grey"}`}>
+                    {characterBrief.trim().length} characters
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void suggestCharacter("all")}
+                    disabled={Boolean(suggestingTarget)}
+                    className="rounded-full bg-accent px-4 py-2 text-[9px] font-semibold text-white hover:bg-accent-light disabled:opacity-45"
+                  >
+                    {suggestingTarget === "all"
+                      ? `Writing everything · ${progress}%`
+                      : productionBible
+                        ? "Rewrite everything"
+                        : "Write everything →"}
+                  </button>
+                </div>
+
+                {suggestingTarget === "all" && (
+                  <div className="mt-3 rounded-lg border border-accent/30 bg-black/20 p-3" role="progressbar" aria-valuenow={progress}>
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="font-semibold text-ink">{IDENTITY_BUILD_STAGES[buildStage].label}</span>
+                      <span className="font-mono text-accent">{progress}%</span>
+                    </div>
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-accent to-[#26d7c5] transition-all duration-1000"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[9px] leading-4 text-grey">{IDENTITY_BUILD_STAGES[buildStage].detail}</p>
+                  </div>
+                )}
+
+                {error && (
+                  <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-4 text-red-300">
+                    {error}
+                  </p>
+                )}
+                {suggestionMessage && <p className="mt-2 text-[9px] leading-4 text-grey">{suggestionMessage}</p>}
+              </section>
 
               <label className="mt-5 block text-[10px] font-semibold">
                 Name
@@ -1044,27 +1138,6 @@ export default function NewCharacterPage() {
                 />
               </label>
 
-              <div className="mt-5 rounded-xl border border-accent/35 bg-[linear-gradient(135deg,rgba(242,78,112,0.10),rgba(21,92,83,0.13))] p-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-accent">Magic Write</p>
-                    <p className="mt-1 text-[10px] leading-4 text-grey">
-                      {productionBible
-                        ? "The complete actor identity is written and editable. Change any field or create the actor."
-                        : "Use your initial thought to write the promise, character engine, visual identity, voice, SFX, theme, and reusable actor bible."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void suggestCharacter("all")}
-                    disabled={Boolean(suggestingTarget)}
-                    className="shrink-0 rounded-full bg-accent px-3 py-2 text-[9px] font-semibold text-white hover:bg-accent-light disabled:opacity-45"
-                  >
-                    {suggestingTarget === "all" ? `${progress}%` : productionBible ? "Rewrite" : "Write actor"}
-                  </button>
-                </div>
-              </div>
-
               <details className="mt-4 rounded-lg border border-white/10 bg-white/[0.02]">
                 <summary className="cursor-pointer list-none px-3.5 py-3 text-[10px] font-semibold">Advanced identity controls <span className="float-right text-grey">＋</span></summary>
                 <div className="space-y-3 border-t border-white/10 p-3.5">
@@ -1081,31 +1154,56 @@ export default function NewCharacterPage() {
                     <select value={voicePreset} onChange={(event) => setVoicePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {VOICE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
+                    {isCustomVoice && (
+                      <textarea
+                        value={customVoice}
+                        onChange={(event) => setCustomVoice(event.target.value)}
+                        rows={4}
+                        placeholder="Magic Write will place the complete language, accent, timbre, and performance direction here."
+                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                      />
+                    )}
                   </label>
                   <label className="block text-[9px] text-grey">
                     Signature SFX
                     <select value={sfxPreset} onChange={(event) => setSfxPreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {SFX_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
+                    {isCustomSfx && (
+                      <textarea
+                        value={customSfx}
+                        onChange={(event) => setCustomSfx(event.target.value)}
+                        rows={3}
+                        placeholder="The generated physical sound identity appears here."
+                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                      />
+                    )}
                   </label>
                   <label className="block text-[9px] text-grey">
                     Theme
                     <select value={scorePreset} onChange={(event) => setScorePreset(event.target.value)} className="mt-1 w-full rounded-md border border-white/10 bg-[#0b100e] px-2.5 py-2 text-[10px] text-ink outline-none">
                       {SCORE_PRESETS.map((preset) => <option key={preset}>{preset}</option>)}
                     </select>
+                    {isCustomScore && (
+                      <textarea
+                        value={customScore}
+                        onChange={(event) => setCustomScore(event.target.value)}
+                        rows={3}
+                        placeholder="The generated musical identity appears here."
+                        className="mt-2 w-full resize-y rounded-md border border-accent/25 bg-black/25 px-2.5 py-2 text-[10px] leading-4 text-ink outline-none focus:border-accent"
+                      />
+                    )}
                   </label>
                 </div>
               </details>
 
-              {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-4 text-red-300">{error}</p>}
-
               <button
-                type={productionBible ? "submit" : "button"}
-                onClick={productionBible ? undefined : () => void suggestCharacter("all")}
+                type={canCreateActor ? "submit" : "button"}
+                onClick={canCreateActor ? undefined : () => void suggestCharacter("all")}
                 disabled={saving || Boolean(suggestingTarget)}
                 className="mt-4 w-full rounded-lg bg-accent px-4 py-3 text-xs font-semibold text-white hover:bg-accent-light disabled:opacity-45"
               >
-                {saving ? "Saving actor…" : productionBible ? `Create ${name || "actor"}` : "✦ Magic Write complete identity"}
+                {saving ? "Creating actor…" : canCreateActor ? `Create ${name || "actor"} →` : "✦ Magic Write complete identity"}
               </button>
             </aside>
           </div>
