@@ -3,6 +3,34 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.19 - 2026-07-26 - Ensemble scenes, generation resilience, hero framing
+
+- Prompt lint no longer cancels paid generation. Two heuristic rules were hard
+  gates and both produced false positives: L1 fired on persona boilerplate that
+  legitimately repeats across composed prompt slots, and L4 flagged "shoes"
+  because the canonical wardrobe sentence did not enumerate footwear. Studio
+  Auto halted with Voice and Still in Error as a result. Both are now warnings,
+  generic basics are exempt from the wardrobe check, and findings are recorded
+  on the job as advisory. `CHAPLIN_BLOCK_ON_PROMPT_LINT=true` restores blocking.
+- Video generation now fails over instead of losing the shot. The Dreamina line
+  refuses image-to-video whenever the seed still reads as a real person, which
+  is exactly what a Chaplin identity still is. The chain is Seedance 2.0 ->
+  Seedance 1.5 Pro -> Replicate open weights, and only safety rejections advance
+  it. Open-weights models have no vendor likeness filter to trip. Inert unless
+  `REPLICATE_API_TOKEN` is set.
+- Scenes stopped rendering twice. The auto-preview effect had no re-entrancy
+  guard and its batch was only cleared after the whole run, so React
+  StrictMode's double invocation started a second batch mid-flight.
+- Changing the cast now actually repaints the scenes. The batch captured its
+  lead when Magic Writer ran and never revalidated it against the current cast.
+- User-facing: the hero performance now plays inside a real 16:9 frame instead
+  of being cropped across the full panel width, featured cards are taller
+  (4:5 on mobile), and the actor style picker uses a new four-image reference
+  set showing one subject rendered realistic, cartoon, anime, and manga.
+- Passed TypeScript, ESLint with one pre-existing test warning, and all four
+  test suites (40 tests).
+- `(b90d7d5)`
+
 ## v0.1.18 - 2026-07-26 - Immediate Studio asset previews
 
 - Fixed Studio Auto incorrectly marking whichever open stage as generating for
