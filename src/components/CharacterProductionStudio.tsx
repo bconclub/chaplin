@@ -1681,7 +1681,16 @@ export default function CharacterProductionStudio({
           const seen = new Set(current.map((candidate) => candidate.assetId));
           return [...current, ...candidates.filter((candidate) => !seen.has(candidate.assetId))];
         });
-        const selected = candidates[0];
+        /*
+          Prefer the BytePlus still when more than one provider returns.
+
+          Seedance rejects a foreign photoreal face as a possible real person,
+          so a still from another provider fails video generation and quietly
+          falls back to the older model - no lip-sync, weaker motion. A still
+          generated on the same ModelArk account is a trusted output and goes
+          straight to video, which is what an unattended run needs.
+        */
+        const selected = candidates.find((candidate) => candidate.provider === "byteplus") ?? candidates[0];
         const selectResponse = await fetch("/api/characters/profile-media", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
