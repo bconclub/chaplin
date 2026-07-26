@@ -38,6 +38,9 @@ export default function AdminProviderStatus() {
     try {
       const response = await fetch("/api/admin/providers", { cache: "no-store" });
       const data = await response.json() as { providers?: ProviderStatus[]; checkedAt?: string; error?: string };
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(data.error || "Sign in as Super Admin to view provider status.");
+      }
       if (!response.ok) throw new Error(data.error || "Could not read provider status.");
       setProviders(data.providers ?? []);
       setCheckedAt(data.checkedAt ?? "");

@@ -49,6 +49,7 @@ export default function HomeShell() {
   // Advances on a slow timer so the featured shelf keeps rotating through the
   // catalogue instead of showing the same six actors on every visit.
   const [shuffleTick, setShuffleTick] = useState(0);
+  const [version, setVersion] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [heroProgress, setHeroProgress] = useState(0);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -152,6 +153,17 @@ export default function HomeShell() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/build-info", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { label?: string } | null) => {
+        if (!cancelled && data?.label) setVersion(data.label);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
   // Rotate the featured window periodically so the shelf keeps moving through
   // the catalogue across a long session.
   useEffect(() => {
@@ -210,7 +222,11 @@ export default function HomeShell() {
           </label>
 
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            <span className="rounded-full border border-[#202020] px-2.5 py-1 text-[10px] font-semibold text-white/45">v0.1.28</span>
+            {/* Read from the running build, not typed in: the literal that used
+                to sit here still said v0.1.28 thirty releases later. */}
+            {version && (
+              <span className="rounded-full border border-[#202020] px-2.5 py-1 text-[10px] font-semibold text-white/45">{version}</span>
+            )}
             <Link href="/feed" className="hidden text-[10px] font-bold uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-accent lg:block">
               Creator feed
             </Link>
@@ -230,7 +246,7 @@ export default function HomeShell() {
           </div>
         </header>
 
-        <div className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4" data-home-scroll>
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-2.5 sm:p-3" data-home-scroll>
           {/* ── HERO ─────────────────────────────────────────────── */}
           <section
             /*
@@ -240,7 +256,14 @@ export default function HomeShell() {
               frame is portrait-ish on mobile and only widens once there is room
               for the cinematic crop.
             */
-            className="group relative aspect-[4/5] shrink-0 overflow-hidden rounded-2xl border border-[#202020] bg-[#111111] sm:aspect-[16/10] lg:aspect-[1000/447]"
+            /*
+              Phone keeps a portrait block; from sm up the hero stops being
+              aspect-locked and absorbs whatever height the column has left,
+              cropping the landscape frame rather than forcing the page taller
+              than the viewport. An aspect ratio here is what pushed content
+              off-screen behind an inner scrollbar.
+            */
+            className="group relative aspect-[4/5] shrink-0 overflow-hidden rounded-2xl border border-[#202020] bg-[#111111] sm:aspect-auto sm:min-h-0 sm:flex-1"
             data-home-featured
             data-featured-character={current.id}
           >
@@ -400,7 +423,7 @@ export default function HomeShell() {
                         : "border-[#202020] hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
                     }`}
                   >
-                    <span className="relative block aspect-[4/5] w-full overflow-hidden bg-[#0d0d0d]">
+                    <span className="relative block h-[clamp(5.5rem,17vh,10rem)] w-full overflow-hidden bg-[#0d0d0d]">
                       {artwork ? (
                         <Image
                           src={artwork}
@@ -445,8 +468,8 @@ export default function HomeShell() {
           </section>
 
           {/* ── CURATED COLLECTIONS ──────────────────────────────── */}
-          <section className="shrink-0 home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
-            <h2 className="mb-3 flex items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-[0.18em]">
+          <section className="shrink-0 home-frost rounded-2xl p-3 backdrop-blur-2xl backdrop-saturate-150" data-home-collections>
+            <h2 className="mb-2.5 flex items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-[0.18em]">
               <span aria-hidden="true">◈</span> Curated collections
             </h2>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
@@ -481,7 +504,7 @@ export default function HomeShell() {
       </div>
 
       {/* ── RIGHT SIDEBAR ───────────────────────────────────────────── */}
-      <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-3 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-3 xl:flex" data-home-scroll>
+      <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-2 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-2 xl:flex" data-home-scroll>
         <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Platform highlights</h2>
@@ -545,7 +568,7 @@ export default function HomeShell() {
           </ol>
         </section>
 
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
           <h2 className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Trending</h2>
           <div className="flex flex-wrap gap-1.5">
             {TRENDING_LABELS.map((tag) => (
@@ -560,7 +583,7 @@ export default function HomeShell() {
           </div>
         </section>
 
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Live productions</h2>
             <Link href="/studio/pipelines" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>

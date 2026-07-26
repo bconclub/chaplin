@@ -143,7 +143,12 @@ function openRouter(): ProviderStatus {
 
 export async function GET(request: NextRequest) {
   try {
-    const identity = await requireRequestIdentity(request);
+    // Handled separately so a signed-out caller gets 401 rather than a 500:
+    // requireRequestIdentity throws a plain "Sign in to continue." Error.
+    const identity = await requireRequestIdentity(request).catch(() => null);
+    if (!identity) {
+      return Response.json({ error: "Sign in as Super Admin to view provider status." }, { status: 401 });
+    }
     if (identity.role !== "admin") {
       return Response.json({ error: "Super Admin access is required." }, { status: 403 });
     }

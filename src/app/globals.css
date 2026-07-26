@@ -268,37 +268,46 @@ body:has([data-home-shell]) > main {
   unreachable on shorter windows, so the lock is height-gated: tall screens get
   the fixed 100dvh surface the design calls for, anything shorter scrolls.
 */
-@media (min-height: 1000px) {
-  html:has([data-home-shell]),
-  body:has([data-home-shell]) {
-    overflow: hidden;
-  }
+/*
+  The home surface is a fixed 100dvh canvas that never scrolls the page. An
+  earlier version gated this behind a min-height so short windows scrolled
+  instead, which meant the layout was allowed to overflow rather than fit.
+  The columns now size to the viewport and the hero absorbs whatever height
+  is left, so everything is on screen at any height.
+*/
+html:has([data-home-shell]),
+body:has([data-home-shell]) {
+  overflow: hidden;
+}
 
-  body:has([data-home-shell]) > main {
-    height: 100dvh;
-    overflow: hidden;
-  }
+body:has([data-home-shell]) > main {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+[data-home-shell] [data-home-scroll] {
+  overscroll-behavior: contain;
 }
 
 /*
-  Below the height the fixed canvas actually needs, the surface behaves like a
-  normal page: the shell grows to its content and the internal panel scrollers
-  release, so one ordinary page scroll reaches everything. Keeping the lock on
-  a short window froze the page with the lower half still cut off.
+  Nothing is allowed to hide behind an inner scrollbar either. When the viewport
+  is too short to hold everything at a readable size, whole panels are dropped
+  in priority order rather than squeezed or scrolled: collections first, then
+  the sidebar's trending tags and live productions. Platform Highlights and Top
+  Performers always survive.
 */
-@media (max-height: 999px) {
-  [data-home-shell] {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
-
-  [data-home-shell] [data-home-scroll] {
-    height: auto;
-    max-height: none;
-    overflow: visible;
+@media (max-height: 860px) {
+  [data-home-collections] {
+    display: none;
   }
 }
+
+@media (max-height: 940px) {
+  [data-home-optional] {
+    display: none;
+  }
+}
+
 
 [data-create-toggle] {
   left: 50%;
