@@ -3,6 +3,16 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.60 - 2026-07-26 - Correct Eleven Music v2 plan schema
+
+- Replaced the legacy `sections`, `positive_global_styles`, and
+  `negative_global_styles` payload with Music v2's required `chunks` schema.
+- Kept exact 8-second and 15-second timing, instrumental section markers, and
+  the actor's style palette while emitting only v2-valid composition fields.
+- Removed `respect_sections_durations` from v2 requests because Music v2 always
+  enforces chunk durations and the compatibility field only applies to v1.
+- Added regression coverage that rejects any reappearance of the v1 plan shape.
+
 ## v0.1.57 - 2026-07-26 - Full-width trending rail
 
 - Expanded Trending Now from six to ten distinct AI actors so wide screens stay
@@ -20,9 +30,9 @@ provider integrations, and the validation boundary for each major Chaplin update
   `composition_plan` requests that never send the mutually exclusive `prompt`,
   `music_length_ms`, or `force_instrumental` fields.
 - Added exact eight-second actor idents with five-second hook and three-second
-  identity-hit sections, plus exact 15-second scene cues split into establish,
-  turn, and payoff sections.
-- Added Zod timing and style guards for empty lyric lines, section limits,
+  identity-hit chunks, plus exact 15-second scene cues split into establish,
+  turn, and payoff chunks.
+- Added Zod timing and style guards for lyric-free chunk text, chunk limits,
   duplicate tags, directive prose, character-name leakage, and exact totals.
 - Added a Studio selector and read-only plan preview, with plan JSON, requested
   duration, and delivered duration preserved in job and asset ledger metadata.

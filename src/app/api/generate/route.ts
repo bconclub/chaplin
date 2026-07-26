@@ -1058,11 +1058,11 @@ export async function POST(request: Request) {
         themeKind,
         requestedDurationSeconds: durationSeconds,
         providerDurationParameter: compositionPlanEnabled
-          ? "composition_plan.sections.duration_ms"
+          ? "composition_plan.chunks.duration_ms"
           : "music_length_ms",
         providerDurationMilliseconds: durationSeconds * 1000,
         providerOutputFormat: outputFormat,
-        respectSectionDurations: settingBoolean(themeConfig, "respectSectionDurations", true),
+        providerEnforcesChunkDurations: compositionPlanEnabled && themeConfig.model === "music_v2",
         compositionPlan,
       };
       jobId = await startGeneration({
@@ -1078,7 +1078,6 @@ export async function POST(request: Request) {
         plan: compositionPlan,
         prompt,
         durationMilliseconds: durationSeconds * 1000,
-        respectSectionDurations: settingBoolean(themeConfig, "respectSectionDurations", true),
         modelId: themeConfig.model,
         forceInstrumental: settingBoolean(themeConfig, "forceInstrumental", true),
         signWithC2pa: settingBoolean(themeConfig, "signWithC2pa", false),
@@ -1568,4 +1567,3 @@ export async function POST(request: Request) {
     return Response.json({ error: message }, { status });
   }
 }
-

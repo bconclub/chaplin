@@ -27,27 +27,29 @@ const vantaNine: CharacterIdentityInput = {
   sfxDesc: "a corroded relay closes in a dead corridor",
 };
 
-test("Ru Ansari ident is an exact instrumental 8s two-section plan", () => {
+test("Ru Ansari ident is an exact instrumental 8s two-chunk music_v2 plan", () => {
   const plan = buildThemePlan(ruAnsari, "ident_8s");
   assert.deepEqual(
-    plan.sections.map(({ section_name, duration_ms, lines }) => ({ section_name, duration_ms, lines })),
+    plan.chunks.map(({ text, duration_ms }) => ({ text, duration_ms })),
     [
-      { section_name: "hook", duration_ms: 5000, lines: [] },
-      { section_name: "ident hit", duration_ms: 3000, lines: [] },
+      { text: "[hook]", duration_ms: 5000 },
+      { text: "[ident hit]", duration_ms: 3000 },
     ],
   );
-  assert.match(plan.positive_global_styles.join(" "), /future garage/i);
-  assert.match(plan.positive_global_styles.join(" "), /90 BPM/i);
-  assert.match(plan.negative_global_styles.join(" "), /vocals/i);
+  assert.match(plan.chunks[0].positive_styles.join(" "), /future garage/i);
+  assert.match(plan.chunks[0].positive_styles.join(" "), /90 BPM/i);
+  assert.match(plan.chunks[0].negative_styles.join(" "), /vocals/i);
+  assert.ok(plan.chunks.every((chunk) => /^\[[^\]\r\n]+\]$/.test(chunk.text)));
+  assert.ok(plan.chunks.every((chunk) => chunk.context_adherence === "high"));
+  assert.ok(!("sections" in plan));
   assert.doesNotMatch(JSON.stringify(plan), /Rukhsar|Ansari/i);
 });
 
-test("VANTA-9 scene cue is three exact shot-beat sections without narrative prose", () => {
+test("VANTA-9 scene cue is three exact shot-beat chunks without lyrics or narrative prose", () => {
   const plan = buildThemePlan(vantaNine, "scene_15s", "A cold eerie reveal turns urgent at the final frame.");
-  assert.deepEqual(plan.sections.map((section) => section.duration_ms), [5000, 5000, 5000]);
-  assert.deepEqual(plan.sections.map((section) => section.section_name), ["establish", "turn", "payoff"]);
-  assert.ok(plan.sections.every((section) => section.lines.length === 0));
-  assert.ok(plan.sections.flatMap((section) => section.positive_local_styles).some((style) => /eerie/i.test(style)));
+  assert.deepEqual(plan.chunks.map((chunk) => chunk.duration_ms), [5000, 5000, 5000]);
+  assert.deepEqual(plan.chunks.map((chunk) => chunk.text), ["[establish]", "[turn]", "[payoff]"]);
+  assert.ok(plan.chunks.flatMap((chunk) => chunk.positive_styles).some((style) => /eerie/i.test(style)));
   assert.doesNotMatch(JSON.stringify(plan), /station|borrowed voices|VANTA/i);
 });
 
@@ -56,9 +58,9 @@ test("plan validation rejects timing drift and directive sentences", () => {
   assert.throws(
     () => themeCompositionPlanSchemaFor("ident_8s").parse({
       ...plan,
-      sections: plan.sections.map((section, index) => ({
-        ...section,
-        duration_ms: index === 0 ? 6000 : section.duration_ms,
+      chunks: plan.chunks.map((chunk, index) => ({
+        ...chunk,
+        duration_ms: index === 0 ? 6000 : chunk.duration_ms,
       })),
     }),
     /total exactly 8000ms/,
@@ -66,7 +68,9 @@ test("plan validation rejects timing drift and directive sentences", () => {
   assert.throws(
     () => themeCompositionPlanSchemaFor("ident_8s").parse({
       ...plan,
-      positive_global_styles: ["the music ends with a dramatic final chord"],
+      chunks: plan.chunks.map((chunk, index) => index === 0
+        ? { ...chunk, positive_styles: ["the music ends with a dramatic final chord"] }
+        : chunk),
     }),
     /directive verb|at most 8 words/,
   );
@@ -79,7 +83,6 @@ test("ElevenLabs plan and legacy payloads remain mutually exclusive", () => {
     modelId: "music_v2",
     plan,
     durationMilliseconds: 8000,
-    respectSectionDurations: true,
     forceInstrumental: true,
     signWithC2pa: false,
   });
@@ -87,13 +90,26 @@ test("ElevenLabs plan and legacy payloads remain mutually exclusive", () => {
   assert.ok(!("prompt" in structured));
   assert.ok(!("music_length_ms" in structured));
   assert.ok(!("force_instrumental" in structured));
+  assert.ok(!("respect_sections_durations" in structured));
+  assert.ok("chunks" in structured.composition_plan);
+  assert.ok(!("sections" in structured.composition_plan));
+  assert.throws(
+    () => buildElevenMusicRequest({
+      mode: "composition-plan",
+      modelId: "music_v1",
+      plan,
+      durationMilliseconds: 8000,
+      forceInstrumental: true,
+      signWithC2pa: false,
+    }),
+    /require the music_v2 model/,
+  );
 
   const legacy = buildElevenMusicRequest({
     mode: "legacy-prompt",
     modelId: "music_v2",
     prompt: "Restrained instrumental future garage cue.",
     durationMilliseconds: 8000,
-    respectSectionDurations: true,
     forceInstrumental: true,
     signWithC2pa: false,
   });

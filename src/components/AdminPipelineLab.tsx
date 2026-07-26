@@ -60,13 +60,7 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
       key: "compositionPlanEnabled",
       label: "Structured composition plans",
       type: "boolean",
-      note: "Default. Sends a validated section plan and omits the mutually exclusive text prompt.",
-    },
-    {
-      key: "respectSectionDurations",
-      label: "Strict section timing",
-      type: "boolean",
-      note: "Keeps each section at its requested duration. Music v2 enforces this natively.",
+      note: "Default. Sends a validated Music v2 chunk plan and omits the mutually exclusive text prompt.",
     },
     {
       key: "durationSeconds",
@@ -77,9 +71,9 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
         { value: 8, label: "8 seconds · default ident" },
         { value: 15, label: "15 seconds · extended cue" },
       ],
-      note: "Used by legacy prompt mode. Structured plans use exact per-section milliseconds.",
+      note: "Used by legacy prompt mode. Structured plans use exact per-chunk milliseconds.",
     },
-    { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Legacy prompt mode only. Structured plans keep every lyrics line empty." },
+    { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Legacy prompt mode only. Structured plans use section-name-only chunk text with vocals excluded." },
     { key: "signWithC2pa", label: "C2PA provenance", type: "boolean", note: "Requests provider provenance signing when available." },
   ],
   image: [

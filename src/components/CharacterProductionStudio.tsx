@@ -2534,7 +2534,7 @@ export default function CharacterProductionStudio({
                     Eleven Music composition plan
                   </span>
                   <span className="text-[9px] text-grey">
-                    {themePlan.sections.reduce((total, section) => total + section.duration_ms, 0) / 1000}s exact
+                    {themePlan.chunks.reduce((total, chunk) => total + chunk.duration_ms, 0) / 1000}s exact
                   </span>
                 </div>
                 <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 text-[10px] leading-5 text-grey branded-scrollbar">

@@ -42,18 +42,19 @@ const ThemeStyleSchema = z.string().trim().min(2).max(120).superRefine((style, c
   }
 });
 
-export const ThemeCompositionSectionSchema = z.object({
-  section_name: z.string().trim().min(2).max(80),
+export const ThemeCompositionChunkSchema = z.object({
+  text: z.string().trim().regex(
+    /^\[[^\]\r\n]{2,80}\]$/,
+    "Instrumental chunk text must be one bracketed section name without lyrics.",
+  ),
   duration_ms: z.number().int().min(3000).max(120000),
-  positive_local_styles: z.array(ThemeStyleSchema).min(1).max(10),
-  negative_local_styles: z.array(ThemeStyleSchema).max(10).default([]),
-  lines: z.array(z.string()).max(0),
+  positive_styles: z.array(ThemeStyleSchema).min(1).max(50),
+  negative_styles: z.array(ThemeStyleSchema).max(50).default([]),
+  context_adherence: z.enum(["low", "medium", "high"]).default("high"),
 });
 
 export const ThemeCompositionPlanSchema = z.object({
-  positive_global_styles: z.array(ThemeStyleSchema).min(1).max(10),
-  negative_global_styles: z.array(ThemeStyleSchema).min(1).max(20),
-  sections: z.array(ThemeCompositionSectionSchema).min(1).max(30),
+  chunks: z.array(ThemeCompositionChunkSchema).min(1).max(30),
 });
 
 export type ThemeCompositionPlan = z.infer<typeof ThemeCompositionPlanSchema>;
@@ -65,12 +66,12 @@ export function themePlanTargetMilliseconds(kind: ThemePlanKind) {
 export function themeCompositionPlanSchemaFor(kind: ThemePlanKind) {
   const target = themePlanTargetMilliseconds(kind);
   return ThemeCompositionPlanSchema.superRefine((plan, context) => {
-    const total = plan.sections.reduce((sum, section) => sum + section.duration_ms, 0);
+    const total = plan.chunks.reduce((sum, chunk) => sum + chunk.duration_ms, 0);
     if (total !== target) {
       context.addIssue({
         code: "custom",
-        path: ["sections"],
-        message: `Section durations must total exactly ${target}ms; received ${total}ms.`,
+        path: ["chunks"],
+        message: `Chunk durations must total exactly ${target}ms; received ${total}ms.`,
       });
     }
   });
@@ -134,27 +135,19 @@ function sceneMoodTags(sceneBrief: string | undefined) {
 }
 
 function assertPlanDevelopmentRules(plan: ThemeCompositionPlan, characterName: string) {
-  const styleLists = [
-    plan.positive_global_styles,
-    plan.negative_global_styles,
-    ...plan.sections.flatMap((section) => [
-      section.positive_local_styles,
-      section.negative_local_styles,
-    ]),
-  ];
+  const styleLists = plan.chunks.flatMap((chunk) => [
+    chunk.positive_styles,
+    chunk.negative_styles,
+  ]);
   for (const styles of styleLists) {
     if (new Set(styles.map((style) => style.toLowerCase())).size !== styles.length) {
       throw new Error("Theme composition plan contains a duplicated style tag.");
     }
   }
-  const styles = [
-    ...plan.positive_global_styles,
-    ...plan.negative_global_styles,
-    ...plan.sections.flatMap((section) => [
-      ...section.positive_local_styles,
-      ...section.negative_local_styles,
-    ]),
-  ];
+  const styles = plan.chunks.flatMap((chunk) => [
+    ...chunk.positive_styles,
+    ...chunk.negative_styles,
+  ]);
   const storyTokens = characterName.toLowerCase().split(/\s+/).filter((token) => token.length > 2);
   const leaked = styles.find((style) =>
     storyTokens.some((token) => new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(style))
@@ -194,50 +187,48 @@ export function buildThemePlan(
     "fade-out",
   ], character.name);
   const moods = sceneMoodTags(sceneBrief);
-  const sections = kind === "ident_8s"
+  const chunk = (
+    sectionName: string,
+    durationMilliseconds: number,
+    positiveLocalStyles: string[],
+    negativeLocalStyles: string[],
+  ) => ({
+    text: `[${sectionName}]`,
+    duration_ms: durationMilliseconds,
+    // Music v2 has no global-style fields. Repeat the identity palette on each
+    // chunk so later sections cannot drift, while the first chunk still sets
+    // the overall genre as ElevenLabs recommends.
+    positive_styles: uniqueStyles([...positiveGlobal, ...positiveLocalStyles]).slice(0, 50),
+    negative_styles: uniqueStyles([...negativeGlobal, ...negativeLocalStyles]).slice(0, 50),
+    context_adherence: "high" as const,
+  });
+  const chunks = kind === "ident_8s"
     ? [
-        {
-          section_name: "hook",
-          duration_ms: 5000,
-          positive_local_styles: ["dry close identity motif", "rhythmic development"],
-          negative_local_styles: ["sparse demo"],
-          lines: [],
-        },
-        {
-          section_name: "ident hit",
-          duration_ms: 3000,
-          positive_local_styles: ["core motif reduction", "hard clean final hit"],
-          negative_local_styles: ["fade-out"],
-          lines: [],
-        },
+        chunk("hook", 5000, ["dry close identity motif", "rhythmic development"], ["sparse demo"]),
+        chunk("ident hit", 3000, ["core motif reduction", "hard clean final hit"], ["fade-out"]),
       ]
     : [
-        {
-          section_name: "establish",
-          duration_ms: 5000,
-          positive_local_styles: uniqueStyles([...moods, "restrained motif", "clear pulse"]).slice(0, 4),
-          negative_local_styles: ["wall-to-wall density"],
-          lines: [],
-        },
-        {
-          section_name: "turn",
-          duration_ms: 5000,
-          positive_local_styles: uniqueStyles([...moods, "harmonic pressure", "rhythmic lift"]).slice(0, 4),
-          negative_local_styles: ["static harmony"],
-          lines: [],
-        },
-        {
-          section_name: "payoff",
-          duration_ms: 5000,
-          positive_local_styles: uniqueStyles([...moods, "core motif payoff", "hard clean final hit"]).slice(0, 4),
-          negative_local_styles: ["fade-out"],
-          lines: [],
-        },
+        chunk(
+          "establish",
+          5000,
+          uniqueStyles([...moods, "restrained motif", "clear pulse"]).slice(0, 4),
+          ["wall-to-wall density"],
+        ),
+        chunk(
+          "turn",
+          5000,
+          uniqueStyles([...moods, "harmonic pressure", "rhythmic lift"]).slice(0, 4),
+          ["static harmony"],
+        ),
+        chunk(
+          "payoff",
+          5000,
+          uniqueStyles([...moods, "core motif payoff", "hard clean final hit"]).slice(0, 4),
+          ["fade-out"],
+        ),
       ];
   const plan = themeCompositionPlanSchemaFor(kind).parse({
-    positive_global_styles: positiveGlobal,
-    negative_global_styles: negativeGlobal,
-    sections,
+    chunks,
   });
   if (process.env.NODE_ENV !== "production") assertPlanDevelopmentRules(plan, character.name);
   return plan;
@@ -249,16 +240,17 @@ export function buildElevenMusicRequest(input: {
   plan?: ThemeCompositionPlan;
   prompt?: string;
   durationMilliseconds: number;
-  respectSectionDurations: boolean;
   forceInstrumental: boolean;
   signWithC2pa: boolean;
 }) {
   if (input.mode === "composition-plan") {
     if (!input.plan) throw new Error("Composition-plan mode requires a validated plan.");
+    if (input.modelId !== "music_v2") {
+      throw new Error("Chunk-based composition plans require the music_v2 model.");
+    }
     return {
       composition_plan: input.plan,
       model_id: input.modelId,
-      respect_sections_durations: input.respectSectionDurations,
       sign_with_c2pa: input.signWithC2pa,
     };
   }

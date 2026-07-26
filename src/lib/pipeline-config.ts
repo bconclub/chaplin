@@ -148,7 +148,6 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
       settings: {
         durationSeconds: 8,
         compositionPlanEnabled: true,
-        respectSectionDurations: true,
         forceInstrumental: true,
         signWithC2pa: false,
       },
@@ -224,9 +223,6 @@ export function normalizePipelineConfig(input: unknown, metadata?: {
       settings.durationSeconds = [5, 8, 15].includes(duration) ? duration : 8;
       settings.compositionPlanEnabled = typeof settings.compositionPlanEnabled === "boolean"
         ? settings.compositionPlanEnabled
-        : true;
-      settings.respectSectionDurations = typeof settings.respectSectionDurations === "boolean"
-        ? settings.respectSectionDurations
         : true;
     }
     if (id === "sfx") {
