@@ -83,7 +83,7 @@ export const PIPELINE_STAGE_META: Record<PipelineStageId, {
   video: {
     label: "Video",
     owner: "Motion director",
-    purpose: "Five-second image-to-video motion plates that preserve identity and composition.",
+    purpose: "Five-second image-to-video plates with diegetic location sound, preserving identity and composition. Dialogue and theme remain separate stems.",
     temperatureSupported: false,
   },
 };
@@ -181,7 +181,10 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
         durationSeconds: 5,
         resolution: "720p",
         ratio: "16:9",
-        generateAudio: false,
+        // Seedance supplies diegetic location sound (room tone, foley, weather).
+        // Dialogue and theme are still separate stems in the actor's locked
+        // voice, so the video prompt asks for sound without speech or score.
+        generateAudio: true,
         watermark: false,
         pollIntervalSeconds: 5,
         maximumPolls: 55,

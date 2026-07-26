@@ -142,6 +142,28 @@ function softenPromptForSafety(prompt: string, attempt: number) {
 
 const MAX_IMAGE_ATTEMPTS = 3;
 
+/**
+ * Scene audio direction.
+ *
+ * The video prompts were written for silent motion plates, because dialogue,
+ * signature SFX, and theme are produced as separate stems and mixed in
+ * assembly. Simply switching Seedance's generate_audio on would leave the model
+ * with contradictory instructions — the request asks for sound while the prompt
+ * demands silence — and any speech it invented would not be the actor's locked
+ * voice, which is the one thing a persistent AI actor cannot afford to lose.
+ *
+ * So when audio is enabled the silent-plate directives are replaced with a
+ * diegetic-only brief: the model supplies room tone, foley, and weather, while
+ * spoken words and score stay with the locked voice and character theme.
+ */
+const SILENT_PLATE_LINE = /^AUDIO:.*$/gm;
+const SILENT_PLATE_CLAUSE = /\s*Silent visual plate[^.]*\./gi;
+
+function withSceneAudioDirection(prompt: string) {
+  const cleaned = prompt.replace(SILENT_PLATE_LINE, "").replace(SILENT_PLATE_CLAUSE, "").trim();
+  return `${cleaned}\nAUDIO: Record the location, not a soundtrack. Generate only diegetic sound that the visible frame would actually make — room tone, footsteps, cloth movement, handled objects, machinery, and weather. No spoken words, no lip-sync, no singing, and no musical score: the actor's locked voice and the character theme are recorded separately and mixed over this plate.`;
+}
+
 const REPLICATE_API = "https://api.replicate.com/v1";
 
 /** Replicate's own docs call this a token; the deployment stores it as a key. */
@@ -1348,7 +1370,10 @@ export async function POST(request: Request) {
       // A production-approved frame is more specific than the actor's general
       // profile image and must remain the binding source for image-to-video.
       const reference = requestedReference || canonicalReference?.url || "";
-      const prompt = visualGenerationPrompt(videoConfig, silentPrompt, "video");
+      // Applied after compaction so the audio brief is never trimmed away.
+      const wantsSceneAudio = settingBoolean(videoConfig, "generateAudio", true);
+      const composedPrompt = visualGenerationPrompt(videoConfig, silentPrompt, "video");
+      const prompt = wantsSceneAudio ? withSceneAudioDirection(composedPrompt) : composedPrompt;
       const referenceMetadata = {
         referenceImage: reference || null,
         referenceAssetId: requestedReference ? null : canonicalReference?.assetId ?? null,
@@ -1378,7 +1403,7 @@ export async function POST(request: Request) {
           resolution: settingString(videoConfig, "resolution", "720p"),
           duration: durationSeconds,
           ratio: settingString(videoConfig, "ratio", "16:9"),
-          generate_audio: settingBoolean(videoConfig, "generateAudio", false),
+          generate_audio: wantsSceneAudio,
           watermark: settingBoolean(videoConfig, "watermark", false),
         });
         const taskId = createdResponse.data.id;
