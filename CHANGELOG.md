@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.26 - 2026-07-26 - Unified production workspace header
+
+- Moved Magic Scene into the production header instead of stacking it as a
+  separate full-width toolbar.
+- Docked Studio Auto above the center editor column so the stage rail and Asset
+  Canvas no longer sit beneath an unrelated full-width control layer.
+- Replaced the generic `Build prompts` action with clear `Use Magic Scene` and
+  `Direct scene` calls to action.
+- Passed TypeScript, ESLint with one pre-existing test warning, all four test
+  suites (40 tests), and the complete Next.js production build.
+
 ## v0.1.19 - 2026-07-26 - Ensemble scenes, generation resilience, hero framing
 
 - Prompt lint no longer cancels paid generation. Two heuristic rules were hard

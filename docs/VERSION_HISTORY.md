@@ -123,3 +123,12 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.15 | `e076a8e` | 2026-07-26T08:50:12+05:30 | chore: synchronize Chaplin version |
 | v0.1.16 | `d1ac3d1` | 2026-07-26T08:56:57+05:30 | fix: restore canonical Chaplin workspace logo |
 | v0.1.17 | `fe02b7b` | 2026-07-26T09:05:23+05:30 | fix: hide internal actor creation details |
+| v0.1.18 | `5c21cea` | 2026-07-26T09:14:39+05:30 | fix: reveal completed studio asset previews |
+| v0.1.19 | `a85ad9f` | 2026-07-26T09:20:11+05:30 | Frame the hero performance instead of stretching it across the panel |
+| v0.1.20 | `6c2afad` | 2026-07-26T09:20:11+05:30 | Stop double-rendering scenes and honour the current cast |
+| v0.1.21 | `3e05725` | 2026-07-26T09:20:12+05:30 | Fail over to Seedance 1.5 Pro when Dreamina rejects the seed image |
+| v0.1.22 | `1b76368` | 2026-07-26T09:20:12+05:30 | Replace actor style thumbnails with the new reference set |
+| v0.1.23 | `6d2f06c` | 2026-07-26T09:20:12+05:30 | Add Replicate open-weights video fallback |
+| v0.1.24 | `b90d7d5` | 2026-07-26T09:20:12+05:30 | Stop prompt lint from cancelling paid generation |
+| v0.1.25 | `77941f6` | 2026-07-26T09:21:30+05:30 | Changelog for v0.1.19 |
+| v0.1.26 | `ffbb81e` | 2026-07-26T09:29:02+05:30 | fix: unify production workspace header |

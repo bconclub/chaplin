@@ -1782,11 +1782,11 @@ export default function CharacterProductionStudio({
   return (
     <section data-production-workflow className="character-production-room">
       <div
-        className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 py-2.5 backdrop-blur-xl sm:px-4"
-        data-magic-scene-toolbar
+        className="shrink-0 border-b border-white/10 bg-[#080c0a]/96 px-3 py-2.5 backdrop-blur-xl sm:px-4 lg:ml-[12rem] lg:mr-[22rem] lg:border-x xl:ml-[13rem] xl:mr-[25rem]"
+        data-studio-auto-dock
       >
         <div
-          className={`mb-2 rounded-md border px-3 py-2.5 ${
+          className={`rounded-md border px-3 py-2.5 ${
             autoStudioRun?.status === "failed"
               ? "border-red-500/50 bg-red-500/[0.07]"
               : studioAutoMode
@@ -1866,11 +1866,13 @@ export default function CharacterProductionStudio({
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="flex shrink-0 items-center justify-between gap-3 lg:w-[11rem] xl:w-[12rem]">
+        <div
+          className="mt-2 flex flex-col gap-2 lg:fixed lg:left-[19rem] lg:right-[17rem] lg:top-0 lg:z-[90] lg:mt-0 lg:h-16 lg:flex-row lg:items-center xl:left-[21rem] xl:right-[19rem]"
+          data-magic-scene-toolbar
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3">
             <span className="min-w-0">
               <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-accent">✦ Magic Scene</span>
-              <span className="mt-0.5 block truncate text-[9px] text-grey">Direct every production prompt</span>
             </span>
             {magicSceneIndex > 0 && (
               <span className="rounded-full border border-accent/35 px-2 py-0.5 text-[8px] font-semibold text-accent">
@@ -1902,20 +1904,12 @@ export default function CharacterProductionStudio({
             >
               {busy === "magic-scene" && generationRun?.key === "magic-scene"
                 ? `Directing ${estimatedGenerationProgress(generationRun)}%`
-                : "Build prompts"}
+                : magicSceneBrief.trim()
+                  ? "Direct scene"
+                  : "Use Magic Scene"}
             </button>
           </div>
         </div>
-        {generationRun?.key === "magic-scene" && (
-          <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
-            <span
-              className={`block h-full rounded-full transition-[width] duration-500 ${
-                generationRun.status === "failed" ? "bg-red-500" : "bg-gradient-to-r from-accent to-accent-secondary"
-              }`}
-              style={{ width: `${estimatedGenerationProgress(generationRun)}%` }}
-            />
-          </div>
-        )}
       </div>
       <div className="studio-production-grid lg:grid lg:grid-cols-[12rem_minmax(0,1fr)_22rem] xl:grid-cols-[13rem_minmax(0,1fr)_25rem]">
       <aside
