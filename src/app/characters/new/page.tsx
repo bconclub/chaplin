@@ -688,11 +688,7 @@ export default function NewCharacterPage() {
             if (index === reveal.length - 1) {
               window.setTimeout(() => {
                 setRevealingField("");
-                setSuggestionMessage(
-                  data.warning || (data.provider === "anthropic"
-                    ? "Claude named and expanded the character. Every suggestion is editable."
-                    : "Character name and suggestions are ready. Every field remains editable.")
-                );
+                setSuggestionMessage("");
               }, 700);
             }
           }, 450 * index);
@@ -714,14 +710,11 @@ export default function NewCharacterPage() {
           setScorePreset(SCORE_PRESETS[SCORE_PRESETS.length - 1]);
           setCustomScore(suggestion.themeScore);
         }
-        setSuggestionMessage(
-          data.warning || (data.provider === "anthropic"
-            ? "Claude expanded the character. Every suggestion is editable."
-            : "Character suggestions are ready. Every field remains editable.")
-        );
+        setSuggestionMessage("");
       }
     } catch (suggestionError) {
-      setError(suggestionError instanceof Error ? suggestionError.message : "Character suggestions failed.");
+      console.error("Character suggestion failed", suggestionError);
+      setError("Magic Write could not finish. Please try again.");
     } finally {
       setSuggestingTarget(null);
     }
@@ -794,7 +787,8 @@ export default function NewCharacterPage() {
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? `Saving the AI actor returned ${response.status}.`);
+        console.error("Saving the AI actor failed", { status: response.status, error: data?.error });
+        throw new Error("We could not save this actor. Please try again.");
       }
       window.localStorage.removeItem(draftStorageKey);
       window.dispatchEvent(new CustomEvent("chaplin:catalogue-updated", { detail: { characterId: character.id } }));
@@ -1086,12 +1080,6 @@ export default function NewCharacterPage() {
                   </div>
                 )}
 
-                {error && (
-                  <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-4 text-red-300">
-                    {error}
-                  </p>
-                )}
-                {suggestionMessage && <p className="mt-2 text-[9px] leading-4 text-grey">{suggestionMessage}</p>}
               </section>
 
               <label className="mt-5 block text-[10px] font-semibold">

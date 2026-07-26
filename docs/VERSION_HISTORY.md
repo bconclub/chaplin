@@ -121,3 +121,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.13 | `7cf857d` | 2026-07-26T08:32:23+05:30 | Fix ensemble scene generation losing both the scene and the cast |
 | v0.1.14 | `472ee7b` | 2026-07-26T08:47:41+05:30 | fix: reveal custom actor sound directions |
 | v0.1.15 | `e076a8e` | 2026-07-26T08:50:12+05:30 | chore: synchronize Chaplin version |
+| v0.1.16 | `d1ac3d1` | 2026-07-26T08:56:57+05:30 | fix: restore canonical Chaplin workspace logo |

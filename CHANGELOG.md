@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.17 - 2026-07-26 - Clean actor creation feedback
+
+- Removed provider attribution and completion boilerplate from the Magic Write
+  panel after an actor identity finishes writing.
+- Stopped exposing backend field names and raw API validation messages in the
+  actor-creation interface; detailed failures remain available in developer
+  logs while makers receive a concise retry message.
+- Removed duplicated inline status details from the identity-writing card.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  Next.js production build.
+
 ## v0.1.16 - 2026-07-26 - Canonical actor workspace logo
 
 - Replaced the improvised circular `C` and separate `CHAPLIN STUDIO` label in
