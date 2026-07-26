@@ -38,6 +38,8 @@ const PHOTOREAL = /\b(photoreal|live.action|cinematic photograph|natural skin|re
 const NARRATIVE = /\b(story|plot|cliffhanger|payoff|discovers?|mission|signed up|betray|save someone|scene beat)\b/i;
 const SEQUENCE = /\b(five seconds?|then|followed by|after that|next|first.+(?:then|followed)|\d(?:\.\d+)?s\s*[-:])\b/i;
 const GARMENTS = /\b(coat|jacket|kurta|salwar|saree|sari|dress|shirt|blouse|trousers|skirt|robe|uniform|boots|shoes|flip-flops?|belt|hat|scarf|gloves)\b/gi;
+/** Basics almost never spelled out in a canonical wardrobe sentence. */
+const GENERIC_GARMENTS = new Set(["shoes", "boots", "belt", "shirt", "trousers"]);
 
 function normalizedWords(value: string) {
   return value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
@@ -74,8 +76,11 @@ export function lintPromptHandoff(rawInput: PromptLintInput): PromptLintResult {
   const allowedGarments = garmentSet(input.wardrobe);
 
   for (const artifact of input.artifacts) {
+    // Advisory, not a gate. Composed prompts legitimately repeat persona and
+    // performance boilerplate across slots, so a repeated 21-word window is a
+    // quality smell rather than proof the prompt is broken.
     const duplicate = duplicatedSegment(artifact.prompt);
-    if (duplicate) failures.push({ rule: "L1", cardId: artifact.id, message: `Repeated rendered segment: “${duplicate.slice(0, 120)}…”` });
+    if (duplicate) warnings.push({ rule: "L1", cardId: artifact.id, message: `Repeated rendered segment: “${duplicate.slice(0, 120)}…”` });
     for (const marker of defaultMarkerFailures(artifact.prompt)) {
       failures.push({ rule: "L1", cardId: artifact.id, message: marker });
     }
@@ -90,10 +95,14 @@ export function lintPromptHandoff(rawInput: PromptLintInput): PromptLintResult {
       if (canonicalFamily === "stylized" && /\bnegative\b[^]*\b(?:manga|anime|illustration|cartoon)\b/i.test(artifact.prompt)) {
         failures.push({ rule: "L2", cardId: artifact.id, message: "Negative prompt excludes the canonical stylized medium." });
       }
+      // A canonical wardrobe string describes the hero garments; it rarely
+      // enumerates basics. Flagging "shoes" because the wardrobe sentence never
+      // said "shoes" is noise, so generic items are exempt and the rest is
+      // advisory rather than blocking.
       const emittedGarments = garmentSet(artifact.prompt);
       for (const garment of emittedGarments) {
-        if (allowedGarments.size && !allowedGarments.has(garment)) {
-          failures.push({ rule: "L4", cardId: artifact.id, message: `Prompt invents wardrobe item “${garment}” outside the canonical wardrobe.` });
+        if (allowedGarments.size && !allowedGarments.has(garment) && !GENERIC_GARMENTS.has(garment)) {
+          warnings.push({ rule: "L4", cardId: artifact.id, message: `Prompt invents wardrobe item “${garment}” outside the canonical wardrobe.` });
         }
       }
     }

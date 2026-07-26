@@ -675,7 +675,17 @@ export async function POST(request: Request) {
             failures: handoff.lint.failures.filter((issue) => relevantCards.includes(issue.cardId)),
           }
         : null;
-      if (blockingResult?.failures.length) {
+      /*
+        The linter is a set of regex heuristics over a *synthetic* handoff, not a
+        measurement of the prompt actually being sent. Treating its output as a
+        hard gate took the whole studio down: a repeated boilerplate phrase (L1)
+        and the word "shoes" appearing in a prompt whose wardrobe string did not
+        enumerate footwear (L4) were enough to fail Voice and Still and stop
+        Studio Auto. Findings are recorded on the job and returned to the client
+        so they stay visible, but they no longer cancel paid work. Set
+        CHAPLIN_BLOCK_ON_PROMPT_LINT=true to restore hard blocking.
+      */
+      if (blockingResult?.failures.length && process.env.CHAPLIN_BLOCK_ON_PROMPT_LINT === "true") {
         throw new PromptLintError({ ...blockingResult, pass: false });
       }
       return beginGeneration({
@@ -683,6 +693,9 @@ export async function POST(request: Request) {
         metadata: {
           ...(details.metadata ?? {}),
           ...(handoff ? { prompt_lint: handoff.lint } : {}),
+          ...(blockingResult?.failures.length
+            ? { prompt_lint_advisory: blockingResult.failures }
+            : {}),
         },
         experimentId,
         experimentVariantId,
