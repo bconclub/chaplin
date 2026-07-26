@@ -17,10 +17,36 @@ function localReply(name: string, message: string, bible: ReturnType<typeof buil
   ].join(" ").slice(0, 480);
 }
 
+/**
+ * Prior turns of this conversation, oldest first. Only the current message used
+ * to be sent, so the actor answered every question as if it were the first one
+ * and could not refer back to anything already said. The window is capped so a
+ * long room does not grow the request without bound.
+ */
+const MEMORY_TURNS = 16;
+
+function conversationMemory(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const turns = value.flatMap((entry) => {
+    const turn = entry as { role?: unknown; text?: unknown };
+    const text = clean(turn.text, 600);
+    if (!text) return [];
+    // Anthropic expects assistant for the character's own prior replies.
+    const role = turn.role === "character" || turn.role === "assistant" ? "assistant" as const : "user" as const;
+    return [{ role, content: text }];
+  });
+  const windowed = turns.slice(-MEMORY_TURNS);
+  // The exchange must begin with a user turn, so drop a leading assistant line
+  // (the opening punchline) rather than letting the request be rejected.
+  while (windowed.length && windowed[0].role === "assistant") windowed.shift();
+  return windowed;
+}
+
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const message = clean(body.message);
+  const memory = conversationMemory(body.history);
   if (message.length < 2) return Response.json({ error: "Write something for the actor first." }, { status: 400 });
 
   let character;
@@ -50,8 +76,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         model,
         max_tokens: 220,
         thinking: { type: "disabled" },
-        system: `${composeCharacterInteractionPrompt(character, bible)}\n\nReply only as the actor, in first person. Be conversational and specific, never narrate an action, never mention a prompt, bible, model, or creator notes. Keep it to one or two short sentences.`,
-        messages: [{ role: "user", content: message }],
+        system: `${composeCharacterInteractionPrompt(character, bible)}\n\nReply only as the actor, in first person. Be conversational and specific, never narrate an action, never mention a prompt, bible, model, or creator notes. Keep it to one or two short sentences. You remember everything already said in this conversation; refer back to it naturally when it matters, and never reintroduce yourself to someone you are already talking to.`,
+        messages: [...memory, { role: "user", content: message }],
       }),
       cache: "no-store",
     });

@@ -11,20 +11,71 @@ const STARTERS = [
   "What would you say before the scene starts?",
 ];
 
+/** The theme is a bed under the performance, not a track competing with it. */
+const THEME_BED_VOLUME = 0.16;
+const THEME_DUCKED_VOLUME = 0.05;
+
 export default function CharacterConversationPanel({ character }: { character: Character }) {
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sending, setSending] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [canSpeak, setCanSpeak] = useState(Boolean(character.voiceId));
+  const [themeUrl, setThemeUrl] = useState<string | null>(null);
+  const [roomLive, setRoomLive] = useState(false);
   const [error, setError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const themeRef = useRef<HTMLAudioElement | null>(null);
+  const openedRef = useRef(false);
 
   useEffect(() => () => {
     audioRef.current?.pause();
+    themeRef.current?.pause();
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
   }, []);
+
+  // The character's own theme is part of their identity, so the room plays it
+  // rather than sitting in silence. Same production state the profile hero uses.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/generate?characterId=${encodeURIComponent(character.id)}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { production?: { latestThemeUrl?: string | null } } | null) => {
+        if (!cancelled) setThemeUrl(data?.production?.latestThemeUrl ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setThemeUrl(null);
+      });
+    return () => { cancelled = true; };
+  }, [character.id]);
+
+  // Browsers block autoplay until a gesture, so the bed starts on first send or
+  // on an explicit "enter the room" press rather than on mount.
+  function startThemeBed() {
+    if (!themeUrl || themeRef.current) return;
+    const theme = new Audio(themeUrl);
+    theme.loop = true;
+    theme.volume = THEME_BED_VOLUME;
+    themeRef.current = theme;
+    void theme.play().catch(() => {
+      // A blocked bed must never break the conversation itself.
+      themeRef.current = null;
+    });
+  }
+
+  /** Opens the room: theme bed up, and the actor lands their punchline aloud. */
+  function enterRoom() {
+    if (openedRef.current) return;
+    openedRef.current = true;
+    setRoomLive(true);
+    startThemeBed();
+    const opener = character.brollLine?.trim() || character.tagline?.trim();
+    if (opener) {
+      setTurns((current) => (current.length ? current : [{ role: "character", text: opener }]));
+      void speak(opener);
+    }
+  }
 
   async function send(nextMessage = message) {
     const text = nextMessage.trim();
@@ -32,17 +83,23 @@ export default function CharacterConversationPanel({ character }: { character: C
     setError("");
     setSending(true);
     setMessage("");
+    enterRoom();
+    // Snapshot before appending so the request carries prior turns, not this one.
+    const history = turns;
     setTurns((current) => [...current, { role: "user", text }]);
     try {
       const response = await fetch(`/api/characters/${encodeURIComponent(character.id)}/interact`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history }),
       });
       const data = await response.json() as { reply?: string; error?: string; canSpeak?: boolean };
       if (!response.ok || !data.reply) throw new Error(data.error || "The actor could not answer right now.");
-      setCanSpeak(Boolean(data.canSpeak));
+      const speakable = Boolean(data.canSpeak);
+      setCanSpeak(speakable);
       setTurns((current) => [...current, { role: "character", text: data.reply! }]);
+      // The room is a conversation, so the actor answers aloud without being asked.
+      if (speakable) void speak(data.reply!);
     } catch (caught) {
       setTurns((current) => current.slice(0, -1));
       setMessage(text);
@@ -55,6 +112,7 @@ export default function CharacterConversationPanel({ character }: { character: C
   async function speak(text: string) {
     if (speaking) return;
     setError("");
+    if (!character.voiceId) return;
     setSpeaking(true);
     try {
       const response = await fetch(`/api/characters/${encodeURIComponent(character.id)}/interact/voice`, {
@@ -72,12 +130,21 @@ export default function CharacterConversationPanel({ character }: { character: C
       audioUrlRef.current = url;
       const audio = new Audio(url);
       audioRef.current = audio;
+      // Duck the bed under the line, then lift it once the actor stops talking.
+      if (themeRef.current) themeRef.current.volume = THEME_DUCKED_VOLUME;
+      const liftBed = () => {
+        if (themeRef.current) themeRef.current.volume = THEME_BED_VOLUME;
+        setSpeaking(false);
+      };
+      audio.addEventListener("ended", liftBed, { once: true });
+      audio.addEventListener("error", liftBed, { once: true });
       await audio.play();
+      return;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Voice playback is unavailable.");
-    } finally {
-      setSpeaking(false);
+      if (themeRef.current) themeRef.current.volume = THEME_BED_VOLUME;
     }
+    setSpeaking(false);
   }
 
   const lastReply = [...turns].reverse().find((turn) => turn.role === "character");
@@ -88,7 +155,27 @@ export default function CharacterConversationPanel({ character }: { character: C
         <div>
           <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-accent-secondary">Live character room</p>
           <h2 className="reel-title mt-1 text-2xl">Talk to {character.name}</h2>
-          <p className="mt-1 text-xs text-grey">Ask a question. The reply stays in character, not in the production notes.</p>
+          <p className="mt-1 text-xs text-grey">
+            {canSpeak
+              ? `${character.name.split(" ")[0]} answers out loud and remembers what you have already said.`
+              : "Ask a question. The reply stays in character, not in the production notes."}
+          </p>
+          {!roomLive && canSpeak && (
+            <button
+              type="button"
+              onClick={enterRoom}
+              className="mt-2.5 inline-flex items-center gap-2 rounded-full border border-accent-secondary/55 px-3.5 py-1.5 text-[10px] font-semibold text-accent-secondary transition-colors hover:bg-accent-secondary/10"
+            >
+              ▶ Enter the room{themeUrl ? " · with theme" : ""}
+            </button>
+          )}
+          {roomLive && (
+            <p className="mt-2.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-accent-secondary">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-secondary" />
+              {speaking ? "Speaking" : "Listening"}
+              {themeRef.current ? " · theme running" : ""}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2" aria-label={`Conversation starters for ${character.name}`}>
           {STARTERS.map((starter) => (
@@ -123,7 +210,7 @@ export default function CharacterConversationPanel({ character }: { character: C
           </button>
           {lastReply && canSpeak && (
             <button type="button" onClick={() => void speak(lastReply.text)} disabled={speaking} className="rounded-sm border border-accent-secondary/55 px-4 py-3 text-sm font-semibold text-accent-secondary transition-colors hover:bg-accent-secondary/10 disabled:opacity-40">
-              {speaking ? "Speaking…" : "Hear reply"}
+              {speaking ? "Speaking…" : "Replay"}
             </button>
           )}
         </div>
