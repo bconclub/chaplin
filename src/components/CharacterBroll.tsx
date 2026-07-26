@@ -189,7 +189,7 @@ export default function CharacterBroll({ character }: { character: Character }) 
           >
             <div className="relative min-h-44 overflow-hidden border-b border-white/10 p-5 sm:min-h-52 sm:p-6">
               {posterSource && (
-                <Image src={posterSource} alt="" fill sizes="672px" className="object-cover object-[68%_center] opacity-45" />
+                <Image src={posterSource} alt="" fill sizes="672px" className="object-cover object-[68%_22%] opacity-45" />
               )}
               <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(7,12,5,0.98),rgba(7,12,5,0.58)_60%,rgba(7,12,5,0.22))]" />
               <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#11190d] to-transparent" />
@@ -299,7 +299,7 @@ export default function CharacterBroll({ character }: { character: Character }) 
           // by roughly a quarter, which read as softness on the actor's face.
           sizes="(min-width: 1152px) 1104px, 100vw"
           quality={90}
-          className={`object-cover object-[68%_center] ${videoSource ? "" : "motion-safe:animate-[broll-drift_8s_ease-in-out_infinite_alternate]"}`}
+          className={`object-cover object-[68%_22%] ${videoSource ? "" : "motion-safe:animate-[broll-drift_8s_ease-in-out_infinite_alternate]"}`}
           priority
         />
       ) : (
@@ -330,7 +330,7 @@ export default function CharacterBroll({ character }: { character: Character }) 
         The name and tagline sit bottom-left inside max-w-[78%] on mobile and
         max-w-[52%] on desktop, so the scrim only needs to protect that column.
         It used to run the full width at 92% black falling to 55% mid-frame,
-        which dulled the actor's face — object-[68%_center] deliberately places
+        which dulled the actor's face — object-[68%_22%] deliberately places
         it on the right. The fade now completes before the portrait begins, so
         the right side of the frame renders at full contrast.
       */}

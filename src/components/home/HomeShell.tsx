@@ -264,7 +264,7 @@ export default function HomeShell() {
                 priority
                 quality={90}
                 sizes="(min-width: 1280px) 62vw, 100vw"
-                className="object-cover object-[72%_center] transition-transform duration-[1200ms] group-hover:scale-[1.02]"
+                className="object-cover object-[72%_22%] transition-transform duration-[1200ms] group-hover:scale-[1.02]"
               />
             ) : (
               <div
@@ -288,7 +288,7 @@ export default function HomeShell() {
                   setHeroProgress(video.duration ? video.currentTime / video.duration : 0);
                 }}
                 onEnded={advance}
-                className="absolute inset-0 h-full w-full object-cover object-[72%_center]"
+                className="absolute inset-0 h-full w-full object-cover object-[72%_22%]"
               />
             )}
 
