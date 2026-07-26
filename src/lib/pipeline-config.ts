@@ -147,6 +147,8 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
       maxTokens: null,
       settings: {
         durationSeconds: 8,
+        compositionPlanEnabled: true,
+        respectSectionDurations: true,
         forceInstrumental: true,
         signWithC2pa: false,
       },
@@ -220,6 +222,12 @@ export function normalizePipelineConfig(input: unknown, metadata?: {
     if (id === "theme") {
       const duration = Number(settings.durationSeconds);
       settings.durationSeconds = [5, 8, 15].includes(duration) ? duration : 8;
+      settings.compositionPlanEnabled = typeof settings.compositionPlanEnabled === "boolean"
+        ? settings.compositionPlanEnabled
+        : true;
+      settings.respectSectionDurations = typeof settings.respectSectionDurations === "boolean"
+        ? settings.respectSectionDurations
+        : true;
     }
     if (id === "sfx") {
       const influence = finiteNumber(settings.promptInfluence, 0.55, 0, 1);

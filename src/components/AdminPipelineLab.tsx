@@ -57,6 +57,18 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
   ],
   theme: [
     {
+      key: "compositionPlanEnabled",
+      label: "Structured composition plans",
+      type: "boolean",
+      note: "Default. Sends a validated section plan and omits the mutually exclusive text prompt.",
+    },
+    {
+      key: "respectSectionDurations",
+      label: "Strict section timing",
+      type: "boolean",
+      note: "Keeps each section at its requested duration. Music v2 enforces this natively.",
+    },
+    {
       key: "durationSeconds",
       label: "Theme seconds",
       type: "select",
@@ -65,9 +77,9 @@ const STAGE_FIELDS: Record<PipelineStageId, FieldDefinition[]> = {
         { value: 8, label: "8 seconds · default ident" },
         { value: 15, label: "15 seconds · extended cue" },
       ],
-      note: "Sent to Eleven Music v2 as music_length_ms with a 48 kHz, 192 kbps delivery target. Studio choices remain edit-ready presets.",
+      note: "Used by legacy prompt mode. Structured plans use exact per-section milliseconds.",
     },
-    { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Blocks generated vocals and lyrics." },
+    { key: "forceInstrumental", label: "Force instrumental", type: "boolean", note: "Legacy prompt mode only. Structured plans keep every lyrics line empty." },
     { key: "signWithC2pa", label: "C2PA provenance", type: "boolean", note: "Requests provider provenance signing when available." },
   ],
   image: [

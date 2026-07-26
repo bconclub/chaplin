@@ -762,7 +762,7 @@ type AudioIdentityFamily =
   | "hero"
   | "grounded";
 
-type ModernThemePalette = {
+export type ModernThemePalette = {
   family: AudioIdentityFamily;
   genres: string;
   instruments: [string, string, string, string];

@@ -15,6 +15,10 @@ import {
 } from "@/lib/production-prompting";
 import { dialogueForEditor } from "@/lib/dialogue-performance";
 import { pipelineModelLabel } from "@/lib/pipeline-config";
+import {
+  buildThemePlan,
+  type ThemePlanKind,
+} from "@/lib/theme-composition-plan";
 
 type ProductionAsset = {
   id: string;
@@ -556,6 +560,8 @@ export default function CharacterProductionStudio({
     initialScene.theme
   );
   const [themeDurationSeconds, setThemeDurationSeconds] = useState<ThemeDurationPreset>(8);
+  const [themePlanEnabled, setThemePlanEnabled] = useState(true);
+  const [themeKind, setThemeKind] = useState<ThemePlanKind>("ident_8s");
   const [themeUrl, setThemeUrl] = useState("");
   const [imagePurpose, setImagePurpose] = useState<ImagePurpose>("identity");
   const [imagePrompt, setImagePrompt] = useState(composeIdentityImagePrompt(character));
@@ -573,6 +579,10 @@ export default function CharacterProductionStudio({
   const [assetHistory, setAssetHistory] = useState<ProductionAsset[]>([]);
   const [magicSceneIndex, setMagicSceneIndex] = useState(0);
   const [magicSceneBrief, setMagicSceneBrief] = useState("");
+  const themePlan = useMemo(
+    () => buildThemePlan(character, themeKind, initialScene.blueprint.musicalArc),
+    [character, initialScene.blueprint.musicalArc, themeKind],
+  );
   const [activeStep, setActiveStep] = useState<number>(1);
   const [sceneBlueprint, setSceneBlueprint] = useState<ShotBlueprint>(initialScene.blueprint);
   const [busy, setBusy] = useState("");
@@ -692,6 +702,7 @@ export default function CharacterProductionStudio({
       .then((data: ProviderStatus) => {
         setStatus(data);
         setThemeDurationSeconds(themeDurationPreset(data.pipeline?.stages?.theme?.settings?.durationSeconds));
+        setThemePlanEnabled(data.pipeline?.stages?.theme?.settings?.compositionPlanEnabled !== false);
         const production = data.production;
         if (!production) return;
         const assets = production.assets ?? [];
@@ -1101,8 +1112,12 @@ export default function CharacterProductionStudio({
     void run("theme", async () => {
       setThemeUrl(await audioAction("theme", {
         prompt: themePrompt,
-        durationSeconds: themeDurationSeconds,
-        grammarVersion: "v3",
+        durationSeconds: themePlanEnabled
+          ? (themeKind === "scene_15s" ? 15 : 8)
+          : themeDurationSeconds,
+        themeKind,
+        sceneBrief: initialScene.blueprint.musicalArc,
+        grammarVersion: themePlanEnabled ? "plan-v2" : "v3-legacy",
       }));
       await refreshHistory();
       setMessage(
@@ -1539,14 +1554,20 @@ export default function CharacterProductionStudio({
       updateAutoStudioStep(4, "writing", "Writing the score direction");
       try {
         if (!elevenReady) throw new Error("ElevenLabs is not ready for theme generation.");
-        const themeResult = await writeField("theme", themePrompt);
-        const writtenTheme = (themeResult.text ?? themePrompt).trim();
-        setThemePrompt(writtenTheme);
-        updateAutoStudioStep(4, "generating", `Composing ${themeDurationSeconds}s theme`);
+        const writtenTheme = themePlanEnabled
+          ? themePrompt
+          : (await writeField("theme", themePrompt)).text?.trim() ?? themePrompt;
+        if (!themePlanEnabled) setThemePrompt(writtenTheme);
+        const automaticDuration = themePlanEnabled
+          ? (themeKind === "scene_15s" ? 15 : 8)
+          : themeDurationSeconds;
+        updateAutoStudioStep(4, "generating", `Composing ${automaticDuration}s theme`);
         const automaticThemeUrl = await audioAction("theme", {
           prompt: writtenTheme,
-          durationSeconds: themeDurationSeconds,
-          grammarVersion: "v3",
+          durationSeconds: automaticDuration,
+          themeKind,
+          sceneBrief: initialScene.blueprint.musicalArc,
+          grammarVersion: themePlanEnabled ? "plan-v2" : "v3-legacy",
         });
         setThemeUrl(automaticThemeUrl);
         await refreshHistory();
@@ -2474,35 +2495,83 @@ export default function CharacterProductionStudio({
         <div data-production-stage="theme" className={`border border-line rounded-md p-4 flex flex-col gap-3 ${activeStep === 4 ? "" : "hidden"}`}>
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-semibold text-sm">4. Theme score</h3>
-            <QuickWriteButton
-              field="theme"
-              busy={Boolean(busy) || Boolean(quickWriting)}
-              writing={quickWriting === "theme"}
-              onClick={() => void quickWrite("theme", themePrompt, setThemePrompt)}
-            />
+            {!themePlanEnabled && (
+              <QuickWriteButton
+                field="theme"
+                busy={Boolean(busy) || Boolean(quickWriting)}
+                writing={quickWriting === "theme"}
+                onClick={() => void quickWrite("theme", themePrompt, setThemePrompt)}
+              />
+            )}
           </div>
-          <input data-scene-field="theme" value={themePrompt} onChange={(event) => setThemePrompt(event.target.value)} className="bg-paper border border-line rounded-sm p-3 text-xs focus:outline-none focus:border-accent" />
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-grey">
-              Duration
-              <select
-                value={themeDurationSeconds}
-                onChange={(event) => setThemeDurationSeconds(themeDurationPreset(event.target.value))}
-                disabled={Boolean(busy)}
-                className="rounded-sm border border-line bg-paper px-2 py-2 text-xs font-semibold text-ink outline-none focus:border-accent disabled:opacity-40"
-                aria-label="Theme duration"
-              >
-                {THEME_DURATION_PRESETS.map((seconds) => (
-                  <option key={seconds} value={seconds}>{seconds}s</option>
+          {themePlanEnabled ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([
+                  ["ident_8s", "8s ident", "Hook + identity hit"],
+                  ["scene_15s", "15s scene cue", "Establish + turn + payoff"],
+                ] as const).map(([kind, label, description]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => {
+                      setThemeKind(kind);
+                      setThemeDurationSeconds(kind === "scene_15s" ? 15 : 8);
+                    }}
+                    disabled={Boolean(busy)}
+                    className={`rounded-sm border p-3 text-left transition disabled:opacity-40 ${
+                      themeKind === kind ? "border-accent bg-accent/10" : "border-line bg-paper"
+                    }`}
+                  >
+                    <span className="block text-xs font-semibold text-ink">{label}</span>
+                    <span className="mt-1 block text-[10px] text-grey">{description}</span>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+              <div className="overflow-hidden rounded-sm border border-line bg-black/20">
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
+                    Eleven Music composition plan
+                  </span>
+                  <span className="text-[9px] text-grey">
+                    {themePlan.sections.reduce((total, section) => total + section.duration_ms, 0) / 1000}s exact
+                  </span>
+                </div>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 text-[10px] leading-5 text-grey branded-scrollbar">
+                  {JSON.stringify(themePlan, null, 2)}
+                </pre>
+              </div>
+            </>
+          ) : (
+            <input data-scene-field="theme" value={themePrompt} onChange={(event) => setThemePrompt(event.target.value)} className="bg-paper border border-line rounded-sm p-3 text-xs focus:outline-none focus:border-accent" />
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {!themePlanEnabled && (
+              <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-grey">
+                Duration
+                <select
+                  value={themeDurationSeconds}
+                  onChange={(event) => setThemeDurationSeconds(themeDurationPreset(event.target.value))}
+                  disabled={Boolean(busy)}
+                  className="rounded-sm border border-line bg-paper px-2 py-2 text-xs font-semibold text-ink outline-none focus:border-accent disabled:opacity-40"
+                  aria-label="Theme duration"
+                >
+                  {THEME_DURATION_PRESETS.map((seconds) => (
+                    <option key={seconds} value={seconds}>{seconds}s</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button onClick={() => generateTheme()} disabled={!elevenReady || Boolean(busy)} className="border border-accent text-accent rounded-sm px-4 py-2 text-sm font-semibold disabled:opacity-40">
               {busy === "theme"
                 ? "Composing theme..."
-                : themeUrl
-                  ? "Regenerate with v2 grammar"
-                  : `Generate ${themeDurationSeconds}-second theme`}
+                : themePlanEnabled
+                  ? themeUrl
+                    ? "Regenerate with plan v2"
+                    : `Generate ${themeKind === "scene_15s" ? 15 : 8}-second plan`
+                  : themeUrl
+                    ? "Regenerate legacy prompt"
+                    : `Generate ${themeDurationSeconds}-second theme`}
             </button>
           </div>
           {themeUrl && (

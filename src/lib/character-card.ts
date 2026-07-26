@@ -73,6 +73,7 @@ export const ThemeProfileSchema = z.object({
   style_anchor: z.string().min(3).max(180),
   mood: z.string().min(3).max(120),
   instruments: z.array(z.string().min(2).max(80)).min(2).max(4),
+  avoid: z.array(z.string().min(2).max(80)).max(10).optional(),
   opening: z.string().min(3).max(180),
   build: z.string().min(3).max(180),
   emotional_turn: z.string().min(3).max(180),

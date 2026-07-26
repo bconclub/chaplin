@@ -3,6 +3,23 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.56 - 2026-07-26 - Structured Eleven Music composition plans
+
+- Replaced the default overloaded ElevenLabs theme prompt with validated
+  `composition_plan` requests that never send the mutually exclusive `prompt`,
+  `music_length_ms`, or `force_instrumental` fields.
+- Added exact eight-second actor idents with five-second hook and three-second
+  identity-hit sections, plus exact 15-second scene cues split into establish,
+  turn, and payoff sections.
+- Added Zod timing and style guards for empty lyric lines, section limits,
+  duplicate tags, directive prose, character-name leakage, and exact totals.
+- Added a Studio selector and read-only plan preview, with plan JSON, requested
+  duration, and delivered duration preserved in job and asset ledger metadata.
+- Kept the previous prompt workflow behind Super Admin's structured-plan toggle,
+  where `music_length_ms` and `force_instrumental` remain correctly scoped.
+- Passed strict TypeScript, focused ESLint, all 70 library tests, and the complete
+  Next.js production build. A paid ElevenLabs generation was not triggered.
+
 ## v0.1.54 - 2026-07-26 - Locked-voice audiovisual scene delivery
 
 - Added the actor's locked ElevenLabs performance as a Seedance 2.0 audio

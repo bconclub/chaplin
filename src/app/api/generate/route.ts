@@ -42,6 +42,12 @@ import {
   prepareSeedanceAudioPrompt,
   seedanceSupportsAudioReference,
 } from "@/lib/seedance-audio";
+import {
+  buildElevenMusicRequest,
+  buildThemePlan,
+  themePlanTargetMilliseconds,
+  type ThemePlanKind,
+} from "@/lib/theme-composition-plan";
 import { compactVisualDirection, requestsStylizedImage } from "@/lib/prompt-compaction";
 import { buildPromptHandoff } from "@/lib/prompt-handoff";
 import { PromptLintError } from "@/lib/prompt-lint";
@@ -1024,20 +1030,40 @@ export async function POST(request: Request) {
       if (!isThemeDurationPreset(requestedDuration)) {
         throw new RequestValidationError("Theme duration must be one of 5, 8, or 15 seconds.");
       }
-      const durationSeconds = requestedDuration;
-      const prompt = withThemeDurationDirection(
-        directedPrompt(themeConfig, text(input, "prompt", 10, 3000)),
-        durationSeconds,
-      );
-      if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+      const compositionPlanEnabled = settingBoolean(themeConfig, "compositionPlanEnabled", true);
+      const themeKind: ThemePlanKind = input.themeKind === "scene_15s" || requestedDuration === 15
+        ? "scene_15s"
+        : "ident_8s";
+      const durationSeconds = compositionPlanEnabled
+        ? themePlanTargetMilliseconds(themeKind) / 1000
+        : requestedDuration;
+      if (compositionPlanEnabled && !requestCharacter) {
+        throw new RequestValidationError("Composition-plan theme generation requires the saved AI actor identity.");
+      }
+      const prompt = compositionPlanEnabled
+          ? undefined
+          : withThemeDurationDirection(
+            directedPrompt(themeConfig, text(input, "prompt", 10, 3000)),
+            requestedDuration,
+          );
+      if (prompt && process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
+      const sceneBrief = typeof input.sceneBrief === "string" ? input.sceneBrief.trim().slice(0, 1000) : undefined;
+      const compositionPlan = compositionPlanEnabled && requestCharacter
+        ? buildThemePlan(requestCharacter, themeKind, sceneBrief)
+        : undefined;
       const outputFormat = themeConfig.model === "music_v2" ? "mp3_48000_192" : "mp3_44100_128";
       const generationMetadata = {
-        grammarVersion: "v3",
+        grammarVersion: compositionPlanEnabled ? "plan-v2" : "v3-legacy",
+        generationMode: compositionPlanEnabled ? "composition-plan" : "legacy-prompt",
+        themeKind,
         requestedDurationSeconds: durationSeconds,
-        providerDurationParameter: "music_length_ms",
+        providerDurationParameter: compositionPlanEnabled
+          ? "composition_plan.sections.duration_ms"
+          : "music_length_ms",
         providerDurationMilliseconds: durationSeconds * 1000,
         providerOutputFormat: outputFormat,
-        productionLevel: "full-arrangement",
+        respectSectionDurations: settingBoolean(themeConfig, "respectSectionDurations", true),
+        compositionPlan,
       };
       jobId = await startGeneration({
         characterId,
@@ -1047,13 +1073,16 @@ export async function POST(request: Request) {
         prompt,
         metadata: generationMetadata,
       });
-      const response = await eleven(`/music?output_format=${outputFormat}`, {
+      const response = await eleven(`/music?output_format=${outputFormat}`, buildElevenMusicRequest({
+        mode: compositionPlanEnabled ? "composition-plan" : "legacy-prompt",
+        plan: compositionPlan,
         prompt,
-        music_length_ms: durationSeconds * 1000,
-        model_id: themeConfig.model,
-        force_instrumental: settingBoolean(themeConfig, "forceInstrumental", true),
-        sign_with_c2pa: settingBoolean(themeConfig, "signWithC2pa", false),
-      });
+        durationMilliseconds: durationSeconds * 1000,
+        respectSectionDurations: settingBoolean(themeConfig, "respectSectionDurations", true),
+        modelId: themeConfig.model,
+        forceInstrumental: settingBoolean(themeConfig, "forceInstrumental", true),
+        signWithC2pa: settingBoolean(themeConfig, "signWithC2pa", false),
+      }));
       const delivered = await enforceThemeDuration(await response.arrayBuffer(), durationSeconds);
       const durationMetadata = {
         ...generationMetadata,
@@ -1081,7 +1110,7 @@ export async function POST(request: Request) {
         await calculateGenerationBilling({
           kind: "theme",
           usage: {
-            inputCharacters: prompt.length,
+            inputCharacters: prompt?.length ?? JSON.stringify(compositionPlan).length,
             durationSeconds: delivered.originalDurationSeconds,
             providerCredits: headerNumber(response, "character-cost"),
           },
