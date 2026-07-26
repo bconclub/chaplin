@@ -57,6 +57,19 @@ export default function CharacterCard({
 
         <p className="line-clamp-2 flex-1 text-[11px] italic leading-snug text-white/58 sm:text-sm">&ldquo;{character.tagline}&rdquo;</p>
 
+        <dl className="grid grid-cols-3 divide-x divide-white/10 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+          {[
+            ["Impressions", character.stats.socialImpressions],
+            ["Views", character.stats.socialViews],
+            ["Likes", character.stats.socialLikes],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="min-w-0 px-1.5 py-2 text-center">
+              <dt className="truncate text-[7px] font-semibold uppercase tracking-[0.08em] text-white/35 sm:text-[8px]">{label}</dt>
+              <dd className="mt-0.5 truncate text-[10px] font-semibold tabular-nums text-white/85 sm:text-xs">{compactNumber(Number(value))}</dd>
+            </div>
+          ))}
+        </dl>
+
         <p className="truncate whitespace-nowrap border-t border-white/10 pt-1.5 text-[10px] text-white/48 sm:pt-2 sm:text-xs">
           <b className="text-white/90">{character.stats.castings}</b> cast <span aria-hidden="true">·</span> <b className="text-white/90">{compactNumber(character.stats.fans)}</b> fans
           {character.stats.earnings > 0 && (

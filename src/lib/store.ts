@@ -167,7 +167,14 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
       licenseType: input.licenseType as LicenseType,
       royaltyRate: input.licenseType === "open" ? 0 : input.royaltyRate,
       createdAt: nowIso(),
-      stats: { castings: 0, fans: 40, earnings: 0 },
+      stats: {
+        castings: 0,
+        fans: 40,
+        earnings: 0,
+        socialImpressions: 0,
+        socialViews: 0,
+        socialLikes: 0,
+      },
     };
     set((s) => ({ characters: [character, ...s.characters] }));
     persist(get());
@@ -261,6 +268,7 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
         return {
           ...c,
           stats: {
+            ...c.stats,
             castings: c.stats.castings + gained.length,
             fans: c.stats.fans + gained.length * 55,
             earnings: c.stats.earnings + earned,

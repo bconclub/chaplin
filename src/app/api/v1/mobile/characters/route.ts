@@ -85,7 +85,14 @@ export async function POST(request: Request) {
       licenseType: "approval",
       royaltyRate: 0,
       createdAt: new Date().toISOString(),
-      stats: { castings: 0, fans: 0, earnings: 0 },
+      stats: {
+        castings: 0,
+        fans: 0,
+        earnings: 0,
+        socialImpressions: 0,
+        socialViews: 0,
+        socialLikes: 0,
+      },
     };
     await persistCharacter(character);
     return Response.json({ character }, { status: 201 });

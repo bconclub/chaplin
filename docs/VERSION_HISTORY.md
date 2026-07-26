@@ -153,3 +153,6 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.45 | `f17cc99` | 2026-07-26T10:41:40+05:30 | Use the real logo and real navigation on the home rail |
 | v0.1.46 | `73db07a` | 2026-07-26T10:42:36+05:30 | Add showcase platform figures to the home sidebar |
 | v0.1.47 | `4cad6b7` | 2026-07-26T10:47:00+05:30 | Curate generation media in the creator feed |
+| v0.1.48 | `20d7486` | 2026-07-26T10:47:55+05:30 | chore: synchronize Chaplin v0.1.48 |
+| v0.1.49 | `e7f1795` | 2026-07-26T10:50:36+05:30 | Restore the app's own rail and unfreeze the home page |
+| v0.1.50 | `050e330` | 2026-07-26T10:56:05+05:30 | Add the Scene Studio canvas |

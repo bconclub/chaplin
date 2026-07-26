@@ -15,7 +15,14 @@ export const RUKHSAR_RU_FIXTURE: Character = {
   licenseType: "paid",
   royaltyRate: 30,
   createdAt: "2026-07-26T00:00:00.000Z",
-  stats: { castings: 0, fans: 0, earnings: 0 },
+  stats: {
+    castings: 0,
+    fans: 0,
+    earnings: 0,
+    socialImpressions: 0,
+    socialViews: 0,
+    socialLikes: 0,
+  },
   productionBible: {
     version: 1,
     creationInputs: {
@@ -81,4 +88,3 @@ export const RUKHSAR_RU_FIXTURE: Character = {
     },
   },
 };
-

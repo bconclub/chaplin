@@ -584,7 +584,14 @@ function computeStats(characterId: string) {
     0
   );
   const fans = 120 + castings.length * 165 + Math.floor(earnings * 1.8);
-  return { castings: castings.length, fans, earnings };
+  return {
+    castings: castings.length,
+    fans,
+    earnings,
+    socialImpressions: 0,
+    socialViews: 0,
+    socialLikes: 0,
+  };
 }
 
 export const CHARACTERS: Character[] = SEED_CHARACTERS.map((c) => ({

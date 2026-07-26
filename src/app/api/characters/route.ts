@@ -91,6 +91,9 @@ function parseCharacter(value: unknown): Character {
       castings: Number(stats.castings ?? 0),
       fans: Number(stats.fans ?? 0),
       earnings: Number(stats.earnings ?? 0),
+      socialImpressions: Number(stats.socialImpressions ?? 0),
+      socialViews: Number(stats.socialViews ?? 0),
+      socialLikes: Number(stats.socialLikes ?? 0),
     },
   };
 }

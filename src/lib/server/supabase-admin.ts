@@ -161,6 +161,13 @@ interface CharacterCatalogRow {
   featured_cover_asset_id: string | null;
 }
 
+interface CharacterSocialMetricRow {
+  character_id: string;
+  impressions_count: number | string;
+  views_count: number | string;
+  likes_count: number | string;
+}
+
 /** Returns the shared actor catalogue used by every browser and device. */
 export async function listCharacters(): Promise<Character[]> {
   const supabase = adminClient();
@@ -186,6 +193,32 @@ export async function listCharacters(): Promise<Character[]> {
   assert(characters.error, "Load AI actors");
   assert(voices.error, "Load AI actor voices");
   assert(assets.error, "Load AI actor media");
+
+  // Social connectors update one row per external post. Keep catalogue loading
+  // available before the migration is installed, but never manufacture counts
+  // from fans, castings, or local feed reactions.
+  const socialMetricsResult = await supabase
+    .from("character_social_metrics")
+    .select("character_id,impressions_count,views_count,likes_count");
+  if (socialMetricsResult.error) {
+    console.warn("Load actor social performance:", socialMetricsResult.error.message);
+  }
+  const socialByCharacter = new Map<string, {
+    socialImpressions: number;
+    socialViews: number;
+    socialLikes: number;
+  }>();
+  for (const row of (socialMetricsResult.data ?? []) as CharacterSocialMetricRow[]) {
+    const current = socialByCharacter.get(row.character_id) ?? {
+      socialImpressions: 0,
+      socialViews: 0,
+      socialLikes: 0,
+    };
+    current.socialImpressions += Number(row.impressions_count ?? 0);
+    current.socialViews += Number(row.views_count ?? 0);
+    current.socialLikes += Number(row.likes_count ?? 0);
+    socialByCharacter.set(row.character_id, current);
+  }
 
   const voiceByCharacter = new Map(
     (voices.data ?? []).map((voice) => [voice.character_id, voice.provider_voice_id])
@@ -230,6 +263,11 @@ export async function listCharacters(): Promise<Character[]> {
 
   return ((characters.data ?? []) as CharacterCatalogRow[]).map((row) => {
     const media = mediaByCharacter.get(row.id);
+    const social = socialByCharacter.get(row.id) ?? {
+      socialImpressions: 0,
+      socialViews: 0,
+      socialLikes: 0,
+    };
     const characterAssets = (assets.data ?? []).filter((asset) => asset.character_id === row.id);
     const featuredCover = characterAssets.find((asset) => asset.id === row.featured_cover_asset_id)?.url;
     const featuredVideo = characterAssets.find((asset) => asset.id === row.featured_video_asset_id)?.url;
@@ -260,6 +298,7 @@ export async function listCharacters(): Promise<Character[]> {
         castings: row.castings_count,
         fans: row.fans_count,
         earnings: Number(row.earnings_total),
+        ...social,
       },
     };
   });

@@ -26,6 +26,7 @@ function featureScore(character: Character, broll?: HomepageBroll) {
   return (broll?.videoUrl || character.videoUrl ? 1_000_000 : 0)
     + (artworkFor(character) ? 100_000 : 0)
     + character.stats.castings * 100
+    + character.stats.socialImpressions
     + character.stats.fans;
 }
 
@@ -78,11 +79,15 @@ export default function HomeShell() {
   const creatorCount = DEMO_FLOOR.creators + new Set(characters.map((character) => character.makerId)).size;
   const characterCount = DEMO_FLOOR.characters + characters.length;
   const storyCount = DEMO_FLOOR.stories + stories.length;
-  const totalFans = DEMO_FLOOR.reach
-    + characters.reduce((total, character) => total + character.stats.fans, 0);
+  const totalViews = DEMO_FLOOR.reach
+    + characters.reduce((total, character) => total + character.stats.socialViews, 0);
 
   const topPerformers = useMemo(
-    () => [...characters].sort((left, right) => right.stats.fans - left.stats.fans).slice(0, 5),
+    () => [...characters].sort((left, right) =>
+      right.stats.socialImpressions - left.stats.socialImpressions
+      || right.stats.socialViews - left.stats.socialViews
+      || right.stats.fans - left.stats.fans
+    ).slice(0, 5),
     [characters],
   );
 
@@ -274,10 +279,10 @@ export default function HomeShell() {
               </div>
               <dl className="hidden shrink-0 items-end gap-6 sm:flex">
                 {[
-                  [current.stats.fans, "Views"],
-                  [Math.round(current.stats.fans * 0.013), "Likes"],
+                  [current.stats.socialImpressions, "Impressions"],
+                  [current.stats.socialViews, "Views"],
+                  [current.stats.socialLikes, "Likes"],
                   [current.stats.castings, "Castings"],
-                  [Math.round(current.stats.earnings), "Earned"],
                 ].map(([value, label]) => (
                   <div key={String(label)} className="text-right">
                     <dt className="text-[15px] font-semibold leading-none">
@@ -358,9 +363,10 @@ export default function HomeShell() {
                     </span>
                     <span className="block px-2 pb-2 pt-1.5">
                       <span className="block truncate text-[11.5px] font-semibold">{character.name}</span>
-                      <span className="mt-1 flex items-center gap-2.5 text-[9px] text-white/45">
-                        <span>◉ {compact(character.stats.fans)}</span>
-                        <span>♡ {compact(Math.round(character.stats.fans * 0.013))}</span>
+                      <span className="mt-1 grid grid-cols-3 gap-1 text-[8px] tabular-nums text-white/45">
+                        <span title="Impressions">◎ {compact(character.stats.socialImpressions)}</span>
+                        <span title="Views">◉ {compact(character.stats.socialViews)}</span>
+                        <span title="Likes">♡ {compact(character.stats.socialLikes)}</span>
                       </span>
                     </span>
                   </button>
@@ -418,7 +424,7 @@ export default function HomeShell() {
               { icon: "◆", label: "Active creators", value: creatorCount, tint: "text-accent", delta: "+18%" },
               { icon: "◈", label: "Characters created", value: characterCount, tint: "text-accent-secondary", delta: "+22%" },
               { icon: "▤", label: "Stories published", value: storyCount, tint: "text-amber-300", delta: "+15%" },
-              { icon: "◉", label: "Total views", value: totalFans, tint: "text-emerald-400", delta: "+31%" },
+              { icon: "◉", label: "Total views", value: totalViews, tint: "text-emerald-400", delta: "+31%" },
             ].map((row) => (
               <div key={row.label} className="flex items-center gap-2.5 rounded-xl border border-[#1b1b1b] bg-[#0d0d0d] px-2.5 py-2.5">
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[11px] ${row.tint}`}>{row.icon}</span>
@@ -460,7 +466,7 @@ export default function HomeShell() {
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-[9.5px] font-semibold text-emerald-400">{compact(character.stats.castings)} cast</span>
-                      <span className="mt-0.5 block text-[9px] text-white/40">{compact(character.stats.fans)} reach</span>
+                      <span className="mt-0.5 block text-[9px] text-white/40">{compact(character.stats.socialImpressions)} impressions</span>
                     </span>
                   </Link>
                 </li>

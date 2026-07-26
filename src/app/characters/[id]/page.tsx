@@ -194,7 +194,7 @@ export default function CharacterProfilePage() {
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
+        <div className="grid grid-cols-3 divide-x divide-y divide-line border-t border-line sm:grid-cols-6 sm:divide-y-0">
           <div className="p-2.5 text-center sm:p-4">
             <p className="text-base font-semibold sm:text-xl">{character.stats.castings}</p>
             <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Castings</p>
@@ -202,6 +202,18 @@ export default function CharacterProfilePage() {
           <div className="p-2.5 text-center sm:p-4">
             <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.fans)}</p>
             <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Fans</p>
+          </div>
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.socialImpressions)}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Impressions</p>
+          </div>
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.socialViews)}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Views</p>
+          </div>
+          <div className="p-2.5 text-center sm:p-4">
+            <p className="text-base font-semibold sm:text-xl">{compactNumber(character.stats.socialLikes)}</p>
+            <p className="text-[8px] uppercase tracking-wide text-grey sm:text-[11px]">Likes</p>
           </div>
           <div className="p-2.5 text-center sm:p-4">
             <p className="text-base font-semibold text-accent sm:text-xl">{money(character.stats.earnings)}</p>

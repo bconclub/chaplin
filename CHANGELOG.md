@@ -3,6 +3,20 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.51 - 2026-07-26 - Actor social performance stats
+
+- Added per-character social impressions, views, and likes to actor cards,
+  homepage featured cards, and actor profile heroes.
+- Replaced fan-derived view and like estimates with explicit, zero-safe social
+  metrics so an actor never displays invented performance.
+- Added additive per-platform `character_social_metrics` storage and
+  character-level aggregation for future Instagram, YouTube, TikTok, and other
+  social imports.
+- Preserved social totals through casting updates and across web and mobile
+  character persistence.
+- Applied the Supabase migration and passed TypeScript, ESLint with one
+  pre-existing test warning, all 50 tests, and the production build.
+
 ## v0.1.48 - 2026-07-26 - Curated creator feed and full-viewport home
 
 - Integrated the pending homepage shell and its full-viewport entertainment

@@ -36,6 +36,9 @@ export interface CharacterStats {
   castings: number;
   fans: number;
   earnings: number; // lifetime, in mock currency units
+  socialImpressions: number;
+  socialViews: number;
+  socialLikes: number;
 }
 
 export type CharacterSheetViewId =
