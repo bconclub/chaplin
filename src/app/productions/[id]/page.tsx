@@ -55,6 +55,35 @@ type ShotRenderState = {
   The cap keeps a twelve-shot episode from firing twelve provider calls at once,
   which is what turns a burst into a throttle.
 */
+/*
+  A provider hiccup used to cost one scene. Now that scenes render together it
+  costs the whole batch: three sibling videos are already in flight when a
+  fourth fails, and aborting discards all of them. So a transient failure is
+  retried rather than surfaced.
+
+  Only transient failures. A safety rejection or an unactivated model returns
+  the same answer however many times it is asked, so retrying one would just
+  spend the creator's time and money to arrive at the same refusal.
+*/
+const TRANSIENT_PROVIDER_FAILURE = /\b(429|500|502|503|504)\b|inference limit|rate limit|timed out|interrupted before the provider/i;
+
+async function withSceneRetry<T>(attempt: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let tryIndex = 0; tryIndex < attempts; tryIndex += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      const detail = error instanceof Error ? error.message : "";
+      if (!TRANSIENT_PROVIDER_FAILURE.test(detail) || tryIndex === attempts - 1) throw error;
+      // Backing off matters most for an inference limit, where every concurrent
+      // scene is being refused at once and retrying in step would refuse again.
+      await new Promise((resolve) => { window.setTimeout(resolve, 2000 * (tryIndex + 1) * (1 + tryIndex)); });
+    }
+  }
+  throw lastError;
+}
+
 const SCENE_CONCURRENCY = 4;
 
 async function mapScenes<T>(count: number, task: (index: number) => Promise<T>): Promise<T[]> {
@@ -841,39 +870,49 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
           assetId: directedScene.previewAssetId,
         };
         if (!frameData.url) {
-          const frameResponse = await fetch("/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "image",
-              characterId: cast[0].id,
-              imagePurpose: "scene",
-              referenceImages: [...lockedCastReferences, story.productImageUrl ?? ""].filter(
-                (value, referenceIndex, references) => references.indexOf(value) === referenceIndex,
-              ),
-              prompt: framePrompt,
-            }),
-          });
-          frameData = await frameResponse.json() as { url?: string; assetId?: string; error?: string };
-          if (!frameResponse.ok || !frameData.url) {
+          frameData = await withSceneRetry(async () => {
+            const frameResponse = await fetch("/api/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "image",
+                characterId: cast[0].id,
+                imagePurpose: "scene",
+                referenceImages: [...lockedCastReferences, story.productImageUrl ?? ""].filter(
+                  (value, referenceIndex, references) => references.indexOf(value) === referenceIndex,
+                ),
+                prompt: framePrompt,
+              }),
+            });
+            const payload = await frameResponse.json() as { url?: string; assetId?: string; error?: string };
+            if (!frameResponse.ok || !payload.url) {
+              throw new Error(payload.error ?? `Scene frame ${index + 1} was not created.`);
+            }
+            return payload;
+          }).catch((error: unknown) => {
             /*
               Concurrent scenes mean the loop counter no longer identifies the
               failure, so each scene records its own index before it throws.
             */
             activeShotIndex = index;
-            throw new Error(frameData.error ?? `Scene frame ${index + 1} was not created.`);
-          }
+            throw error;
+          });
+        }
+        const frameUrl = frameData.url;
+        if (!frameUrl) {
+          activeShotIndex = index;
+          throw new Error(frameData.error ?? `Scene frame ${index + 1} was not created.`);
         }
         framesDesigned += 1;
-        setRenderFrameUrl(frameData.url);
+        setRenderFrameUrl(frameUrl);
         setSelectedShotIndex(index);
         setRenderProgress(`Designed ${framesDesigned} of ${contract.shotCount} scene frames`);
         setRenderShots((shots) => shots.map((shot, shotIndex) => (
           shotIndex === index
-            ? { ...shot, frameUrl: frameData.url, frameAssetId: frameData.assetId, status: "frame_ready" }
+            ? { ...shot, frameUrl, frameAssetId: frameData.assetId, status: "frame_ready" }
             : shot
         )));
-        return { frameUrl: frameData.url as string, frameAssetId: frameData.assetId };
+        return { frameUrl, frameAssetId: frameData.assetId };
       });
 
       /*
@@ -969,6 +1008,7 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
           productName: story.productImageName, hasProductReference: Boolean(story.productImageUrl),
           continuityNote: "Animate only this scene's exact starting frame. Preserve every visible identity, object, spatial relationship, and screen direction inside the shot; do not borrow staging or action from another scene.",
         });
+        const videoData = await withSceneRetry(async () => {
         const videoResponse = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -995,11 +1035,15 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
             prompt: motionPrompt,
           }),
         });
-        const videoData = await videoResponse.json() as { url?: string; assetId?: string; error?: string };
-        if (!videoResponse.ok || !videoData.url || !videoData.assetId) {
-          activeShotIndex = index;
-          throw new Error(videoData.error ?? `Scene ${index + 1} did not produce a saved video.`);
+        const payload = await videoResponse.json() as { url?: string; assetId?: string; error?: string };
+        if (!videoResponse.ok || !payload.url || !payload.assetId) {
+          throw new Error(payload.error ?? `Scene ${index + 1} did not produce a saved video.`);
         }
+        return payload as { url: string; assetId: string };
+        }).catch((error: unknown) => {
+          activeShotIndex = index;
+          throw error;
+        });
         scenesAnimated += 1;
         setSelectedShotIndex(index);
         setRenderFrameUrl(frameData.frameUrl);
