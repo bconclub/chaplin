@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminDashboard } from "@/lib/server/supabase-admin";
 import { getServerAuthIdentity } from "@/lib/server/auth";
 import AdminRefreshButton from "@/components/AdminRefreshButton";
+import AdminProviderStatus from "@/components/AdminProviderStatus";
 import AdminSectionNav from "@/components/AdminSectionNav";
 import AppearanceToggle from "@/components/AppearanceToggle";
 import { pipelineModelLabel } from "@/lib/pipeline-config";
@@ -192,6 +193,12 @@ export default async function AdminPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Provider readiness sits beside the logs: an unconfigured or rejected
+          key is the first thing to check when generation starts failing. */}
+      <section className="mb-6">
+        <AdminProviderStatus />
       </section>
 
       <div className="grid lg:grid-cols-[1.5fr_0.5fr] gap-6">
