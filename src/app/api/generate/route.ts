@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+﻿import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { NextRequest } from "next/server";
 import {
@@ -141,6 +141,103 @@ function softenPromptForSafety(prompt: string, attempt: number) {
 }
 
 const MAX_IMAGE_ATTEMPTS = 3;
+
+const REPLICATE_API = "https://api.replicate.com/v1";
+
+/**
+ * Open-weights video fallbacks. Every commercial image-to-video vendor
+ * (Seedance, Kling, Runway, Veo, Sora) sits behind a face-detection layer that
+ * refuses a photoreal human seed image — which is exactly what a Chaplin
+ * identity still is. Running open weights on a GPU host removes that layer
+ * entirely: there is no vendor policy between the request and the model.
+ *
+ * Input field names differ per model and change as models are revised, so the
+ * mapping is configuration rather than code. Override the video stage's
+ * `replicateFallbacks` setting with a JSON array to retarget without a deploy.
+ */
+type ReplicateFallback = {
+  model: string;
+  imageField?: string;
+  promptField?: string;
+  input?: Record<string, unknown>;
+};
+
+const DEFAULT_REPLICATE_FALLBACKS: ReplicateFallback[] = [
+  { model: "wan-video/wan-2.2-i2v-fast", imageField: "image", promptField: "prompt", input: { resolution: "720p" } },
+  { model: "lightricks/ltx-video", imageField: "image", promptField: "prompt" },
+];
+
+function replicateFallbacks(stage: PipelineStageConfig): ReplicateFallback[] {
+  const raw = settingString(stage, "replicateFallbacks", "").trim();
+  if (!raw) return DEFAULT_REPLICATE_FALLBACKS;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return DEFAULT_REPLICATE_FALLBACKS;
+    const entries = parsed.filter((entry): entry is ReplicateFallback =>
+      Boolean(entry) && typeof (entry as ReplicateFallback).model === "string");
+    return entries.length ? entries : DEFAULT_REPLICATE_FALLBACKS;
+  } catch {
+    // A malformed override must not silently disable the fallback entirely.
+    return DEFAULT_REPLICATE_FALLBACKS;
+  }
+}
+
+async function replicateVideo(input: {
+  entry: ReplicateFallback;
+  prompt: string;
+  imageUrl: string;
+  pollIntervalMs: number;
+  maximumPolls: number;
+}) {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) throw new Error("REPLICATE_API_TOKEN is not configured.");
+  const body: Record<string, unknown> = {
+    [input.entry.promptField ?? "prompt"]: input.prompt,
+    ...(input.entry.input ?? {}),
+  };
+  // Replicate fetches the reference itself, so the public storage URL is passed
+  // straight through rather than being inlined as base64.
+  if (input.imageUrl) body[input.entry.imageField ?? "image"] = input.imageUrl;
+
+  const created = await fetch(`${REPLICATE_API}/models/${input.entry.model}/predictions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      // Hold the connection briefly so short renders return without any polling.
+      Prefer: "wait",
+    },
+    body: JSON.stringify({ input: body }),
+  });
+  let prediction = await created.json() as {
+    id?: string; status?: string; output?: unknown; error?: string; detail?: string;
+    metrics?: Record<string, unknown>; urls?: { get?: string };
+  };
+  if (!created.ok) {
+    throw new Error(`Replicate ${input.entry.model} returned ${created.status}: ${prediction.detail ?? prediction.error ?? "unknown error"}`);
+  }
+  const predictionId = prediction.id;
+  if (!predictionId) throw new Error(`Replicate ${input.entry.model} did not return a prediction id.`);
+  // Replicate returns the canonical poll URL; prefer it over rebuilding one.
+  const pollUrl = prediction.urls?.get ?? `${REPLICATE_API}/predictions/${encodeURIComponent(predictionId)}`;
+
+  for (let attempt = 0; attempt < input.maximumPolls; attempt += 1) {
+    if (["succeeded", "failed", "canceled"].includes(String(prediction.status))) break;
+    await new Promise((resolve) => setTimeout(resolve, input.pollIntervalMs));
+    const poll = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
+    prediction = await poll.json() as typeof prediction;
+  }
+  if (prediction.status !== "succeeded") {
+    throw new Error(prediction.error ?? `Replicate ${input.entry.model} ${prediction.status ?? "timed out"}.`);
+  }
+  // Models return either a single URL or a list of frames/renditions.
+  const output = prediction.output;
+  const videoUrl = Array.isArray(output) ? output[output.length - 1] : output;
+  if (typeof videoUrl !== "string") {
+    throw new Error(`Replicate ${input.entry.model} completed without returning a video URL.`);
+  }
+  return { videoUrl, taskId: predictionId, usage: prediction.metrics, requestId: predictionId };
+}
 
 function visualGenerationPrompt(stage: PipelineStageConfig, prompt: string, kind: "image" | "video") {
   if (kind === "video") return compactVisualDirection(prompt, kind);
@@ -429,7 +526,7 @@ async function generateWithOpenAI(
   if (!key) throw new Error("OPENAI_API_KEY is not configured.");
   const requestedSize = settingString(stage, "size", "1536x1024");
   // GPT Image accepts its own supported sizes; retain a safe landscape default
-  // when this stage was previously configured for Seedream's 2560×1440 output.
+  // when this stage was previously configured for Seedream's 2560Ã—1440 output.
   const size = ["1024x1024", "1024x1536", "1536x1024", "auto"].includes(requestedSize)
     ? requestedSize
     : "1536x1024";
@@ -1272,39 +1369,58 @@ export async function POST(request: Request) {
         ByteDance model, which carries a different policy, before losing the shot.
       */
       const fallbackVideoModel = settingString(videoConfig, "fallbackModel", "seedance-1-5-pro-251215");
-      const videoModelCandidates = [videoConfig.model, fallbackVideoModel]
+      const seedanceCandidates = [videoConfig.model, fallbackVideoModel]
         .filter((model, index, models) => model && models.indexOf(model) === index);
+      // Seedance first (cheapest, already contracted), then open weights, which
+      // have no likeness filter and so cannot refuse a photoreal seed image.
+      const videoAttempts: Array<{ provider: "byteplus" | "replicate"; model: string; entry?: ReplicateFallback }> = [
+        ...seedanceCandidates.map((model) => ({ provider: "byteplus" as const, model })),
+        ...(process.env.REPLICATE_API_TOKEN
+          ? replicateFallbacks(videoConfig).map((entry) => ({ provider: "replicate" as const, model: entry.model, entry }))
+          : []),
+      ];
       let videoUrl = "";
       let taskId = "";
       let videoModelUsed = videoConfig.model;
+      let videoProviderUsed: "byteplus" | "replicate" = "byteplus";
       let videoUsage: Record<string, unknown> | undefined;
       let videoRequestId: string | null | undefined;
       const rejectedModels: string[] = [];
-      for (const model of videoModelCandidates) {
+      for (const attempt of videoAttempts) {
         try {
-          const result = await runVideoTask(model);
+          const result = attempt.provider === "replicate"
+            ? await replicateVideo({
+                entry: attempt.entry!,
+                prompt,
+                imageUrl: reference,
+                pollIntervalMs,
+                maximumPolls,
+              })
+            : await runVideoTask(attempt.model);
           videoUrl = result.videoUrl;
           taskId = result.taskId;
           videoUsage = result.usage;
           videoRequestId = result.requestId;
-          videoModelUsed = model;
+          videoModelUsed = attempt.model;
+          videoProviderUsed = attempt.provider;
           break;
         } catch (error) {
-          const isLastCandidate = model === videoModelCandidates[videoModelCandidates.length - 1];
-          if (!isSafetyRejection(error) || isLastCandidate) throw error;
-          rejectedModels.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+          const isLastAttempt = attempt === videoAttempts[videoAttempts.length - 1];
+          if (!isSafetyRejection(error) || isLastAttempt) throw error;
+          rejectedModels.push(`${attempt.model}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
       const asset = await saveRemoteMediaAsset({
         characterId,
         kind: "video",
-        provider: "byteplus",
+        provider: videoProviderUsed,
         remoteUrl: videoUrl,
         prompt,
         durationSeconds,
         metadata: {
           taskId,
           videoModel: videoModelUsed,
+          videoProvider: videoProviderUsed,
           ...(rejectedModels.length ? { safetyRejectedModels: rejectedModels } : {}),
           ...referenceMetadata,
           ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
@@ -1317,6 +1433,7 @@ export async function POST(request: Request) {
         {
           taskId,
           videoModel: videoModelUsed,
+          videoProvider: videoProviderUsed,
           ...(rejectedModels.length ? { safetyRejectedModels: rejectedModels } : {}),
           ...referenceMetadata,
           ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
@@ -1339,3 +1456,4 @@ export async function POST(request: Request) {
     return Response.json({ error: message }, { status });
   }
 }
+
