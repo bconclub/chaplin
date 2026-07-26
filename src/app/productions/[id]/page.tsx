@@ -887,6 +887,17 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
                 action: "speech",
                 characterId: dialogueSpeaker.id,
                 speechText: dialogueText,
+              }).catch((error: unknown) => {
+                /*
+                  A voice orphaned by an API-key change must not cost the whole
+                  production. Losing one line is recoverable - the shot still
+                  renders and the line can be mixed in once the voice is
+                  re-locked - whereas failing here loses every scene.
+                */
+                const detail = error instanceof Error ? error.message : "";
+                if (!/ORPHANED_VOICE/.test(detail)) throw error;
+                setError(`${dialogueSpeaker.name}'s locked voice is missing on the current ElevenLabs account, so this scene renders without their line. Re-lock their voice and regenerate the dialogue.`);
+                return null;
               })
             : Promise.resolve(null),
           generatePipelineAudio({

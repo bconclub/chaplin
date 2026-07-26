@@ -59,6 +59,8 @@ export const maxDuration = 300;
 
 const ELEVEN_API = "https://api.elevenlabs.io/v1";
 const MODEL_ARK_API = "https://ark.ap-southeast.bytepluses.com/api/v3";
+/** Marker so a caller can tell an orphaned voice from any other provider error. */
+export const ORPHANED_VOICE = "ORPHANED_VOICE";
 const OPENROUTER_IMAGE_API = "https://openrouter.ai/api/v1/images";
 const OPENAI_IMAGE_API = "https://api.openai.com/v1/images";
 const DIALOGUE_MODEL = "eleven_multilingual_v2";
@@ -433,6 +435,18 @@ async function eleven(pathname: string, body: Record<string, unknown>) {
   });
   if (!response.ok) {
     const detail = await response.text();
+    /*
+      ElevenLabs voices belong to the account that created them, so changing the
+      API key orphans every voice designed under the old one. That reads as an
+      ordinary provider error, and it used to fail the whole production - a
+      character built last week could no longer be used in a scene at all.
+
+      It is marked here so callers can recognise it and carry on without the
+      line rather than losing the shot.
+    */
+    if (response.status === 404 || /voice_not_found|voice does not exist/i.test(detail)) {
+      throw new Error(`${ORPHANED_VOICE}: this actor's locked voice does not exist on the current ElevenLabs account. Re-lock the voice to restore their dialogue.`);
+    }
     throw new Error(`ElevenLabs returned ${response.status}: ${detail.slice(0, 500)}`);
   }
   return response;
