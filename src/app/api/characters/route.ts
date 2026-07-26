@@ -63,13 +63,13 @@ function parseCharacter(value: unknown): Character {
     makerId: requiredString(input.makerId, "makerId", 100),
     name: requiredString(input.name, "name", 120),
     archetype,
-    tagline: requiredString(input.tagline, "tagline", 500),
-    personality: requiredString(input.personality, "personality", 2000),
+    tagline: requiredString(input.tagline, "tagline", 1000),
+    personality: requiredString(input.personality, "personality", 8000),
     voiceGender,
-    voiceDesc: requiredString(input.voiceDesc, "voiceDesc", 1000),
+    voiceDesc: requiredString(input.voiceDesc, "voiceDesc", 6000),
     voiceId: typeof input.voiceId === "string" ? input.voiceId : undefined,
-    sfxDesc: requiredString(input.sfxDesc, "sfxDesc", 1000),
-    themeDesc: requiredString(input.themeDesc, "themeDesc", 3000),
+    sfxDesc: requiredString(input.sfxDesc, "sfxDesc", 6000),
+    themeDesc: requiredString(input.themeDesc, "themeDesc", 8000),
     productionBible: input.productionBible && typeof input.productionBible === "object"
       ? input.productionBible as CharacterProductionBible
       : undefined,

@@ -113,3 +113,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.5 | `be195dc` | 2026-07-26T01:45:51+05:30 | Version Chaplin production workflow as v0.1.5 |
 | v0.1.6 | `01d80fe` | 2026-07-26T02:56:09+05:30 | Refine creator access and production workflows |
 | v0.1.7 | `5eb281e` | 2026-07-26T04:28:23+05:30 | Refine actor creation and production workflows |
+| v0.1.8 | `c6e8946` | 2026-07-26T07:17:15+05:30 | Refine live actor creation and homepage hero |

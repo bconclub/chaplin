@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.9 - 2026-07-26 - Reliable actor creation
+
+- Fixed completed Magic Write actors failing to save when their generated voice,
+  SFX, theme, or personality directions exceeded obsolete API length limits.
+- Replaced the conditional Magic Write/Create button behavior with explicit
+  Create submit actions once all required identity fields are present.
+- Added visible missing-field readiness and save-error feedback beside the Create
+  action so a blocked actor never fails silently.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  production build.
+
 ## v0.1.8 - 2026-07-26 - Live actor creation and split performance hero
 
 - Rebuilt the homepage feature stage as a clear split composition with editorial

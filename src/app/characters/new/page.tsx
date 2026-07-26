@@ -491,14 +491,18 @@ export default function NewCharacterPage() {
   const sfxDesc = isCustomSfx ? customSfx : sfxPreset;
   const isCustomScore = scorePreset === SCORE_PRESETS[SCORE_PRESETS.length - 1];
   const themeDesc = isCustomScore ? customScore : scorePreset;
-  const canCreateActor = [
-    name,
-    tagline,
-    personality,
-    voiceDesc,
-    sfxDesc,
-    themeDesc,
-  ].every((value) => value.trim().length > 0);
+  const requiredCreationFields = [
+    ["name", name],
+    ["character promise", tagline],
+    ["character engine", personality],
+    ["voice direction", voiceDesc],
+    ["signature SFX", sfxDesc],
+    ["theme direction", themeDesc],
+  ] as const;
+  const missingCreationFields = requiredCreationFields
+    .filter(([, value]) => !value.trim())
+    .map(([label]) => label);
+  const canCreateActor = missingCreationFields.length === 0;
   const selectedVisualFormat = CHARACTER_FORMATS.find((format) => format.id === visualFormat);
   const previewImages = visualFormat === "live-action"
     ? CHARACTER_PREVIEW_VARIANTS
@@ -847,12 +851,12 @@ export default function NewCharacterPage() {
                 Save draft
               </button>
               <button
-                type={canCreateActor ? "submit" : "button"}
-                onClick={canCreateActor ? undefined : () => void suggestCharacter("all")}
-                disabled={saving || Boolean(suggestingTarget)}
+                type="submit"
+                disabled={!canCreateActor || saving || Boolean(suggestingTarget)}
+                title={canCreateActor ? "Create this AI actor" : `Still needed: ${missingCreationFields.join(", ")}`}
                 className="rounded-lg bg-accent px-5 py-2.5 text-xs font-semibold text-white shadow-[0_10px_30px_rgba(242,78,112,0.22)] hover:bg-accent-light disabled:opacity-45"
               >
-                {saving ? "Creating actor…" : canCreateActor ? "Create actor →" : "✦ Magic Write →"}
+                {saving ? "Creating actor…" : canCreateActor ? "Create actor →" : `Still needed · ${missingCreationFields[0] ?? "identity"}`}
               </button>
             </div>
           </header>
@@ -1197,13 +1201,24 @@ export default function NewCharacterPage() {
                 </div>
               </details>
 
+              {!canCreateActor && (
+                <p className="mt-3 text-[9px] leading-4 text-grey">
+                  Still needed: {missingCreationFields.join(", ")}.
+                </p>
+              )}
+              {error && (
+                <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] leading-4 text-red-300" role="alert">
+                  Could not create actor: {error}
+                </p>
+              )}
+
               <button
-                type={canCreateActor ? "submit" : "button"}
-                onClick={canCreateActor ? undefined : () => void suggestCharacter("all")}
-                disabled={saving || Boolean(suggestingTarget)}
+                type="submit"
+                disabled={!canCreateActor || saving || Boolean(suggestingTarget)}
+                title={canCreateActor ? "Create this AI actor" : `Still needed: ${missingCreationFields.join(", ")}`}
                 className="mt-4 w-full rounded-lg bg-accent px-4 py-3 text-xs font-semibold text-white hover:bg-accent-light disabled:opacity-45"
               >
-                {saving ? "Creating actor…" : canCreateActor ? `Create ${name || "actor"} →` : "✦ Magic Write complete identity"}
+                {saving ? "Creating actor…" : canCreateActor ? `Create ${name || "actor"} →` : `Still needed · ${missingCreationFields[0] ?? "identity"}`}
               </button>
             </aside>
           </div>
