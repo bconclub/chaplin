@@ -139,7 +139,7 @@ export default function SceneStudioRail({
         rendered past the scrollport - the CTA was pinned somewhere nobody could
         see, which is the bug it was added to fix.
       */}
-      <div className="sticky bottom-0 mt-auto -mx-3 -mb-3 border-t border-line/70 bg-[#070a08]/95 px-3 pb-3 pt-3 backdrop-blur">
+      <div className="sticky bottom-0 mt-auto -mx-3 border-t border-line/70 bg-[#070a08]/95 px-3 pb-3 pt-3 backdrop-blur">
         <button
           type="button"
           onClick={onStartProduction}

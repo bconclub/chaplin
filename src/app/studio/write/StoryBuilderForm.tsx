@@ -232,7 +232,6 @@ export default function StoryBuilderForm() {
   const [sceneAssistMessage, setSceneAssistMessage] = useState<{ index: number; text: string } | null>(null);
   const [scenePreviewBusy, setScenePreviewBusy] = useState<number | null>(null);
   const [activeSceneIndex, setActiveSceneIndex] = useState(0);
-  const [autoPreviewBatch, setAutoPreviewBatch] = useState<{ scenes: DraftScene[]; leadId: string } | null>(null);
   const [claudeConfigured, setClaudeConfigured] = useState<boolean | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [startingProduction, setStartingProduction] = useState(false);
@@ -647,8 +646,13 @@ export default function StoryBuilderForm() {
         setScenes(nextScenes);
         setActiveSceneIndex(0);
         setStep(3);
-        const previewLead = world.characters.find((character) => character.id === nextCastIds[0]) ?? lead;
-        if (previewLead) setAutoPreviewBatch({ scenes: nextScenes, leadId: previewLead.id });
+        /*
+          Magic writes the scenes; it does not spend on rendering them. This
+          used to queue every first frame the moment the draft landed, so a
+          writing action silently started paid image generation before the
+          creator had read a single scene. Rendering now waits for an explicit
+          Generate action.
+        */
       }
       setClaudeConfigured(Boolean(data.configured));
       setMagicMessage(
@@ -867,29 +871,6 @@ export default function StoryBuilderForm() {
       previewRunRef.current = false;
     }
   }
-
-  useEffect(() => {
-    if (!autoPreviewBatch) return;
-    // `autoPreviewBatch` is only cleared in .finally(), once the whole batch has
-    // finished. React StrictMode invokes this effect twice, so without a ref
-    // guard a second batch starts while the first is still running and every
-    // scene renders twice. The ref survives both invocations of the same mount.
-    if (previewRunRef.current) return;
-    // The batch captured its lead when Magic Writer ran. If the cast has changed
-    // since, that actor may no longer be in the story at all — prefer the current
-    // cast so a recast actually repaints the scenes.
-    const lead = castCharacters.find((character) => character.id === autoPreviewBatch.leadId)
-      ?? castCharacters[0]
-      ?? world.characters.find((character) => character.id === autoPreviewBatch.leadId);
-    if (lead) {
-      void generateAllScenePreviews(autoPreviewBatch.scenes, lead)
-        .finally(() => setAutoPreviewBatch(null));
-    } else {
-      window.setTimeout(() => setAutoPreviewBatch(null), 0);
-    }
-    // This is a one-shot handoff after Magic Writer replaces the complete scene array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPreviewBatch]);
 
   async function handleStartProduction() {
     if (startingProduction) return;
@@ -1619,7 +1600,12 @@ export default function StoryBuilderForm() {
             </div>
           </div>
 
-          <div className="flex justify-between">
+          {/*
+            The cast shelf scrolls for as long as the shelf is deep, so a CTA in
+            normal flow sat below every actor and read as "there is no button".
+            It sticks to the bottom of the scroller instead.
+          */}
+          <div className="sticky bottom-0 -mx-6 flex items-center justify-between border-t border-line/70 bg-[#070a08]/95 px-6 py-3 backdrop-blur">
             <button
               type="button"
               onClick={() => setStep(1)}
