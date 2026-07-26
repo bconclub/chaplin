@@ -871,7 +871,16 @@ export async function POST(request: Request) {
     if (action === "sfx") {
       const sfxConfig = pipeline.stages.sfx;
       requireStage(sfxConfig, "SFX");
-      const prompt = providerPrompt(sfxConfig, text(input, "prompt", 1, 1000), 450);
+      /*
+        The bound was 1000, which is stricter than the 450-character clamp this
+        line immediately applies. A per-scene effect brief carries the scene's
+        visible action and the actor's sound identity, so a detailed scene blew
+        past 1000 and the whole shot-packages step failed with "prompt must be
+        between 1 and 1000 characters" - no clips, no master, no video. The
+        bound now only guards absurd payloads; providerPrompt still decides what
+        reaches the provider.
+      */
+      const prompt = providerPrompt(sfxConfig, text(input, "prompt", 1, 4000), 450);
       const requestedDuration = Number(input.durationSeconds);
       const minimumDuration = settingNumber(sfxConfig, "minimumDurationSeconds", 0.5);
       const maximumDuration = Math.max(minimumDuration, settingNumber(sfxConfig, "maximumDurationSeconds", 2));

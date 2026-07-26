@@ -847,12 +847,20 @@ export default function ProductionDetailPage() {
         const dialogueSpeaker = cast.find((character) => character.id === dialogueLine?.characterId) ?? cast[0];
         const dialogueText = dialogueLine?.text.trim() ?? "";
         setRenderProgress(`Recording voice and sound for scene ${index + 1} of ${contract.shotCount}`);
+        /*
+          The provider brief is clamped to 450 characters downstream, and the
+          negatives sit at the end - so an unbounded scene action pushed them
+          off the edge and the effect model stopped being told to avoid speech
+          and score. The variable parts are bounded here so the constraints
+          always survive the clamp.
+        */
+        const clamp = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit);
         const sfxPrompt = [
-          `One distinctive non-musical foreground sound for scene ${index + 1} of "${story.title}".`,
-          `Location: ${directedScene.setting || "the established scene"}.`,
-          `Visible action: ${directedScene.action || directedScene.objective || "one concise physical action"}.`,
-          `Character sound identity: ${cast[0].sfxDesc}.`,
+          `One distinctive non-musical foreground sound for scene ${index + 1}.`,
           "Create one physically plausible event caused by the visible action, different from the other scene sounds. No speech, melody, score, generic cinematic boom, or ambience bed.",
+          `Location: ${clamp(directedScene.setting || "the established scene", 90)}.`,
+          `Visible action: ${clamp(directedScene.action || directedScene.objective || "one concise physical action", 140)}.`,
+          `Character sound identity: ${clamp(cast[0].sfxDesc ?? "", 90)}.`,
         ].join(" ");
         const [dialogueAsset, sfxAsset] = await Promise.all([
           dialogueText
