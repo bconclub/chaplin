@@ -233,8 +233,14 @@ export default function HomeShell() {
         <div className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4" data-home-scroll>
           {/* ── HERO ─────────────────────────────────────────────── */}
           <section
-            className="group relative shrink-0 overflow-hidden rounded-2xl border border-[#202020] bg-[#111111]"
-            style={{ aspectRatio: "1000 / 447" }}
+            /*
+              The hero was pinned to 1000/447 at every width. On a phone that is
+              about 174px tall, which cannot hold the headline, the subtitle and
+              two buttons - they overflowed into the bottom identity strip. The
+              frame is portrait-ish on mobile and only widens once there is room
+              for the cinematic crop.
+            */
+            className="group relative aspect-[4/5] shrink-0 overflow-hidden rounded-2xl border border-[#202020] bg-[#111111] sm:aspect-[16/10] lg:aspect-[1000/447]"
             data-home-featured
             data-featured-character={current.id}
           >
@@ -280,11 +286,17 @@ export default function HomeShell() {
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,8,8,0.86)_0%,rgba(8,8,8,0.55)_28%,rgba(8,8,8,0.12)_48%,transparent_62%)]" />
             <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#080808]/85 to-transparent" />
 
-            <div className="relative flex h-full max-w-[54%] flex-col justify-center px-7 py-6 lg:px-9">
+            {/*
+              54% of a 375px screen is 200px, so the headline wrapped down the
+              frame and the buttons were clipped by the hero's overflow. The
+              copy uses the full width on a phone and only yields the right side
+              to the performance once the frame is wide enough to show both.
+            */}
+            <div className="relative flex h-full max-w-none flex-col justify-center px-5 py-5 sm:max-w-[62%] sm:px-7 lg:max-w-[54%] lg:px-9">
               <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.22em] text-accent">
                 <span aria-hidden="true">★</span> Featured performance
               </p>
-              <h1 className="reel-title mt-3 text-[clamp(2.1rem,3.6vw,3.6rem)] leading-[0.94] tracking-[-0.035em]">
+              <h1 className="reel-title mt-3 text-[clamp(1.7rem,7vw,3.6rem)] leading-[0.94] tracking-[-0.035em] sm:text-[clamp(2.1rem,3.6vw,3.6rem)]">
                 <span className="block">The world of</span>
                 <span className="block text-accent">AI actors.</span>
               </h1>
