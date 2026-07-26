@@ -490,6 +490,23 @@ function AssetCanvasSkeleton({
   );
 }
 
+function FreshIdentityCanvasEmpty() {
+  return (
+    <div
+      className="rounded-md border border-cyan-400/35 bg-cyan-400/[0.045] px-4 py-5"
+      data-fresh-identity-canvas-empty
+    >
+      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
+        Fresh identity · no reference attached
+      </p>
+      <p className="mt-2 text-[11px] font-semibold text-ink">Ready for a new casting</p>
+      <p className="mt-1 text-[10px] leading-relaxed text-grey">
+        The actor&apos;s current profile image is not shown here or sent to an image model. The next result will be created from the rewritten prompt only.
+      </p>
+    </div>
+  );
+}
+
 export default function CharacterProductionStudio({
   character,
   onExit,
@@ -1624,7 +1641,9 @@ export default function CharacterProductionStudio({
         : activeStep === 4
           ? Boolean(themeUrl)
           : activeStep === 5
-            ? imageCandidates.length > 0 || Boolean(generatedImage || identityReferenceImage)
+            ? imagePurpose === "identity"
+              ? imageCandidates.length > 0
+              : imageCandidates.length > 0 || Boolean(generatedImage || identityReferenceImage)
             : Boolean(generatedVideo || character.videoUrl);
 
   function renderActiveAssetPreview() {
@@ -1715,7 +1734,7 @@ export default function CharacterProductionStudio({
                       <span className="block truncate text-[9px] text-grey">{candidate.model}</span>
                     </span>
                     <button type="button" onClick={() => selectImageCandidate(candidate)} disabled={Boolean(busy)} className={`min-h-9 shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold disabled:opacity-40 ${selected ? "border-emerald-400/60 text-emerald-300" : "border-accent/60 text-accent"}`}>
-                      {selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use seed" : "Use frame"}
+                      {selected ? "Chosen ✓" : imagePurpose === "identity" ? "Use as identity" : "Use frame"}
                     </button>
                   </div>
                 </article>
@@ -1724,12 +1743,17 @@ export default function CharacterProductionStudio({
           </div>
         );
       }
+      // Fresh casting is deliberately prompt-only. Never present an older
+      // profile image or scene still as the current generation result.
+      if (imagePurpose === "identity") return null;
       const still = generatedImage || identityReferenceImage;
       return still ? (
         <article className="overflow-hidden rounded-md border border-line bg-black/15" data-asset-canvas-ready="image">
           {/* eslint-disable-next-line @next/next/no-img-element -- generated and uploaded provider URLs are dynamic */}
           <img src={still} alt={`${character.name} selected visual`} className="aspect-video w-full object-cover" />
-          <p className="px-3 py-2 text-[9px] uppercase tracking-[0.12em] text-emerald-300">Selected visual reference</p>
+          <p className="px-3 py-2 text-[9px] uppercase tracking-[0.12em] text-emerald-300">
+            {generatedImage ? "Selected scene frame" : "Approved identity reference"}
+          </p>
         </article>
       ) : null;
     }
@@ -2675,7 +2699,9 @@ export default function CharacterProductionStudio({
           </div>
           <div className="p-3">
             {(activeStepRunning || !activeStepHasOutput) && (
-              <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
+              activeStep === 5 && imagePurpose === "identity" && !activeStepRunning
+                ? <FreshIdentityCanvasEmpty />
+                : <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
             )}
             {activeStepHasOutput && (
               <div className={activeStepRunning ? "mt-3" : ""}>
@@ -2736,7 +2762,9 @@ export default function CharacterProductionStudio({
               </span>
             </div>
             {(activeStepRunning || !activeStepHasOutput) && (
-              <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
+              activeStep === 5 && imagePurpose === "identity" && !activeStepRunning
+                ? <FreshIdentityCanvasEmpty />
+                : <AssetCanvasSkeleton stepId={activeStep} running={activeStepRunning} progress={activeStepProgress} />
             )}
             {activeStepHasOutput && (
               <div className={activeStepRunning ? "mt-3" : ""}>

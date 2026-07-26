@@ -3,6 +3,19 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.10 - 2026-07-26 - Reference-free fresh identity casting
+
+- Removed the existing actor cover and older scene stills from the live Asset
+  Canvas whenever Fresh Identity is selected.
+- Added an explicit empty fresh-casting state confirming that no visual reference
+  is attached and the rewritten prompt is the only casting input.
+- Stopped existing profile media from falsely marking a fresh identity result as
+  ready, while preserving canonical-reference previews for Scene Frame mode.
+- Renamed the fresh-result action from `Use seed` to `Use as identity` so choosing
+  a new face is an explicit profile change rather than an implied generation seed.
+- Confirmed the image API discards canonical, requested, and gallery references
+  for identity-purpose generations and records a zero-reference request.
+
 ## v0.1.9 - 2026-07-26 - Reliable actor creation
 
 - Fixed completed Magic Write actors failing to save when their generated voice,
