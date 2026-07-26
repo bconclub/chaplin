@@ -118,7 +118,7 @@ export default function SceneStudioRail({
         )}
       </div>
 
-      <div className="mt-auto rounded-xl border border-line/70 bg-black/15 p-3">
+      <div className="rounded-xl border border-line/70 bg-black/15 p-3">
         <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-grey">Frames</p>
         <p className="mt-1 text-[15px] font-semibold text-ink">
           {framesReady}<span className="text-[11px] text-grey"> / {sceneCount}</span>
@@ -133,7 +133,13 @@ export default function SceneStudioRail({
         thousands of pixels out of view. The rail owns the readiness state, so it
         owns the action too, pinned where the readiness is read.
       */}
-      <div className="sticky bottom-0 -mx-3 -mb-3 border-t border-line/70 bg-[#070a08]/95 px-3 pb-3 pt-3 backdrop-blur">
+      {/*
+        `mt-auto` belongs on the action, not on Frames. With it on the Frames
+        card, Frames was pushed to the bottom of the content box and this block
+        rendered past the scrollport - the CTA was pinned somewhere nobody could
+        see, which is the bug it was added to fix.
+      */}
+      <div className="sticky bottom-0 mt-auto -mx-3 -mb-3 border-t border-line/70 bg-[#070a08]/95 px-3 pb-3 pt-3 backdrop-blur">
         <button
           type="button"
           onClick={onStartProduction}
