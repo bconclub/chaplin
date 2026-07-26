@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["next", "start", "-p", "4310"],
       "port": 4310
+    },
+    {
+      "name": "chaplin-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "4311"],
+      "port": 4311
     }
   ]
 }

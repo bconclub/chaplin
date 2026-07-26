@@ -19,9 +19,20 @@ import SectionHeading from "@/components/SectionHeading";
 import { getClientAuthIdentity } from "@/lib/client-auth";
 import { money, formatDate, compactNumber } from "@/lib/format";
 import { composeCharacterMasterPrompt } from "@/lib/production-prompting";
-import type { Character } from "@/lib/types";
+import type { Character, Story } from "@/lib/types";
 
 type Tab = "drafts" | "characters" | "stories" | "earnings";
+
+type SavedStoryRow = {
+  id: string;
+  title: string;
+  logline: string | null;
+  cover_hue: number | null;
+  poster_url: string | null;
+  backdrop_url: string | null;
+  views: number | null;
+  created_at: string;
+};
 
 type DraftSummary = {
   id: string;
@@ -41,6 +52,7 @@ export default function StudioPage() {
   const [draftsError, setDraftsError] = useState("");
   const [copiedCharacterId, setCopiedCharacterId] = useState("");
   const [copyError, setCopyError] = useState("");
+  const [savedStories, setSavedStories] = useState<Story[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,9 +93,50 @@ export default function StudioPage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/stories", { cache: "no-store", credentials: "same-origin" });
+        if (!response.ok) return;
+        const data = await response.json() as { stories?: SavedStoryRow[] };
+        if (cancelled) return;
+        setSavedStories((data.stories ?? []).map((row) => ({
+          id: row.id,
+          authorId: currentUserId,
+          title: row.title,
+          logline: row.logline ?? "",
+          coverHue: row.cover_hue ?? 205,
+          posterUrl: row.poster_url ?? undefined,
+          backdropUrl: row.backdrop_url ?? undefined,
+          createdAt: row.created_at,
+          status: "production",
+          // The list endpoint returns the story row only; scenes live on the
+          // pipeline run and the card does not read them.
+          scenes: [],
+          views: row.views ?? 0,
+        })));
+      } catch {
+        // The local store still covers this browser's own productions.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUserId]);
+
   const user = getUser(world, currentUserId);
   const myCharacters = world.characters;
-  const myStories = storiesByAuthor(world, currentUserId);
+  /*
+    Productions live in the database once a run starts, but this tab only ever
+    read the client store, so anything produced in another browser - or after
+    localStorage was cleared - listed as nothing. The saved rows lead; local
+    store entries the server has not seen yet are appended so a production is
+    visible the instant it is started, before the round trip lands.
+  */
+  const localStories = storiesByAuthor(world, currentUserId);
+  const myStories = [
+    ...savedStories,
+    ...localStories.filter((story) => !savedStories.some((saved) => saved.id === story.id)),
+  ];
   const myLedger = ledgerForMaker(world, currentUserId);
   const earnings = makerEarnings(world, currentUserId);
   const totalCastings = myCharacters.reduce((n, c) => n + c.stats.castings, 0);

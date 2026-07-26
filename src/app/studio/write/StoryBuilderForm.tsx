@@ -235,6 +235,7 @@ export default function StoryBuilderForm() {
   const [autoPreviewBatch, setAutoPreviewBatch] = useState<{ scenes: DraftScene[]; leadId: string } | null>(null);
   const [claudeConfigured, setClaudeConfigured] = useState<boolean | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [startingProduction, setStartingProduction] = useState(false);
   const [draftId, setDraftId] = useState(() => searchParams.get("draft") ?? "");
   const [draftReady, setDraftReady] = useState(() => !searchParams.get("draft"));
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>(
@@ -891,6 +892,7 @@ export default function StoryBuilderForm() {
   }, [autoPreviewBatch]);
 
   async function handleStartProduction() {
+    if (startingProduction) return;
     if (format === "spot" && !productImageUrl) {
       setError("Upload the product image before starting an ad production.");
       setStep(1);
@@ -945,6 +947,8 @@ export default function StoryBuilderForm() {
       return;
     }
 
+    setError("");
+    setStartingProduction(true);
     const story = addStory({
       title: title.trim(),
       logline: logline.trim(),
@@ -1022,6 +1026,21 @@ export default function StoryBuilderForm() {
       detail: `${authoredScenes} of ${scenes.length} written`,
     },
   ];
+  /*
+    Mirrors the guards at the top of handleStartProduction so the rail can say
+    what is missing before the click instead of after it. Frames are deliberately
+    absent: previews are a convenience, not a gate on production.
+  */
+  const productionBlockedReason =
+    format === "spot" && !productImageUrl
+      ? "Upload the product reference first"
+      : !conceptLocked
+        ? "Needs a title and logline"
+        : !castLocked
+          ? "Lock at least one actor"
+          : !scriptLocked
+            ? `${scenes.length - authoredScenes} scene${scenes.length - authoredScenes === 1 ? "" : "s"} still unwritten`
+            : undefined;
   const sceneAssets: SceneAsset[] = scenes.map((scene, index) => ({
     index,
     setting: scene.setting,
@@ -1042,6 +1061,10 @@ export default function StoryBuilderForm() {
         durationSeconds={durationSeconds}
         sceneCount={scenes.length}
         framesReady={framesReady}
+        actionLabel={formatDefinition.finalAction}
+        onStartProduction={() => void handleStartProduction()}
+        blockedReason={productionBlockedReason}
+        starting={startingProduction}
       />
       <div className="studio-production-content min-w-0">
         <div className="mx-auto w-full max-w-3xl px-6 py-8">
@@ -2013,7 +2036,12 @@ export default function StoryBuilderForm() {
 
           {error && <p className="text-xs text-red-600">{error}</p>}
 
-          <div className="flex justify-between">
+          {/*
+            On the canvas the rail carries the pinned action; below 1023px the rail
+            is hidden, so this row stays reachable on its own by sticking to the
+            bottom of the scroller rather than sitting under every scene card.
+          */}
+          <div className="sticky bottom-0 -mx-6 flex items-center justify-between border-t border-line/70 bg-[#070a08]/95 px-6 py-3 backdrop-blur lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none">
             <button
               onClick={() => setStep(2)}
               className="text-sm text-grey hover:text-accent px-4 py-2"
@@ -2021,10 +2049,11 @@ export default function StoryBuilderForm() {
               ← Back
             </button>
             <button
-              onClick={handleStartProduction}
-              className="bg-accent text-paper font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-light transition-colors"
+              onClick={() => void handleStartProduction()}
+              disabled={startingProduction}
+              className="bg-accent text-paper font-semibold px-6 py-2.5 rounded-sm hover:bg-accent-light transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {formatDefinition.finalAction} →
+              {startingProduction ? "Starting…" : `${formatDefinition.finalAction} →`}
             </button>
           </div>
         </div>

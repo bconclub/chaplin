@@ -24,6 +24,10 @@ export default function SceneStudioRail({
   durationSeconds,
   sceneCount,
   framesReady,
+  actionLabel,
+  onStartProduction,
+  blockedReason,
+  starting,
 }: {
   stages: SceneStage[];
   step: 1 | 2 | 3;
@@ -33,6 +37,10 @@ export default function SceneStudioRail({
   durationSeconds: number;
   sceneCount: number;
   framesReady: number;
+  actionLabel: string;
+  onStartProduction: () => void;
+  blockedReason?: string;
+  starting?: boolean;
 }) {
   const complete = stages.filter((stage) => stage.state === "done").length;
 
@@ -116,6 +124,31 @@ export default function SceneStudioRail({
           {framesReady}<span className="text-[11px] text-grey"> / {sceneCount}</span>
         </p>
         <p className="mt-0.5 text-[9.5px] text-grey">first frames rendered</p>
+      </div>
+
+      {/*
+        The only way to start a production used to be a button below every scene
+        card at the foot of step 3, which in this canvas is its own scroller: with
+        four scenes authored the rail read "3 of 3 locked" while the action sat
+        thousands of pixels out of view. The rail owns the readiness state, so it
+        owns the action too, pinned where the readiness is read.
+      */}
+      <div className="sticky bottom-0 -mx-3 -mb-3 border-t border-line/70 bg-[#070a08]/95 px-3 pb-3 pt-3 backdrop-blur">
+        <button
+          type="button"
+          onClick={onStartProduction}
+          disabled={starting}
+          className={`w-full rounded-lg px-3 py-2.5 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            blockedReason
+              ? "border border-line/70 bg-white/[0.04] text-grey hover:border-accent/40 hover:text-ink"
+              : "bg-accent text-paper hover:bg-accent-light"
+          }`}
+        >
+          {starting ? "Starting…" : `${actionLabel} →`}
+        </button>
+        <p className="mt-1.5 text-center text-[9.5px] leading-4 text-grey">
+          {blockedReason ?? `${sceneCount} ${sceneCount === 1 ? "scene" : "scenes"} · ${durationSeconds}s master`}
+        </p>
       </div>
     </aside>
   );

@@ -169,7 +169,10 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
       createdAt: nowIso(),
       stats: {
         castings: 0,
-        fans: 40,
+        // A new actor has no audience. This seeded 40, so every card in the
+        // gallery read "40 fans" beside honest zeroes for impressions, views
+        // and likes - a number that was invented rather than counted.
+        fans: 0,
         earnings: 0,
         socialImpressions: 0,
         socialViews: 0,
@@ -270,7 +273,8 @@ export const useChaplinStore = create<ChaplinState>((set, get) => ({
           stats: {
             ...c.stats,
             castings: c.stats.castings + gained.length,
-            fans: c.stats.fans + gained.length * 55,
+            // Castings are counted; fans are not invented from them. A fan is
+            // an audience action and only a real one may move this number.
             earnings: c.stats.earnings + earned,
           },
         };

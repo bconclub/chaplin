@@ -71,7 +71,8 @@ test("legacy Indian-English defaults are replaced by the actor's Russian languag
     personality: "A native Russian rescue pilot from Moscow; clipped under pressure and unexpectedly tender with her crew.",
     voiceDesc: "Native Indian English with warm Hindi and Urdu inflection; adult feminine, low and steady with restrained authority.",
   });
-  assert.match(prompt, /Primary spoken language: Russian/i);
+  // The global voice template labels this slot "Primary language".
+  assert.match(prompt, /Primary language: Russian/i);
   assert.match(prompt, /Use English only when the script or creator explicitly requests it/i);
   assert.doesNotMatch(prompt, /Indian English|Hindi|Urdu/i);
   assert.match(prompt, /low and steady with restrained authority/i);

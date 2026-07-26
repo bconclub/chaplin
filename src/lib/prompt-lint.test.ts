@@ -14,7 +14,9 @@ test("Ru golden handoff renders source direction once and removes legacy default
   assert.equal((voice.match(/low South London register/gi) ?? []).length, 1, "B1");
   assert.doesNotMatch(voice, /UK or Irish dialect|explicitly stated/i, "B2");
   assert.doesNotMatch(sfx, /Five seconds|then|followed by|after that|next/i, "B3");
-  assert.match(theme, /Avoid .+empty intro\..+About 8 seconds, ends cleanly/i, "B4");
+  // The theme brief is rendered from the multi-line global template, so this
+  // ordering check spans newlines: density negatives, then the duration.
+  assert.match(theme, /Avoid [\s\S]+empty intro\.[\s\S]+About 8 seconds, ends cleanly/i, "B4");
   assert.match(runtime, /Self-concept: I am an original rebel/i, "B5");
   assert.doesNotMatch(theme, /mission was a lie|discovers|payoff/i, "B10");
   assert.equal(handoff.lint.failures.length, 0, JSON.stringify(handoff.lint.failures, null, 2));

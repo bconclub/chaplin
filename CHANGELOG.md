@@ -31,6 +31,24 @@ provider integrations, and the validation boundary for each major Chaplin update
 - Passed strict TypeScript, focused ESLint, all 70 library tests, and the complete
   Next.js production build. A paid ElevenLabs generation was not triggered.
 
+## 2026-07-26 - Global audio direction templates and studio fixes
+
+- Voice and theme briefs are now rendered from two global slot templates, so
+  every actor is directed on the same slots in the same order and a change to
+  how Chaplin briefs a provider is one edit rather than a sweep.
+- Fixed the theme brief sending character biography to the music model: mood
+  fell back to the dramatic contradiction, so ElevenLabs received a paragraph of
+  narrative psychology where genre, mood, and instrumentation belong.
+- Fixed a theme regeneration bug where a saved brief was quoted back into the
+  next prompt, nesting a whole template and growing it on every pass.
+- Fixed the voice brief restating age and gender twice in one sentence.
+- User-facing: production can be started from the Scene Studio rail instead of a
+  button buried below every scene card; the Studio Productions tab now lists
+  productions from the database rather than this browser's local storage.
+- User-facing: removed fabricated audience numbers - every actor card read
+  "40 fans" from a hardcoded seed, and castings silently invented 55 more each.
+- Documented the Seedance 2.0 audio capability probe in docs/SEEDANCE_AUDIO.md.
+
 ## v0.1.54 - 2026-07-26 - Locked-voice audiovisual scene delivery
 
 - Added the actor's locked ElevenLabs performance as a Seedance 2.0 audio

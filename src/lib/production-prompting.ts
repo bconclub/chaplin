@@ -16,6 +16,18 @@ import {
   sanitizeVoicePerformanceDirection,
 } from "@/lib/voice-language";
 import { composePromptSlots, joinPromptList, unwrapLegacyDirection } from "@/lib/prompt-composer";
+import {
+  THEME_DIRECTION_TEMPLATE,
+  fillThemeDirectionTemplate,
+  splitThemeGenres,
+} from "@/lib/theme-direction-template";
+import {
+  ARCHETYPE_VOICE_DELIVERY,
+  DEFAULT_VOICE_DELIVERY,
+  VOICE_DIRECTION_TEMPLATE,
+  fillVoiceDirectionTemplate,
+  voiceAgeDescriptor,
+} from "@/lib/voice-direction-template";
 
 export type CharacterIdentityInput = Pick<Character, "name" | "archetype" | "tagline" | "personality" | "voiceGender"> &
   Partial<Pick<Character, "voiceDesc" | "sfxDesc" | "themeDesc" | "productionBible" | "cardV2" | "brollLine" | "brollScene">> & {
@@ -575,17 +587,44 @@ export function composeVoiceDesignPrompt(character: CharacterIdentityInput) {
     sanitizeVoicePerformanceDirection(voiceContext),
     "voice",
   );
-  return composePromptSlots(
-    ["language", "presentation", "persona", "performance", "recording"],
-    {
-      language: languageDirection,
-      presentation: `${character.voiceGender}, adult voice.`,
-      persona: `Persona: ${persona}. Emotion: controlled, alert, emotionally specific.`,
-      performance: sentence(performanceDirection || `Clear mid-register resonance with ${bible.performance.tempo}`),
-      recording: `Under pressure: ${bible.performance.underPressure}. Clean studio close-mic signal without reverb, echo, telephone, tape, or synthetic FX.`,
-    },
-    { separator: " " },
-  );
+  const delivery = ARCHETYPE_VOICE_DELIVERY[character.archetype] ?? DEFAULT_VOICE_DELIVERY;
+  /*
+    Rendered through the one global template so every actor is briefed on the
+    same twelve slots. The creator's own direction still wins the pitch slot -
+    the template fixes the shape of the brief, not its content.
+  */
+  return fillVoiceDirectionTemplate(VOICE_DIRECTION_TEMPLATE, {
+    LANGUAGE: languageDirection
+      .replace(/^Primary spoken language:\s*/i, "")
+      .replace(/\.\s*$/, ""),
+    AGE: voiceAgeDescriptor(bible.visual.perceivedAge),
+    GENDER: character.voiceGender,
+    // The authored direction usually opens by restating age and gender, which
+    // the template has already said - keeping it produced "adult feminine
+    // voice. adult feminine, low and steady...".
+    PITCH: voiceClause(withoutPresentationRestatement(performanceDirection), delivery.PITCH),
+    TONE: delivery.TONE,
+    CHARACTER_SUMMARY: persona,
+    PACE: voiceClause(bible.performance.tempo, delivery.PACE),
+    ARTICULATION: delivery.ARTICULATION,
+    BREATH_STYLE: delivery.BREATH_STYLE,
+    DICTION: delivery.DICTION,
+    EMOTIONAL_STYLE: delivery.EMOTIONAL_STYLE,
+    PRESSURE_BEHAVIOUR: voiceClause(bible.performance.underPressure, "They compress rather than escalate"),
+  });
+}
+
+/** Drops a leading age/gender restatement so the pitch slot describes only sound. */
+function withoutPresentationRestatement(value: string) {
+  return value
+    .replace(/^(?:an?\s+)?(?:late-teenage|young adult|middle-aged|older adult|adult|teenage|elderly)?\s*(?:feminine|masculine|androgynous|female|male|neutral)?\s*(?:voice)?\s*[,;:.-]?\s*/i, "")
+    .trim();
+}
+
+/** Trims canon prose to one clause so a voice slot stays a direction, not a paragraph. */
+function voiceClause(value: string | undefined, fallback: string) {
+  const first = value?.trim().split(/(?<=[.;])\s/)[0]?.trim().replace(/[.;,]+$/, "");
+  return first && first.length >= 3 ? first.slice(0, 180) : fallback;
 }
 
 /**
@@ -773,6 +812,69 @@ export type ModernThemePalette = {
     { label: string; prompt: string },
   ];
 };
+
+/*
+  A music model needs affect, not biography. The theme prompt used to fall back
+  to the character's dramatic contradiction, so ElevenLabs received a paragraph
+  of narrative psychology - "he has never forgiven himself for the one betrayal
+  he could not stop" - where a mood belongs. These are the musical reading of
+  each family: short, affective, and playable.
+*/
+const THEME_MOODS: Record<AudioIdentityFamily, string> = {
+  cyber: "cold precision with buried momentum",
+  horror: "held breath and creeping dread",
+  villain: "controlled menace with unhurried certainty",
+  rebel: "restless defiance with a bruised edge",
+  comic: "bright mischief with a wrong-footed skip",
+  romance: "aching closeness with unspoken restraint",
+  drama: "guarded stillness with buried warmth",
+  hero: "steady resolve gathering to open air",
+  grounded: "watchful calm with quiet weight",
+};
+
+/**
+ * A mood must read as musical direction. Anything sentence-shaped or long is
+ * narrative canon that leaked in from the production bible, and a music model
+ * cannot play it - the family mood is used instead.
+ */
+function playableMood(candidate: string | undefined, family: AudioIdentityFamily) {
+  const value = candidate?.trim() ?? "";
+  const narrative = /\b(?:he|she|they|his|her|their|who|because|yet|but)\b/i.test(value);
+  return value && value.length <= 80 && !narrative ? value : THEME_MOODS[family];
+}
+
+/** True when the value is already a rendered theme brief rather than a colour note. */
+function alreadyComposedTheme(value: string | undefined) {
+  return /Create a cinematic character theme for|Energy Arc:|Musical Characteristics:/i.test(value ?? "");
+}
+
+/**
+ * Recovers the acoustic colour note from a brief this composer already wrote.
+ *
+ * A saved themeDesc is often a previously composed brief. Quoting one back
+ * wholesale would nest a template inside the next prompt and grow it on every
+ * regeneration, but discarding it silently drops the creator's colour note, so
+ * the note is lifted back out and the surrounding brief thrown away.
+ */
+function themeColorFromComposed(value: string) {
+  return value.match(/Character-specific acoustic color:\s*([^.]+)\./i)?.[1]?.trim() ?? "";
+}
+
+/**
+ * The character slot is the one place the template asks for psychology, but a
+ * music model still cannot use three sentences of it. Trimmed to a single
+ * clause so it reads as a brief rather than a bible entry.
+ */
+function playableDescription(
+  character: CharacterIdentityInput,
+  bible: CharacterProductionBible,
+) {
+  const source = character.personality?.trim() || bible.dramatic.contradiction;
+  const first = source?.trim().split(/(?<=[.;])\s/)[0]?.trim().replace(/[.;,]+$/, "");
+  return first && first.length >= 3
+    ? first.slice(0, 200)
+    : `a ${character.archetype.replace(/-/g, " ")} defined by one unresolved contradiction`;
+}
 
 const MODERN_THEME_PALETTES: Record<AudioIdentityFamily, ModernThemePalette> = {
   cyber: {
@@ -1036,8 +1138,16 @@ export function composeThemePrompt(
   const profile = card?.theme_profile;
   const modern = resolveModernThemePalette(character);
   const turn = profile?.emotional_turn || themeClause(dramaticBeat);
+  /*
+    A saved themeDesc is often a previously composed brief. Embedding one as
+    acoustic colour would nest a whole template inside the next prompt and grow
+    it on every regeneration, so an already-composed brief is ignored rather
+    than quoted back at the model.
+  */
   const legacyColor = themeClause(profile?.style_anchor)
-    || themeClause(unwrapLegacyDirection(character.themeDesc, "theme"));
+    || themeClause(alreadyComposedTheme(character.themeDesc)
+      ? themeColorFromComposed(character.themeDesc ?? "")
+      : unwrapLegacyDirection(character.themeDesc, "theme"));
   const profileInstruments = profile?.instruments
     .map((instrument) => themeClause(instrument))
     .filter(Boolean) ?? [];
@@ -1052,23 +1162,40 @@ export function composeThemePrompt(
     || `the harmony and sound design tighten into one emotionally legible turn`;
   const ending = themeClause(profile?.ending)
     || `the full arrangement resolves on one edit-ready final identity hit`;
-  const mood = themeClause(profile?.mood)
-    || themeClause(bible.dramatic.contradiction)
-    || "emotionally specific, dimensional, and alert";
-  const productionBrief = composePromptSlots(
-    ["identity", "color", "palette", "arrangement", "production", "avoid"],
-    {
-      identity: `Original ${modern.genres} character theme for ${character.name}; ${mood}.`,
-      color: legacyColor ? `Character-specific acoustic color: ${legacyColor}.` : "",
-      palette: `Core palette: ${joinPromptList(instruments)}.`,
-      arrangement: `Arrangement: ${sentenceStart(opening)}. ${sentenceStart(build)}. ${sentenceStart(emotionalTurn)}. ${sentenceStart(ending)}.`,
-      production: `Production and mix: ${modern.production}. Fully arranged and mastered with foreground motif, supporting rhythm, bass movement, harmonic development, layered depth, polished transients, and a complete beginning-middle-end arc.`,
-      avoid: "Avoid sparse single-chord noodling, isolated solo demo playing, a stock orchestral trailer bed, generic corporate music, repetitive placeholder loops, muddy low end, thin percussion, or an empty intro.",
-    },
-    { separator: " " },
-  );
+  const mood = playableMood(themeClause(profile?.mood), modern.family);
+  const { primary, secondary } = splitThemeGenres(modern.genres);
+  /*
+    The brief is now rendered through the one global template. Authored card
+    values still win every slot they speak to - the template decides the shape
+    of the brief, not its content.
+  */
   const prompt = withThemeDurationDirection(
-    `${productionBrief} No imitation of an existing composition. Instrumental only, no vocals.`,
+    fillThemeDirectionTemplate(THEME_DIRECTION_TEMPLATE, {
+      CHARACTER_NAME: character.name,
+      PRIMARY_GENRE: primary,
+      SECONDARY_GENRE: secondary,
+      MOOD: mood,
+      // The character reading belongs here and only here. Splicing it into the
+      // musical slots is what sent narrative psychology to the music model.
+      CHARACTER_DESCRIPTION: playableDescription(character, bible),
+      OPENING_FEEL: sentenceStart(opening),
+      BUILD_FEEL: sentenceStart(build),
+      CLIMAX_FEEL: sentenceStart(emotionalTurn),
+      ENDING_FEEL: sentenceStart(ending),
+      MUSICAL_CHARACTERISTICS: composePromptSlots(
+        ["palette", "color", "production", "constraints"],
+        {
+          palette: `Core palette: ${joinPromptList(instruments)}.`,
+          color: legacyColor ? `Character-specific acoustic color: ${legacyColor}.` : "",
+          production: `${modern.production}. Fully arranged and mastered with foreground motif, supporting rhythm, bass movement, harmonic development, layered depth, polished transients, and a complete beginning-middle-end arc.`,
+          // These density negatives predate the template and are kept: they are
+          // what stops the model returning a sparse demo take with an empty
+          // intro, which the template's own Avoid block does not cover.
+          constraints: "Avoid sparse single-chord noodling, isolated solo demo playing, a stock orchestral trailer bed, thin percussion, or an empty intro. Instrumental only, no vocals. No imitation of an existing composition.",
+        },
+        { separator: " " },
+      ),
+    }),
     durationSeconds,
   );
   if (process.env.NODE_ENV !== "production") assertThemePromptV2(prompt);
