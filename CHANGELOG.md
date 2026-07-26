@@ -3,7 +3,7 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
-## v0.1.13 - 2026-07-26 - Visible custom sound directions
+## v0.1.15 - 2026-07-26 - Visible custom sound directions
 
 - Restored saved and Magic Write custom voice, signature-SFX, and theme
   descriptions beneath their selectors instead of hiding retained content.

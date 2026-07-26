@@ -118,3 +118,5 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.10 | `a3c04a5` | 2026-07-26T07:42:00+05:30 | Prevent stale identity reference reuse |
 | v0.1.11 | `62df4b3` | 2026-07-26T08:21:09+05:30 | feat: lint production prompt handoffs |
 | v0.1.12 | `0c8126a` | 2026-07-26T08:29:45+05:30 | ui: enlarge magic write progress |
+| v0.1.13 | `7cf857d` | 2026-07-26T08:32:23+05:30 | Fix ensemble scene generation losing both the scene and the cast |
+| v0.1.14 | `472ee7b` | 2026-07-26T08:47:41+05:30 | fix: reveal custom actor sound directions |
