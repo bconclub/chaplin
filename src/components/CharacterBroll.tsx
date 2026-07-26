@@ -294,7 +294,11 @@ export default function CharacterBroll({ character }: { character: Character }) 
           src={posterSource}
           alt=""
           fill
-          sizes="(max-width: 768px) 100vw, 896px"
+          // The hero fills a max-w-6xl column, so it renders about 1104px wide.
+          // Declaring 896px made Next serve an image the browser then upscaled
+          // by roughly a quarter, which read as softness on the actor's face.
+          sizes="(min-width: 1152px) 1104px, 100vw"
+          quality={90}
           className={`object-cover object-[68%_center] ${videoSource ? "" : "motion-safe:animate-[broll-drift_8s_ease-in-out_infinite_alternate]"}`}
           priority
         />
@@ -322,7 +326,15 @@ export default function CharacterBroll({ character }: { character: Character }) 
       {sfxSource && <audio ref={sfxRef} src={sfxSource} preload="metadata" onEnded={() => handleTrackEnded("sfx")} data-broll-track="sfx" />}
       {themeSource && <audio ref={themeRef} src={themeSource} preload="metadata" onEnded={() => handleTrackEnded("theme")} data-broll-track="theme" />}
 
-      <div className="absolute inset-0 bg-gradient-to-r from-black/92 via-black/55 to-transparent sm:via-black/45" />
+      {/*
+        The name and tagline sit bottom-left inside max-w-[78%] on mobile and
+        max-w-[52%] on desktop, so the scrim only needs to protect that column.
+        It used to run the full width at 92% black falling to 55% mid-frame,
+        which dulled the actor's face — object-[68%_center] deliberately places
+        it on the right. The fade now completes before the portrait begins, so
+        the right side of the frame renders at full contrast.
+      */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/88 via-black/45 to-transparent to-72% sm:via-black/28 sm:to-58%" />
       {availableTracks.length > 0 && (
         <div className="absolute right-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-end gap-2 sm:right-5" data-broll-audio-controls>
           <button
