@@ -42,19 +42,30 @@ const ThemeStyleSchema = z.string().trim().min(2).max(120).superRefine((style, c
   }
 });
 
-export const ThemeCompositionChunkSchema = z.object({
-  text: z.string().trim().regex(
-    /^\[[^\]\r\n]{2,80}\]$/,
-    "Instrumental chunk text must be one bracketed section name without lyrics.",
-  ),
+/*
+  ElevenLabs' documented `composition_plan` contract: global styles at the top
+  level and a `sections` array, each section carrying its own local styles and
+  lyric lines.
+
+  This was modelled as `chunks` with `positive_styles` and `context_adherence`,
+  on the assumption recorded below that "Music v2 has no global-style fields".
+  The provider rejected every request with `Invalid type of composition_plan
+  used for model music_v2`: composition plans are a music_v1 feature, and they
+  do carry global styles. Theme generation failed at 8% on every attempt.
+*/
+export const ThemeCompositionSectionSchema = z.object({
+  section_name: z.string().trim().min(1).max(100),
   duration_ms: z.number().int().min(3000).max(120000),
-  positive_styles: z.array(ThemeStyleSchema).min(1).max(50),
-  negative_styles: z.array(ThemeStyleSchema).max(50).default([]),
-  context_adherence: z.enum(["low", "medium", "high"]).default("high"),
+  positive_local_styles: z.array(ThemeStyleSchema).min(1).max(50),
+  negative_local_styles: z.array(ThemeStyleSchema).max(50).default([]),
+  // Instrumental idents carry no lyrics, but the field is required.
+  lines: z.array(z.string().max(200)).max(30).default([]),
 });
 
 export const ThemeCompositionPlanSchema = z.object({
-  chunks: z.array(ThemeCompositionChunkSchema).min(1).max(30),
+  positive_global_styles: z.array(ThemeStyleSchema).min(1).max(50),
+  negative_global_styles: z.array(ThemeStyleSchema).max(50).default([]),
+  sections: z.array(ThemeCompositionSectionSchema).min(1).max(30),
 });
 
 export type ThemeCompositionPlan = z.infer<typeof ThemeCompositionPlanSchema>;
@@ -66,12 +77,12 @@ export function themePlanTargetMilliseconds(kind: ThemePlanKind) {
 export function themeCompositionPlanSchemaFor(kind: ThemePlanKind) {
   const target = themePlanTargetMilliseconds(kind);
   return ThemeCompositionPlanSchema.superRefine((plan, context) => {
-    const total = plan.chunks.reduce((sum, chunk) => sum + chunk.duration_ms, 0);
+    const total = plan.sections.reduce((sum, section) => sum + section.duration_ms, 0);
     if (total !== target) {
       context.addIssue({
         code: "custom",
-        path: ["chunks"],
-        message: `Chunk durations must total exactly ${target}ms; received ${total}ms.`,
+        path: ["sections"],
+        message: `Section durations must total exactly ${target}ms; received ${total}ms.`,
       });
     }
   });
@@ -135,19 +146,20 @@ function sceneMoodTags(sceneBrief: string | undefined) {
 }
 
 function assertPlanDevelopmentRules(plan: ThemeCompositionPlan, characterName: string) {
-  const styleLists = plan.chunks.flatMap((chunk) => [
-    chunk.positive_styles,
-    chunk.negative_styles,
-  ]);
+  const styleLists = [
+    plan.positive_global_styles,
+    plan.negative_global_styles,
+    ...plan.sections.flatMap((section) => [
+      section.positive_local_styles,
+      section.negative_local_styles,
+    ]),
+  ];
   for (const styles of styleLists) {
     if (new Set(styles.map((style) => style.toLowerCase())).size !== styles.length) {
       throw new Error("Theme composition plan contains a duplicated style tag.");
     }
   }
-  const styles = plan.chunks.flatMap((chunk) => [
-    ...chunk.positive_styles,
-    ...chunk.negative_styles,
-  ]);
+  const styles = styleLists.flat();
   const storyTokens = characterName.toLowerCase().split(/\s+/).filter((token) => token.length > 2);
   const leaked = styles.find((style) =>
     storyTokens.some((token) => new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(style))
@@ -193,14 +205,13 @@ export function buildThemePlan(
     positiveLocalStyles: string[],
     negativeLocalStyles: string[],
   ) => ({
-    text: `[${sectionName}]`,
+    section_name: sectionName,
     duration_ms: durationMilliseconds,
-    // Music v2 has no global-style fields. Repeat the identity palette on each
-    // chunk so later sections cannot drift, while the first chunk still sets
-    // the overall genre as ElevenLabs recommends.
-    positive_styles: uniqueStyles([...positiveGlobal, ...positiveLocalStyles]).slice(0, 50),
-    negative_styles: uniqueStyles([...negativeGlobal, ...negativeLocalStyles]).slice(0, 50),
-    context_adherence: "high" as const,
+    // Local styles stay local: the identity palette is declared once in the
+    // plan's global fields rather than repeated into every section.
+    positive_local_styles: uniqueStyles(positiveLocalStyles).slice(0, 50),
+    negative_local_styles: uniqueStyles(negativeLocalStyles).slice(0, 50),
+    lines: [],
   });
   const chunks = kind === "ident_8s"
     ? [
@@ -228,7 +239,9 @@ export function buildThemePlan(
         ),
       ];
   const plan = themeCompositionPlanSchemaFor(kind).parse({
-    chunks,
+    positive_global_styles: positiveGlobal,
+    negative_global_styles: negativeGlobal,
+    sections: chunks,
   });
   if (process.env.NODE_ENV !== "production") assertPlanDevelopmentRules(plan, character.name);
   return plan;
@@ -245,8 +258,14 @@ export function buildElevenMusicRequest(input: {
 }) {
   if (input.mode === "composition-plan") {
     if (!input.plan) throw new Error("Composition-plan mode requires a validated plan.");
-    if (input.modelId !== "music_v2") {
-      throw new Error("Chunk-based composition plans require the music_v2 model.");
+    /*
+      ElevenLabs accepts `composition_plan` on music_v1 only; sending it with
+      music_v2 returns 422 `Invalid type of composition_plan used for model
+      music_v2`. This guard required music_v2, so it guaranteed the failure it
+      was meant to prevent.
+    */
+    if (input.modelId !== "music_v1") {
+      throw new Error("Composition plans require the music_v1 model.");
     }
     return {
       composition_plan: input.plan,
