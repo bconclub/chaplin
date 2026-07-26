@@ -66,7 +66,13 @@ export default function WatchBrowse({ series }: { series: SeriesSummary[] }) {
   const brollByCharacter = useMemo(() => new Map(brolls.map((b) => [b.characterId, b])), [brolls]);
 
   const published = world.stories.filter((story) => (story.status ?? "published") === "published");
-  const stories = published.filter((story) => story.format === "episode" || (story.format ?? "story") === "story");
+  /*
+    The legacy "story" format only ever held seeded demo posters - fictional
+    titles carrying an invented view count - so the home rail advertised a
+    catalogue Chaplin does not have. Only real Episode productions qualify now;
+    everything else on this page is generated media that actually exists.
+  */
+  const stories = published.filter((story) => story.format === "episode");
   const adsAndReels = published.filter((story) => ["ad", "reel", "punch", "spot"].includes(story.format ?? ""));
   const sparks = world.characters
     .map((character) => ({ character, videoUrl: brollByCharacter.get(character.id)?.videoUrl ?? character.videoUrl ?? null }))
@@ -107,14 +113,6 @@ export default function WatchBrowse({ series }: { series: SeriesSummary[] }) {
         </section>
       )}
 
-      {stories.length > 0 && (
-        <Row title="Top stories" hint="Serialised castings with full scenes and cliffhangers">
-          {stories.map((story) => (
-            <PosterCard key={story.id} story={story} cast={castForStory(world, story.id).map((entry) => entry.character)} authorName={getUser(world, story.authorId)?.name} />
-          ))}
-        </Row>
-      )}
-
       {sparks.length > 0 && (
         <Row title="Top sparks" hint="Five-second auditions — hover to play">
           {sparks.map(({ character, videoUrl }) => (
@@ -126,6 +124,14 @@ export default function WatchBrowse({ series }: { series: SeriesSummary[] }) {
       {adsAndReels.length > 0 && (
         <Row title="Ads & reels" hint="Brand spots and short-form castings">
           {adsAndReels.map((story) => (
+            <PosterCard key={story.id} story={story} cast={castForStory(world, story.id).map((entry) => entry.character)} authorName={getUser(world, story.authorId)?.name} />
+          ))}
+        </Row>
+      )}
+
+      {stories.length > 0 && (
+        <Row title="Episodes" hint="Sixty-second microdramas that end on a cliffhanger">
+          {stories.map((story) => (
             <PosterCard key={story.id} story={story} cast={castForStory(world, story.id).map((entry) => entry.character)} authorName={getUser(world, story.authorId)?.name} />
           ))}
         </Row>
