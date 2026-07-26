@@ -23,6 +23,9 @@ export default function CharacterConversationPanel({ character }: { character: C
   const [canSpeak, setCanSpeak] = useState(Boolean(character.voiceId));
   const [themeUrl, setThemeUrl] = useState<string | null>(null);
   const [roomLive, setRoomLive] = useState(false);
+  // The bed is audible for as long as the room is open, so it needs its own
+  // control - there was no way to quiet it short of leaving the page.
+  const [themePlaying, setThemePlaying] = useState(false);
   const [error, setError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
@@ -58,10 +61,28 @@ export default function CharacterConversationPanel({ character }: { character: C
     theme.loop = true;
     theme.volume = THEME_BED_VOLUME;
     themeRef.current = theme;
-    void theme.play().catch(() => {
-      // A blocked bed must never break the conversation itself.
-      themeRef.current = null;
-    });
+    void theme.play()
+      .then(() => setThemePlaying(true))
+      .catch(() => {
+        // A blocked bed must never break the conversation itself.
+        themeRef.current = null;
+        setThemePlaying(false);
+      });
+  }
+
+  /** Pauses or resumes the theme without disturbing the conversation. */
+  function toggleThemeBed() {
+    const theme = themeRef.current;
+    if (!theme) {
+      startThemeBed();
+      return;
+    }
+    if (theme.paused) {
+      void theme.play().then(() => setThemePlaying(true)).catch(() => setThemePlaying(false));
+      return;
+    }
+    theme.pause();
+    setThemePlaying(false);
   }
 
   /** Opens the room: theme bed up, and the actor lands their punchline aloud. */
@@ -170,11 +191,23 @@ export default function CharacterConversationPanel({ character }: { character: C
             </button>
           )}
           {roomLive && (
-            <p className="mt-2.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-accent-secondary">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-secondary" />
-              {speaking ? "Speaking" : "Listening"}
-              {themeRef.current ? " · theme running" : ""}
-            </p>
+            <div className="mt-2.5 flex items-center gap-2">
+              <p className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-accent-secondary">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-secondary" />
+                {speaking ? "Speaking" : "Listening"}
+                {themePlaying ? " · theme running" : ""}
+              </p>
+              {themeUrl && (
+                <button
+                  type="button"
+                  onClick={toggleThemeBed}
+                  aria-pressed={themePlaying}
+                  className="rounded-full border border-white/15 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/70 transition-colors hover:border-accent-secondary hover:text-accent-secondary"
+                >
+                  {themePlaying ? "Pause theme" : "Play theme"}
+                </button>
+              )}
+            </div>
           )}
         </div>
         <div className="flex flex-wrap gap-2" aria-label={`Conversation starters for ${character.name}`}>
