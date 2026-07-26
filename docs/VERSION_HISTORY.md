@@ -141,3 +141,5 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.33 | `ca2e65f` | 2026-07-26T09:47:30+05:30 | fix: add selectable video seed images |
 | v0.1.34 | `b1dc821` | 2026-07-26T09:48:10+05:30 | chore: synchronize Chaplin v0.1.34 |
 | v0.1.35 | `1b32a67` | 2026-07-26T09:57:24+05:30 | Make the character room a spoken conversation with memory |
+| v0.1.36 | `8f941b7` | 2026-07-26T10:02:37+05:30 | fix: show homepage video on mobile |
+| v0.1.37 | `c31057a` | 2026-07-26T10:04:57+05:30 | Stop rejecting prompts the route was about to compact anyway |

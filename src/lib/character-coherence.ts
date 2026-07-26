@@ -1,4 +1,50 @@
-import type { VoiceGender } from "@/lib/types";
+import type { Archetype, VoiceGender } from "@/lib/types";
+
+const GIVEN_NAMES: Record<VoiceGender, Record<Archetype, string[]>> = {
+  feminine: {
+    villain: ["Naina", "Zoya"],
+    mentor: ["Leela", "Mira"],
+    "love-interest": ["Aanya", "Meher"],
+    "comic-relief": ["Tara", "Pia"],
+    hero: ["Anaya", "Ira"],
+    superhero: ["Astra", "Sana"],
+    horror: ["Rhea", "Noor"],
+    rebel: ["Aditi", "Kavya"],
+    sidekick: ["Juno", "Maya"],
+    outsider: ["Selene", "Asha"],
+  },
+  masculine: {
+    villain: ["Aarav", "Rohan"],
+    mentor: ["Ishaan", "Kabir"],
+    "love-interest": ["Rayan", "Zayn"],
+    "comic-relief": ["Nikhil", "Arjun"],
+    hero: ["Veer", "Dev"],
+    superhero: ["Naveen", "Arin"],
+    horror: ["Samar", "Ilyas"],
+    rebel: ["Rafi", "Yuvan"],
+    sidekick: ["Aman", "Neel"],
+    outsider: ["Rumi", "Ishan"],
+  },
+  androgynous: {
+    villain: ["Vesper", "Noor"],
+    mentor: ["Kiran", "Mitra"],
+    "love-interest": ["Rumi", "Ari"],
+    "comic-relief": ["Juno", "Pip"],
+    hero: ["Kiran", "Arya"],
+    superhero: ["Astra", "Nova"],
+    horror: ["Noor", "Ash"],
+    rebel: ["Rumi", "Kiran"],
+    sidekick: ["Pip", "Juno"],
+    outsider: ["Vesper", "Rumi"],
+  },
+};
+
+const SURNAMES = ["Qureshi", "Malhotra", "Dutta", "Kapoor", "Rao", "Bose", "Mirza", "Iyer"];
+
+function seededIndex(value: string, length: number) {
+  const seed = value.split("").reduce((total, character) => total + character.charCodeAt(0), 0);
+  return seed % length;
+}
 
 export function explicitVoiceGender(text: string): VoiceGender | null {
   const normalized = text.toLowerCase();
@@ -7,6 +53,33 @@ export function explicitVoiceGender(text: string): VoiceGender | null {
   if (masculine && !feminine) return "masculine";
   if (feminine && !masculine) return "feminine";
   return null;
+}
+
+export function suggestedCharacterName(input: {
+  archetype: Archetype;
+  characterBrief: string;
+  voiceGender: VoiceGender;
+}) {
+  const gender = explicitVoiceGender(input.characterBrief) ?? input.voiceGender;
+  const pool = GIVEN_NAMES[gender][input.archetype] ?? GIVEN_NAMES[gender].hero;
+  const seedText = `${input.characterBrief}|${input.archetype}|${gender}`;
+  const givenName = pool[seededIndex(seedText, pool.length)];
+  const surname = SURNAMES[seededIndex(`${seedText}|surname`, SURNAMES.length)];
+  return `${givenName} ${surname}`;
+}
+
+export function coherentGeneratedCharacterName(input: {
+  creatorName: string;
+  modelName: string;
+  archetype: Archetype;
+  characterBrief: string;
+  voiceGender: VoiceGender;
+}) {
+  if (input.creatorName.trim()) return input.creatorName.trim();
+  const requiredGender = explicitVoiceGender(input.characterBrief);
+  const modelName = input.modelName.trim();
+  if (!requiredGender) return modelName || suggestedCharacterName(input);
+  return suggestedCharacterName({ ...input, voiceGender: requiredGender });
 }
 
 export function alignVoiceDescription(description: string, voiceGender: VoiceGender) {

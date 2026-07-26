@@ -5,7 +5,12 @@ import {
   composeVoiceDesignPrompt,
 } from "@/lib/production-prompting";
 import type { Archetype, CharacterProductionBible, VoiceGender } from "@/lib/types";
-import { alignVoiceDescription, explicitVoiceGender } from "@/lib/character-coherence";
+import {
+  alignVoiceDescription,
+  coherentGeneratedCharacterName,
+  explicitVoiceGender,
+  suggestedCharacterName,
+} from "@/lib/character-coherence";
 import { getPipelineConfig } from "@/lib/server/pipeline-config";
 
 export const runtime = "nodejs";
@@ -29,26 +34,19 @@ function clean(value: unknown, max = 2000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function suggestedName(input: { name: string; archetype: Archetype; characterBrief?: string }) {
+function suggestedName(input: {
+  name: string;
+  archetype: Archetype;
+  characterBrief?: string;
+  voiceGender?: VoiceGender;
+}) {
   if (input.name.trim()) return input.name.trim();
-  const firstNames: Record<Archetype, string[]> = {
-    villain: ["Aarav", "Naina", "Zoya", "Rohan"],
-    mentor: ["Ishaan", "Leela", "Mira", "Kabir"],
-    "love-interest": ["Aanya", "Rayan", "Meher", "Zayn"],
-    "comic-relief": ["Tara", "Nikhil", "Pia", "Arjun"],
-    hero: ["Anaya", "Veer", "Ira", "Dev"],
-    superhero: ["Astra", "Kiran", "Naveen", "Sana"],
-    horror: ["Rhea", "Samar", "Noor", "Ilyas"],
-    rebel: ["Aditi", "Rafi", "Kavya", "Yuvan"],
-    sidekick: ["Pip", "Juno", "Aman", "Maya"],
-    outsider: ["Selene", "Vesper", "Asha", "Rumi"],
-  };
-  const surnames = ["Qureshi", "Malhotra", "Dutta", "Kapoor", "Rao", "Bose", "Mirza", "Iyer"];
-  const seed = `${input.characterBrief ?? ""}${input.archetype}`
-    .split("")
-    .reduce((total, character) => total + character.charCodeAt(0), 0);
-  const givenNames = firstNames[input.archetype] ?? firstNames.hero;
-  return `${givenNames[seed % givenNames.length]} ${surnames[(seed * 7) % surnames.length]}`;
+  const brief = input.characterBrief ?? "";
+  return suggestedCharacterName({
+    archetype: input.archetype,
+    characterBrief: brief,
+    voiceGender: explicitVoiceGender(brief) ?? input.voiceGender ?? "androgynous",
+  });
 }
 
 function enforceVoiceCoherence(suggestion: CharacterSuggestion, characterBrief: string) {
@@ -58,6 +56,40 @@ function enforceVoiceCoherence(suggestion: CharacterSuggestion, characterBrief: 
     ...suggestion,
     voiceGender,
     voiceDescription: alignVoiceDescription(suggestion.voiceDescription, voiceGender),
+  };
+}
+
+function replaceGeneratedName(value: unknown, previousName: string, nextName: string): unknown {
+  if (typeof value === "string") {
+    const fullName = previousName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const firstName = previousName.split(/\s+/)[0]?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return value
+      .replace(new RegExp(`\\b${fullName}\\b`, "g"), nextName)
+      .replace(firstName ? new RegExp(`\\b${firstName}\\b`, "g") : /$^/, nextName.split(/\s+/)[0]);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceGeneratedName(item, previousName, nextName));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        replaceGeneratedName(item, previousName, nextName),
+      ]),
+    );
+  }
+  return value;
+}
+
+function enforceGeneratedNameCoherence(
+  suggestion: CharacterSuggestion,
+  nextName: string,
+): CharacterSuggestion {
+  const previousName = clean(suggestion.name, 120);
+  if (!previousName || previousName === nextName) return { ...suggestion, name: nextName };
+  return {
+    ...(replaceGeneratedName(suggestion, previousName, nextName) as CharacterSuggestion),
+    name: nextName,
   };
 }
 
@@ -323,6 +355,7 @@ export async function POST(request: Request) {
             briefGuidance: input.characterBrief
               ? "characterBrief is the maker's creative direction. Treat it as binding canon: every field must be consistent with it."
               : undefined,
+            nameCoherenceGuidance: "Before choosing an unsupplied name, infer gender presentation from explicit pronouns and gender words in characterBrief. The generated name, voiceGender, voiceDescription, appearance, and every pronoun must agree. Preserve a name only when the creator explicitly supplied it.",
             currentCharacter: input,
             visualIdentityGuidance: "Set productionBible.visual.medium to the exact requested medium; default to live-action cinematic photography only when no style is requested. Return exactly four short recognitionLocks spanning the most distinctive face, hair, wardrobe, or signature prop invariants. These four locks must carry recognition while every non-locked scene detail remains adaptable.",
           }),
@@ -346,13 +379,20 @@ export async function POST(request: Request) {
     } catch {
       throw new Error("Claude's output was cut off mid-write. Try again.");
     }
+    const coherentName = coherentGeneratedCharacterName({
+      creatorName: name,
+      modelName: clean(parsed.name, 120),
+      archetype: input.archetype,
+      characterBrief: input.characterBrief,
+      voiceGender: input.voiceGender,
+    });
+    const coherentSuggestion = enforceGeneratedNameCoherence(
+      enforceVoiceCoherence(parsed, input.characterBrief),
+      coherentName,
+    );
     return Response.json({
       suggestion: enforceModernAudioDirection(
-        enforceVisualIdentity(
-          { ...enforceVoiceCoherence(parsed, input.characterBrief), name: suggestedName({ ...input, name: name || clean(parsed.name, 120) }) },
-          input.appearanceBrief,
-          input.worldBrief,
-        ),
+        enforceVisualIdentity(coherentSuggestion, input.appearanceBrief, input.worldBrief),
         input,
       ),
       provider: "anthropic",

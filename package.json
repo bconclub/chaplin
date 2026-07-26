@@ -1,6 +1,6 @@
 {
   "name": "chaplin",
-  "version": "0.1.36",
+  "version": "0.1.38",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -14,7 +14,7 @@
     "verify:ui": "node scripts/verify-current-ui.mjs",
     "verify:pipeline": "node scripts/verify-pipeline.mjs",
     "verify:mobile": "node scripts/verify-mobile.mjs",
-    "test:character-card": "node --import tsx --test src/lib/character-card.test.ts",
+    "test:character-card": "node --import tsx --test src/lib/character-card.test.ts src/lib/character-coherence.test.ts",
     "test:prompt-lint": "node --import tsx --test src/lib/prompt-lint.test.ts",
     "test:scene-variety": "node --import tsx --test src/lib/scene-variety.test.ts",
     "test:prompt-compaction": "node --import tsx --test src/lib/prompt-compaction.test.ts",

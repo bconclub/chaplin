@@ -3,6 +3,19 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.38 - 2026-07-26 - Gender-coherent Magic Write identities
+
+- Made Magic Write infer gender presentation from explicit brief pronouns before
+  choosing the progressive-draft character name.
+- Added a final coherence gate that aligns Claude's generated name with the
+  brief while always preserving a name explicitly supplied by the creator.
+- Propagated a corrected generated name through the tagline, personality, and
+  complete production bible so stale naming cannot survive downstream.
+- Added regression coverage for feminine briefs, conflicting model names, and
+  creator-supplied name preservation.
+- Passed TypeScript, ESLint with one pre-existing test warning, all four test
+  suites (43 tests), and the complete Next.js production build.
+
 ## v0.1.36 - 2026-07-26 - Visible mobile hero performance
 
 - Separated the homepage performance video from the mobile copy overlay so the
