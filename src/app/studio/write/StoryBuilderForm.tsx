@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
@@ -10,6 +10,7 @@ import { getClientAuthIdentity } from "@/lib/client-auth";
 import SceneStudioRail, { type SceneStage } from "@/components/studio/SceneStudioRail";
 import SceneStudioAssets, { type SceneAsset } from "@/components/studio/SceneStudioAssets";
 import SceneStudioTimeline from "@/components/studio/SceneStudioTimeline";
+import { ProductionWorkspace } from "@/app/productions/[id]/page";
 import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
 import {
@@ -193,7 +194,6 @@ function emptyScene(): DraftScene {
 }
 
 export default function StoryBuilderForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const world = useChaplinStore((s) => s);
   const currentUserId = useChaplinStore((s) => s.currentUserId);
@@ -245,6 +245,8 @@ export default function StoryBuilderForm() {
     Remembering the authored cast is what makes that drift detectable.
   */
   const [scriptCastIds, setScriptCastIds] = useState<string[]>([]);
+  // Set once a production starts; the studio then renders the workspace inline.
+  const [productionStoryId, setProductionStoryId] = useState<string | null>(null);
   const [draftId, setDraftId] = useState(() => searchParams.get("draft") ?? "");
   const [draftReady, setDraftReady] = useState(() => !searchParams.get("draft"));
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>(
@@ -1041,7 +1043,13 @@ export default function StoryBuilderForm() {
         ].join("\n"),
       }),
     }).catch(() => undefined);
-    router.push(`/productions/${story.id}`);
+    /*
+      Stay in the studio. Starting a production used to navigate to its own
+      page, so the creator lost the canvas they had just built and had to scroll
+      a separate screen to watch the render. The workspace is hosted here
+      instead; the route still exists for a direct link.
+    */
+    setProductionStoryId(story.id);
   }
 
   // Scene Studio panels read the same state the form already owns, so the
@@ -1105,6 +1113,15 @@ export default function StoryBuilderForm() {
     lineCount: scene.lines.filter((line) => line.text.trim()).length,
     authored: Boolean(scene.setting.trim() || scene.action.trim()),
   }));
+
+  /*
+    Once a production starts the studio becomes the render surface. The
+    workspace owns its own three-column layout, so it replaces the authoring
+    shell rather than nesting inside it - same page, same route, no navigation.
+  */
+  if (productionStoryId) {
+    return <ProductionWorkspace storyId={productionStoryId} />;
+  }
 
   return (
     <div className="scene-studio-shell" data-scene-studio-shell>

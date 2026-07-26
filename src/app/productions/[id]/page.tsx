@@ -119,8 +119,17 @@ function isRetryableStepError(error: unknown) {
   return /timed out|timeout|rate limit|429|50\d|temporarily|unavailable|network|fetch failed|ECONN|socket hang up|did not return/i.test(message);
 }
 
-export default function ProductionDetailPage() {
-  const { id } = useParams<{ id: string }>();
+/**
+ * The production workspace.
+ *
+ * Rendering used to be reachable only by navigating to its own page, so
+ * starting a production meant leaving the Scene Studio and scrolling a separate
+ * screen to watch it. The story id is a prop now, which lets the studio host
+ * this same workspace inline - one surface, no page change - while the route
+ * below keeps working for a direct link.
+ */
+export function ProductionWorkspace({ storyId }: { storyId: string }) {
+  const id = storyId;
   const world = useChaplinStore((state) => state);
   const hydrated = useChaplinStore((state) => state.hydrated);
   const story = getStory(world, id);
@@ -2030,4 +2039,9 @@ export default function ProductionDetailPage() {
       </section>
     </main>
   );
+}
+
+export default function ProductionDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  return <ProductionWorkspace storyId={id} />;
 }
