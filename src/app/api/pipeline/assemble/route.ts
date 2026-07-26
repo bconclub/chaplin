@@ -29,6 +29,27 @@ function urlSlots(value: unknown, maximum = 20) {
   return value.slice(0, maximum).map((item) => typeof item === "string" ? item.trim() : "");
 }
 
+
+/**
+ * Whether a rendered shot carries an audio stream of its own.
+ *
+ * Seedance generates the location's sound into the clip, but a shot rendered as
+ * a silent plate has no audio stream at all - and naming a stream that does not
+ * exist fails the whole assembly. Probed per clip so the two can be mixed in
+ * the same master.
+ */
+async function hasAudioStream(sourcePath: string, ffmpeg: string) {
+  try {
+    await execute(ffmpeg, ["-hide_banner", "-i", sourcePath], { maxBuffer: 1024 * 1024, windowsHide: true });
+    return false;
+  } catch (error) {
+    if (isMissingFfmpegError(error)) throw error;
+    // ffmpeg exits non-zero for a probe-only call and prints the streams to stderr.
+    const output = String((error as { stderr?: string }).stderr ?? "");
+    return /Stream #\d+:\d+.*: Audio:/.test(output);
+  }
+}
+
 export async function POST(request: Request) {
   let workDirectory = "";
   try {
@@ -115,12 +136,33 @@ export async function POST(request: Request) {
 
     const stemInputs: string[] = [];
     const stemLabels: string[] = [];
+    /*
+      The shots' own sound is part of the cut.
+
+      Audio was assembled over a generated silent bed and the clips were
+      concatenated with a=0, so every scene's location sound - the rain, the
+      room tone, the machinery Seedance rendered into the shot - was discarded
+      at assembly and the delivered Punch had no ambience under it at all. Each
+      clip's track now sits in the mix at its own scene offset, under the
+      dialogue, and a silent plate simply contributes nothing.
+    */
+    const ffmpegPath = ffmpegExecutable();
+    const shotHasAudio = await Promise.all(shotPaths.map((shotPath) => hasAudioStream(shotPath, ffmpegPath)));
     let inputIndex = shotPaths.length;
     // The silent bed is always input N, immediately after the shots.
     const bedIndex = inputIndex;
     inputIndex += 1;
     const audioFilters = [`[${bedIndex}:a]atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[abed]`];
     stemLabels.push("[abed]");
+
+    shotPaths.forEach((_, index) => {
+      if (!shotHasAudio[index]) return;
+      const label = `aloc${index}`;
+      const delay = Math.round(index * sceneDurationSeconds * 1000);
+      // Under the locked voice: this is the room, not the performance.
+      audioFilters.push(`[${index}:a]volume=0.55,atrim=0:${sceneDurationSeconds},asetpts=PTS-STARTPTS,adelay=${delay}|${delay},apad,atrim=0:${finalDurationSeconds},asetpts=PTS-STARTPTS[${label}]`);
+      stemLabels.push(`[${label}]`);
+    });
 
     for (const source of dialogueFiles) {
       const label = `adlg${source.sceneIndex}`;
@@ -164,7 +206,7 @@ export async function POST(request: Request) {
     // than the next; the limiter still catches anything the normaliser leaves.
     audioFilters.push(`${stemLabels.join("")}amix=inputs=${stemLabels.length}:duration=first:dropout_transition=0,${DELIVERY_LOUDNESS_FILTER},alimiter=limit=0.95[aout]`);
 
-    await execute(ffmpegExecutable(), [
+    await execute(ffmpegPath, [
       "-y",
       ...shotPaths.flatMap((shotPath) => ["-i", shotPath]),
       "-f", "lavfi", "-t", String(finalDurationSeconds), "-i", "anullsrc=r=48000:cl=stereo",
