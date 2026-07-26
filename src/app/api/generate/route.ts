@@ -1084,7 +1084,9 @@ export async function POST(request: Request) {
     if (action === "image") {
       const imageConfig = imageStageForPreset(pipeline.stages.image, input);
       requireStage(imageConfig, "Image");
-      const requestedPrompt = text(input, "prompt", 10, 6000);
+      // Same reasoning as the video action: compaction (1800 for image) is what
+      // bounds the provider payload, so this only rejects absurd input.
+      const requestedPrompt = text(input, "prompt", 10, 12000);
       const imagePurpose = input.imagePurpose === "scene"
         ? "scene"
         : input.imagePurpose === "character-sheet"
@@ -1329,7 +1331,16 @@ export async function POST(request: Request) {
     if (action === "video") {
       const videoConfig = pipeline.stages.video;
       requireStage(videoConfig, "Video");
-      const requestedPrompt = text(input, "prompt", 10, 3000);
+      /*
+        This ceiling used to be 3000, which is stricter than the compaction the
+        route immediately applies (1450 for video). A full director's prompt is
+        longer than 3000, so pipeline runs died at the shot-packages step with
+        "prompt must be between 10 and 3000 characters" before compaction — the
+        very thing that would have trimmed it — ever ran. The bound now only
+        guards against absurd payloads; compactVisualDirection still decides what
+        actually reaches the provider.
+      */
+      const requestedPrompt = text(input, "prompt", 10, 12000);
       const silentPrompt = requestedPrompt;
       const requestedReference = typeof input.referenceImage === "string" ? input.referenceImage : "";
       const production = await getCharacterProductionState(characterId);
