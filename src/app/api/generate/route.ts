@@ -1504,12 +1504,15 @@ export async function POST(request: Request) {
             },
             speakerName: requestCharacter?.name,
             /*
-              Only claim the reference when it can actually be attached. A first
-              frame excludes reference media on ModelArk, so a shot with an
-              approved still resolves to post-mix and off-face framing rather
-              than directing lip-sync to a recording the request cannot carry.
+              Claim the reference exactly when the request will carry it. A shot
+              with a line sends the still as reference media so the voice can
+              ride along and the actor speaks; a shot without one keeps its
+              first frame and is post-mixed. The prompt has to agree with the
+              transport, or the model is told to lip-sync to nothing.
             */
-            referenceAudioUrl: reference ? undefined : (referenceAudio || undefined),
+            referenceAudioUrl: (referenceAudio && dialogueText && seedanceSupportsAudioReference(videoConfig.model))
+              ? referenceAudio
+              : undefined,
           })
         : null;
       const prompt = audioScene?.block ? `${basePrompt}\n${audioScene.block}` : basePrompt;
@@ -1541,8 +1544,32 @@ export async function POST(request: Request) {
       const pollIntervalMs = settingNumber(videoConfig, "pollIntervalSeconds", 5) * 1000;
       const maximumPolls = settingNumber(videoConfig, "maximumPolls", 55);
 
-      const runVideoTask = async (model: string) => {
-        const taskContent = [...content];
+      /*
+        A speaking shot needs the locked voice attached, and ModelArk refuses a
+        request that carries both first/last frame content and reference media.
+        The still was kept as the first frame, so every dialogue shot dropped
+        the voice and no scene ever lip-synced - characters just moved around.
+
+        The conflict is between the two *roles*, not between an image and audio.
+        So for a shot that actually has a line, the still is sent as reference
+        media alongside the voice: identity is still anchored, and the actor can
+        speak. Exact-first-frame locking is the thing traded away, and only on
+        shots where someone talks.
+      */
+      const wantsLipSync = Boolean(referenceAudio)
+        && Boolean(dialogueText)
+        && seedanceSupportsAudioReference(videoConfig.model);
+
+      const runVideoTask = async (model: string, lipSync = false) => {
+        const taskContent = lipSync
+          ? [
+              { type: "text", text: prompt },
+              ...(reference
+                ? [{ type: "image_url", image_url: { url: await imageInput(reference) }, role: "reference_image" }]
+                : []),
+              { type: "audio_url", audio_url: { url: referenceAudio }, role: "reference_audio" },
+            ]
+          : [...content];
         /*
           ModelArk rejects a request that carries both, with
           "first/last frame content cannot be mixed with reference media
@@ -1555,7 +1582,8 @@ export async function POST(request: Request) {
           its first frame therefore renders without the audio reference and is
           post-mixed, which is the path resolveAudioScene already describes.
         */
-        const canAttachAudio = Boolean(referenceAudio)
+        const canAttachAudio = !lipSync
+          && Boolean(referenceAudio)
           && seedanceSupportsAudioReference(model)
           && !reference;
         if (canAttachAudio) {
@@ -1644,7 +1672,23 @@ export async function POST(request: Request) {
                 pollIntervalMs,
                 maximumPolls,
               })
-            : await runVideoTask(attempt.model);
+            : await (async () => {
+                /*
+                  Try the speaking shot first, then fall back to the silent
+                  path. If ModelArk rejects the reference-media pairing, a
+                  render must still happen: the line is mixed in afterwards
+                  rather than the whole shot failing.
+                */
+                if (wantsLipSync && attempt.provider === "byteplus" && seedanceSupportsAudioReference(attempt.model)) {
+                  try {
+                    return await runVideoTask(attempt.model, true);
+                  } catch (lipSyncError) {
+                    const detail = lipSyncError instanceof Error ? lipSyncError.message : "";
+                    if (!/content|reference|not valid|invalid/i.test(detail)) throw lipSyncError;
+                  }
+                }
+                return runVideoTask(attempt.model);
+              })();
           videoUrl = result.videoUrl;
           taskId = result.taskId;
           videoUsage = result.usage;
