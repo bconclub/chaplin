@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { getMediaPipelineRun } from "@/lib/server/media-pipeline";
-import { saveMediaAsset } from "@/lib/server/supabase-admin";
+import { getCharacterProductionState, saveMediaAsset } from "@/lib/server/supabase-admin";
 import { ffmpegExecutable, isMissingFfmpegError } from "@/lib/server/ffmpeg-runtime";
 
 export const runtime = "nodejs";
@@ -46,12 +46,35 @@ export async function POST(request: Request) {
     const roomTonePath = path.join(workDirectory, "room-tone.mp3");
     const outputPath = path.join(workDirectory, "master.mp4");
 
+    // The character theme was missing from the shot mix entirely, so a shot
+    // carried voice, effects and room tone but never its own score. It is
+    // optional: an actor without a locked theme still mixes.
+    const production = await getCharacterProductionState(characterId).catch(() => null);
+    const themeUrl = production?.latestThemeUrl ?? "";
+    const themePath = themeUrl ? path.join(workDirectory, "theme.mp3") : "";
+
     await Promise.all([
       download(stepUrl(run, "motion-plate"), videoPath),
       download(stepUrl(run, "dialogue"), dialoguePath),
       download(stepUrl(run, "sfx"), sfxPath),
       download(stepUrl(run, "room-tone"), roomTonePath),
+      themePath ? download(themeUrl, themePath) : Promise.resolve(),
     ]);
+
+    const mixLabels = ["[a1]", "[a2]", "[a3]"];
+    const mixFilters = [
+      "[1:a]volume=1.0[a1]",
+      "[2:a]volume=0.72,adelay=350|350[a2]",
+      "[3:a]volume=0.22[a3]",
+    ];
+    if (themePath) {
+      // Well under the voice, looped so a short cue still covers the shot.
+      mixFilters.push("[4:a]volume=0.16,aloop=loop=-1:size=2e9[a4]");
+      mixLabels.push("[a4]");
+    }
+    mixFilters.push(
+      `${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=longest:dropout_transition=0,atrim=0:5,alimiter=limit=0.95[aout]`,
+    );
 
     await execute(ffmpegExecutable(), [
       "-y",
@@ -59,8 +82,9 @@ export async function POST(request: Request) {
       "-i", dialoguePath,
       "-i", sfxPath,
       "-i", roomTonePath,
+      ...(themePath ? ["-i", themePath] : []),
       "-filter_complex",
-      "[1:a]volume=1.0[a1];[2:a]volume=0.72,adelay=350|350[a2];[3:a]volume=0.22[a3];[a1][a2][a3]amix=inputs=3:duration=longest:dropout_transition=0,atrim=0:5[aout]",
+      mixFilters.join(";"),
       "-map", "0:v:0",
       "-map", "[aout]",
       "-c:v", "copy",
