@@ -20,6 +20,7 @@
     "test:scene-variety": "node --import tsx --test src/lib/scene-variety.test.ts",
     "test:prompt-compaction": "node --import tsx --test src/lib/prompt-compaction.test.ts",
     "test:video-types": "node --import tsx --test src/lib/video-brief.test.ts src/lib/production-prompting.test.ts src/lib/shot-director.test.ts",
+    "test:screen-time": "node --import tsx --test src/lib/screen-time.test.ts",
     "test:audio-scene": "node --import tsx --test src/lib/audio-scene.test.ts",
     "test:seedance-audio": "node --import tsx --test src/lib/seedance-audio.test.ts",
     "test:theme-plan": "node --import tsx --test src/lib/theme-composition-plan.test.ts",

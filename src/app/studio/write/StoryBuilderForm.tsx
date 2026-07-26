@@ -9,6 +9,7 @@ import type { Character } from "@/lib/types";
 import { getClientAuthIdentity } from "@/lib/client-auth";
 import SceneStudioRail, { type SceneStage } from "@/components/studio/SceneStudioRail";
 import SceneStudioAssets, { type SceneAsset } from "@/components/studio/SceneStudioAssets";
+import SceneStudioTimeline from "@/components/studio/SceneStudioTimeline";
 import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
 import {
@@ -1681,6 +1682,24 @@ export default function StoryBuilderForm() {
               </p>
             </div>
           )}
+
+          <SceneStudioTimeline
+            scenes={scenes.map((scene, index) => ({
+              index,
+              setting: scene.setting,
+              objective: scene.objective,
+              action: scene.action,
+              durationSeconds: scene.durationSeconds ?? 4,
+              lineCount: scene.lines.filter((line) => line.text.trim()).length,
+              rendered: Boolean(scene.previewImageUrl),
+            }))}
+            totalSeconds={durationSeconds}
+            activeIndex={activeSceneIndex}
+            onSelect={(index) => {
+              setActiveSceneIndex(index);
+              document.querySelector(`[data-scene-card="${index}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
 
           <div className="border-y border-line py-4">
             <div className="grid grid-cols-3 gap-3 text-center">
