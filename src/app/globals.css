@@ -431,6 +431,58 @@ body:has([data-home-shell]) > main {
     padding-bottom: max(2rem, env(safe-area-inset-bottom));
   }
 
+  /*
+    Scene Studio: the same canvas the Character Studio uses, so scene creation
+    stops being a scrolling page. Stage rail on the left, the authoring surface
+    in the middle, generated frames on the right. Each column owns its own
+    scroll; the page itself never scrolls.
+  */
+  body:has([data-scene-studio-shell]) > header[data-header-compact],
+  body:has([data-scene-studio-shell]) > header[data-header-compact] + div,
+  body:has([data-scene-studio-shell]) > footer {
+    display: none;
+  }
+
+  body:has([data-scene-studio-shell]) > main {
+    height: 100dvh;
+    min-height: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .scene-studio-shell {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr) 19rem;
+    grid-template-rows: minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(900px circle at 52% 30%, rgba(27, 53, 47, 0.14), transparent 55%),
+      #070a08;
+  }
+
+  .scene-studio-shell > [data-scene-studio-rail],
+  .scene-studio-shell > [data-scene-studio-assets],
+  .scene-studio-shell > .studio-production-content {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+/* Below the canvas breakpoint the studio stays a normal stacked page. */
+@media (max-width: 1023px) {
+  .scene-studio-shell {
+    display: block;
+  }
+
+  .scene-studio-shell > [data-scene-studio-rail],
+  .scene-studio-shell > [data-scene-studio-assets] {
+    display: none;
+  }
 }
 
 @keyframes studio-queued-sweep {

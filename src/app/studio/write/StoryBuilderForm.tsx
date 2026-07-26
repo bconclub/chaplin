@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import { getClientAuthIdentity } from "@/lib/client-auth";
+import SceneStudioRail, { type SceneStage } from "@/components/studio/SceneStudioRail";
+import SceneStudioAssets, { type SceneAsset } from "@/components/studio/SceneStudioAssets";
 import Avatar from "@/components/Avatar";
 import Chip from "@/components/Chip";
 import {
@@ -975,8 +977,54 @@ export default function StoryBuilderForm() {
     router.push(`/productions/${story.id}`);
   }
 
+  // Scene Studio panels read the same state the form already owns, so the
+  // canvas is a layout over the existing flow rather than a second source
+  // of truth for the draft.
+  const conceptLocked = Boolean(title.trim() && logline.trim());
+  const castLocked = castCharacters.length > 0;
+  const authoredScenes = scenes.filter((scene) => scene.setting.trim() || scene.action.trim()).length;
+  const scriptLocked = authoredScenes === scenes.length && scenes.length > 0;
+  const framesReady = scenes.filter((scene) => Boolean(scene.previewImageUrl)).length;
+  const sceneStages: SceneStage[] = [
+    {
+      id: 1, label: "Concept", hint: "Title, logline and format.",
+      state: conceptLocked ? "done" : step === 1 ? "active" : "todo",
+      detail: conceptLocked ? "Locked" : "Needs a title and logline",
+    },
+    {
+      id: 2, label: "Cast", hint: "Who performs this story.",
+      state: castLocked ? "done" : step === 2 ? "active" : "todo",
+      detail: castLocked ? `${castCharacters.length} cast` : "No actors chosen",
+    },
+    {
+      id: 3, label: `${formatDefinition.label} script`, hint: "Every scene's setting, objective and action.",
+      state: scriptLocked ? "done" : step === 3 ? "active" : "todo",
+      detail: `${authoredScenes} of ${scenes.length} written`,
+    },
+  ];
+  const sceneAssets: SceneAsset[] = scenes.map((scene, index) => ({
+    index,
+    setting: scene.setting,
+    action: scene.action,
+    previewImageUrl: scene.previewImageUrl,
+    lineCount: scene.lines.filter((line) => line.text.trim()).length,
+    authored: Boolean(scene.setting.trim() || scene.action.trim()),
+  }));
+
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10 w-full">
+    <div className="scene-studio-shell" data-scene-studio-shell>
+      <SceneStudioRail
+        stages={sceneStages}
+        step={step}
+        onSelect={setStep}
+        cast={castCharacters}
+        formatLabel={formatDefinition.label}
+        durationSeconds={durationSeconds}
+        sceneCount={scenes.length}
+        framesReady={framesReady}
+      />
+      <div className="studio-production-content min-w-0">
+        <div className="mx-auto w-full max-w-3xl px-6 py-8">
       {startChoiceOpen && createPortal(
         <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/72 p-0 backdrop-blur-xl sm:items-center sm:p-6">
           <button
@@ -1961,6 +2009,16 @@ export default function StoryBuilderForm() {
           </div>
         </div>
       )}
+        </div>
+      </div>
+      <SceneStudioAssets
+        assets={sceneAssets}
+        busyIndex={scenePreviewBusy}
+        onSelect={(index) => { setStep(3); setActiveSceneIndex(index); }}
+        onGenerateAll={() => void generateAllScenePreviews()}
+        canGenerate={castCharacters.length > 0 && scenes.some((scene) => scene.setting || scene.action)}
+        productImageUrl={productImageUrl || undefined}
+      />
     </div>
   );
 }
