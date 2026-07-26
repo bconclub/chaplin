@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
+import FeedBody from "@/components/feed/FeedBody";
+import { FEED_TABS, EMPTY_TAB_COPY, applyFeedTab, trendingTags, type FeedTabId } from "@/components/feed/feed-tabs";
 import MediaPlayer from "@/components/MediaPlayer";
 import { useChaplinStore } from "@/lib/store";
 import type { FeedMediaKind, FeedPost, FeedReply, SharedFeedPost } from "@/lib/feed-types";
 import type { Character } from "@/lib/types";
 import { getClientAuthIdentity } from "@/lib/client-auth";
 import { buildFeedShareCopy } from "@/lib/feed-share";
+import { ARCHETYPE_LABEL, compactNumber } from "@/lib/format";
 
 function relativeTime(value: string) {
   const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -255,7 +258,7 @@ function PostCard({ post, currentUserId, refresh, expanded }: { post: FeedPost; 
           <span className="truncate text-grey">{post.author.handle}</span>
           <Link href={`/feed/${post.id}`} className="ml-auto shrink-0 text-xs text-grey hover:text-accent">{relativeTime(post.createdAt)}</Link>
         </div>
-        {post.body && <p className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-ink/95">{post.body}</p>}
+        {post.body && <FeedBody body={post.body} characters={characters} />}
       </div>
     </div>
 
@@ -292,6 +295,7 @@ function PostCard({ post, currentUserId, refresh, expanded }: { post: FeedPost; 
 export default function CreatorFeed({ postId }: { postId?: string }) {
   const currentUserId = useChaplinStore((state) => state.currentUserId);
   const currentUser = useChaplinStore((state) => state.users.find((user) => user.id === state.currentUserId));
+  const characters = useChaplinStore((state) => state.characters);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [body, setBody] = useState("");
   const [mediaKind, setMediaKind] = useState<FeedMediaKind>("image");
@@ -302,6 +306,7 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [feedLive, setFeedLive] = useState(false);
+  const [tab, setTab] = useState<FeedTabId>("for-you");
 
   useEffect(() => {
     let cancelled = false;
@@ -361,6 +366,15 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
   }
 
   const title = useMemo(() => postId ? "Thread" : "Feed", [postId]);
+  const visiblePosts = useMemo(
+    () => (postId ? posts : applyFeedTab(posts, tab, currentUserId)),
+    [posts, tab, currentUserId, postId],
+  );
+  const tags = useMemo(() => trendingTags(posts), [posts]);
+  const topActors = useMemo(
+    () => [...characters].sort((left, right) => right.stats.fans - left.stats.fans).slice(0, 5),
+    [characters],
+  );
 
   return <main className="mx-auto grid w-full max-w-5xl gap-10 sm:px-5 sm:py-8 lg:grid-cols-[minmax(0,42rem)_17rem]">
     <div className="min-w-0">
@@ -381,6 +395,29 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
           </div>
           {!postId && <Link href="/create" className="hidden rounded-full border border-line px-4 py-2 text-xs hover:border-accent sm:inline-flex">Write</Link>}
         </div>
+        {!postId && (
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" role="tablist" aria-label="Feed filters">
+            {FEED_TABS.map((entry) => {
+              const active = entry.id === tab;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(entry.id)}
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                    active
+                      ? "border-accent bg-accent text-paper"
+                      : "border-line text-grey hover:border-accent/50 hover:text-ink"
+                  }`}
+                >
+                  {entry.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       {!postId && authReady && authIdentity && <section data-feed-composer className="border-b border-line bg-paper px-4 py-5 sm:px-0">
@@ -398,11 +435,51 @@ export default function CreatorFeed({ postId }: { postId?: string }) {
       </section>}
 
       {error && <p className="m-4 rounded-md border border-accent/40 bg-accent/10 p-3 text-sm sm:mx-0">{error}</p>}
-      <div>{posts.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} refresh={load} expanded={Boolean(postId)} />)}{!error && posts.length === 0 && <div className="border-b border-line p-10 text-center"><p className="reel-title text-xl">Nothing has been posted here yet.</p></div>}</div>
+      <div>{visiblePosts.map((post) => <PostCard key={post.id} post={post} currentUserId={currentUserId} refresh={load} expanded={Boolean(postId)} />)}{!error && visiblePosts.length === 0 && <div className="border-b border-line p-10 text-center"><p className="reel-title text-xl">{EMPTY_TAB_COPY[postId ? "for-you" : tab]}</p></div>}</div>
     </div>
 
     {!postId && <aside className="hidden lg:block">
       <div className="sticky top-20 space-y-6">
+        {topActors.length > 0 && (
+          <section className="rounded-xl border border-line bg-white/[0.035] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Top performers</p>
+              <Link href="/characters" className="text-[10px] text-grey hover:text-accent">View all ›</Link>
+            </div>
+            <ol className="grid gap-2">
+              {topActors.map((character, index) => (
+                <li key={character.id}>
+                  <Link href={`/characters/${character.id}`} className="flex items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-white/5">
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                      index === 0 ? "bg-amber-300/20 text-amber-300" : index === 1 ? "bg-white/12 text-white/70" : index === 2 ? "bg-orange-400/15 text-orange-300" : "text-grey"
+                    }`}>{index + 1}</span>
+                    <Avatar hue={character.avatarHue} label={character.name} src={character.imageUrl} size={28} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] font-semibold text-ink">{character.name}</span>
+                      <span className="block truncate text-[10px] text-grey">{ARCHETYPE_LABEL[character.archetype]}</span>
+                    </span>
+                    <span className="shrink-0 text-right text-[10px] text-grey">{compactNumber(character.stats.fans)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {tags.length > 0 && (
+          <section className="rounded-xl border border-line bg-white/[0.035] p-4">
+            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Trending now</p>
+            <ul className="grid gap-1.5">
+              {tags.map((entry) => (
+                <li key={entry.tag} className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-[12px] font-medium text-accent-secondary">{entry.tag}</span>
+                  <span className="shrink-0 text-[10px] text-grey">{entry.count} {entry.count === 1 ? "post" : "posts"}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="rounded-xl border border-line bg-white/[0.035] p-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-accent">Publish on Chaplin</p>
           <h2 className="reel-title mt-3 text-2xl leading-tight">Build an audience around the work.</h2>

@@ -45,6 +45,10 @@ export default function HomeShell() {
   const characters = useChaplinStore((state) => state.characters);
   const stories = useChaplinStore((state) => state.stories);
   const [brolls, setBrolls] = useState<HomepageBroll[]>([]);
+  const [slots, setSlots] = useState<Array<{ characterId: string; position: number }>>([]);
+  // Advances on a slow timer so the featured shelf keeps rotating through the
+  // catalogue instead of showing the same six actors on every visit.
+  const [shuffleTick, setShuffleTick] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [heroProgress, setHeroProgress] = useState(0);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -54,13 +58,34 @@ export default function HomeShell() {
     [brolls],
   );
 
-  const featured = useMemo(
-    () => [...characters]
+  /*
+    Featured selection, in priority order:
+      1. Slots an admin curated in the dashboard, in their chosen order.
+      2. Everyone else, ranked by whether they have a clip, then by reach.
+    The remainder rotates on a slow cycle so the shelf does not show the same
+    six actors forever; the cycle advances on a timer rather than at random so
+    a render is always reproducible.
+  */
+  const featured = useMemo(() => {
+    const byId = new Map(characters.map((character) => [character.id, character]));
+    const curated = slots
+      .map((slot) => byId.get(slot.characterId))
+      .filter((character): character is Character => Boolean(character));
+    const curatedIds = new Set(curated.map((character) => character.id));
+
+    const pool = characters
+      .filter((character) => !curatedIds.has(character.id))
       .sort((left, right) =>
-        featureScore(right, brollByCharacter.get(right.id)) - featureScore(left, brollByCharacter.get(left.id)))
-      .slice(0, FEATURED_LIMIT),
-    [brollByCharacter, characters],
-  );
+        featureScore(right, brollByCharacter.get(right.id)) - featureScore(left, brollByCharacter.get(left.id)));
+
+    const remaining = Math.max(0, FEATURED_LIMIT - curated.length);
+    if (!pool.length || !remaining) return [...curated, ...pool].slice(0, FEATURED_LIMIT);
+
+    // Rotate the window through the ranked pool so later actors get airtime.
+    const offset = (shuffleTick * remaining) % pool.length;
+    const rotated = [...pool.slice(offset), ...pool.slice(0, offset)];
+    return [...curated, ...rotated].slice(0, FEATURED_LIMIT);
+  }, [brollByCharacter, characters, slots, shuffleTick]);
 
   const currentId = featured.some((character) => character.id === activeId) ? activeId : featured[0]?.id ?? null;
   const current = featured.find((character) => character.id === currentId) ?? featured[0];
@@ -96,11 +121,13 @@ export default function HomeShell() {
     function load() {
       void fetch("/api/broll", { cache: "no-store" })
         .then((response) => (response.ok ? response.json() : { characters: [] }))
-        .then((data: { characters?: HomepageBroll[] }) => {
-          if (!cancelled) setBrolls(data.characters ?? []);
+        .then((data: { characters?: HomepageBroll[]; slots?: Array<{ characterId: string; position: number }> }) => {
+          if (cancelled) return;
+          setBrolls(data.characters ?? []);
+          setSlots(data.slots ?? []);
         })
         .catch(() => {
-          if (!cancelled) setBrolls([]);
+          if (!cancelled) { setBrolls([]); setSlots([]); }
         });
     }
     load();
@@ -109,6 +136,13 @@ export default function HomeShell() {
       cancelled = true;
       window.removeEventListener("chaplin:media-updated", load);
     };
+  }, []);
+
+  // Rotate the featured window periodically so the shelf keeps moving through
+  // the catalogue across a long session.
+  useEffect(() => {
+    const timer = window.setInterval(() => setShuffleTick((tick) => tick + 1), 45_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // A still frame advances on a timer; a playing clip advances when it ends.

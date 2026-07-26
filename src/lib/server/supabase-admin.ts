@@ -832,6 +832,24 @@ export async function getHomepageBrollState() {
   return [...characters.values()].filter((entry) => entry.videoUrl);
 }
 
+/**
+ * Homepage feature slots curated in the admin dashboard. The homepage used to
+ * rank its own featured set with no way for an admin to intervene, so an actor
+ * could not be promoted or pulled. An empty list means nobody has curated the
+ * homepage and the surface should fall back to its own ranking.
+ */
+export async function getHomepageSlots() {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("home_slots")
+    .select("character_id,position,status")
+    .order("position");
+  assert(error, "Load homepage slots");
+  return (data ?? [])
+    .filter((slot) => (slot.status ?? "active") === "active")
+    .map((slot) => ({ characterId: slot.character_id as string, position: Number(slot.position) || 0 }));
+}
+
 export async function getCharacterProviderHealth(characterId: string) {
   const supabase = adminClient();
   const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
