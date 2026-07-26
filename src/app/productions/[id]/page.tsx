@@ -45,6 +45,32 @@ type ShotRenderState = {
   error?: string;
 };
 
+/*
+  Every scene in a production is independent - its own frame, its own sound, its
+  own motion - yet each stage used to wait for the previous scene to finish. On
+  the DOLA image model a still takes about 160 seconds, so four serial frames
+  cost over ten minutes before the first video could even start. Running the
+  scenes together costs roughly the slowest one instead of the sum of all four.
+
+  The cap keeps a twelve-shot episode from firing twelve provider calls at once,
+  which is what turns a burst into a throttle.
+*/
+const SCENE_CONCURRENCY = 4;
+
+async function mapScenes<T>(count: number, task: (index: number) => Promise<T>): Promise<T[]> {
+  const results = new Array<T>(count) as T[];
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(SCENE_CONCURRENCY, count) }, async () => {
+      for (let index = cursor; index < count; index = cursor) {
+        cursor += 1;
+        results[index] = await task(index);
+      }
+    }),
+  );
+  return results;
+}
+
 function stepTone(status: string) {
   if (status === "ready") return "border-accent-secondary text-accent-secondary";
   if (status === "running") return "border-accent text-accent";
@@ -790,17 +816,12 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
       }
       activePipelineStepKey = "shot-packages";
 
-      const frameResults: Array<{ frameUrl: string; frameAssetId?: string }> = [];
-
       // Build the complete storyboard before asking the video model to move any frame.
       // This keeps the four authored scene starts visible and reviewable as one sequence.
-      for (let index = 0; index < contract.shotCount; index += 1) {
-        activeShotIndex = index;
-        setSelectedShotIndex(index);
-        setRenderShots((shots) => shots.map((shot, shotIndex) => (
-          shotIndex === index ? { ...shot, status: "designing", error: undefined } : shot
-        )));
-        setRenderProgress(`Designing scene frame ${index + 1} of ${contract.shotCount}`);
+      let framesDesigned = 0;
+      setRenderShots((shots) => shots.map((shot) => ({ ...shot, status: "designing", error: undefined })));
+      setRenderProgress(`Designing ${contract.shotCount} scene frames together`);
+      const frameResults = await mapScenes(contract.shotCount, async (index) => {
         const directedScene = authoredScenes[index];
         /*
           Only this scene's actors. Rendering every shot against the whole cast
@@ -835,17 +856,25 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
           });
           frameData = await frameResponse.json() as { url?: string; assetId?: string; error?: string };
           if (!frameResponse.ok || !frameData.url) {
+            /*
+              Concurrent scenes mean the loop counter no longer identifies the
+              failure, so each scene records its own index before it throws.
+            */
+            activeShotIndex = index;
             throw new Error(frameData.error ?? `Scene frame ${index + 1} was not created.`);
           }
         }
+        framesDesigned += 1;
         setRenderFrameUrl(frameData.url);
+        setSelectedShotIndex(index);
+        setRenderProgress(`Designed ${framesDesigned} of ${contract.shotCount} scene frames`);
         setRenderShots((shots) => shots.map((shot, shotIndex) => (
           shotIndex === index
             ? { ...shot, frameUrl: frameData.url, frameAssetId: frameData.assetId, status: "frame_ready" }
             : shot
         )));
-        frameResults.push({ frameUrl: frameData.url, frameAssetId: frameData.assetId });
-      }
+        return { frameUrl: frameData.url as string, frameAssetId: frameData.assetId };
+      });
 
       /*
         Build every authored scene's soundtrack before motion. Seedance 2.0 can
@@ -853,20 +882,13 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
         original ElevenLabs asset is still mastered into the final cut so actor
         identity never depends on a model's re-performance.
       */
-      const audioResults: Array<{
-        dialogueText: string;
-        dialogueUrl?: string;
-        dialogueAssetId?: string;
-        sfxUrl: string;
-        sfxAssetId: string;
-      }> = [];
-      for (let index = 0; index < contract.shotCount; index += 1) {
-        activeShotIndex = index;
+      let scenesRecorded = 0;
+      setRenderProgress(`Recording voice and sound for ${contract.shotCount} scenes together`);
+      const audioResults = await mapScenes(contract.shotCount, async (index) => {
         const directedScene = authoredScenes[index];
         const dialogueLine = directedScene.lines.find((line) => line.text.trim());
         const dialogueSpeaker = cast.find((character) => character.id === dialogueLine?.characterId) ?? cast[0];
         const dialogueText = dialogueLine?.text.trim() ?? "";
-        setRenderProgress(`Recording voice and sound for scene ${index + 1} of ${contract.shotCount}`);
         /*
           The provider brief is clamped to 450 characters downstream, and the
           negatives sit at the end - so an unbounded scene action pushed them
@@ -895,7 +917,10 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
                   re-locked - whereas failing here loses every scene.
                 */
                 const detail = error instanceof Error ? error.message : "";
-                if (!/ORPHANED_VOICE/.test(detail)) throw error;
+                if (!/ORPHANED_VOICE/.test(detail)) {
+                  activeShotIndex = index;
+                  throw error;
+                }
                 setError(`${dialogueSpeaker.name}'s locked voice is missing on the current ElevenLabs account, so this scene renders without their line. Re-lock their voice and regenerate the dialogue.`);
                 return null;
               })
@@ -907,13 +932,8 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
             durationSeconds: Math.min(3, Math.max(1, directedScene.durationSeconds ?? 2)),
           }),
         ]);
-        audioResults.push({
-          dialogueText,
-          dialogueUrl: dialogueAsset?.url,
-          dialogueAssetId: dialogueAsset?.assetId,
-          sfxUrl: sfxAsset.url,
-          sfxAssetId: sfxAsset.assetId,
-        });
+        scenesRecorded += 1;
+        setRenderProgress(`Recorded ${scenesRecorded} of ${contract.shotCount} scene soundtracks`);
         setRenderShots((shots) => shots.map((shot, shotIndex) => (
           shotIndex === index
             ? {
@@ -925,19 +945,21 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
               }
             : shot
         )));
-      }
+        return {
+          dialogueText,
+          dialogueUrl: dialogueAsset?.url,
+          dialogueAssetId: dialogueAsset?.assetId,
+          sfxUrl: sfxAsset.url,
+          sfxAssetId: sfxAsset.assetId,
+        };
+      });
 
-      const shotResults: Array<{ frameUrl: string; frameAssetId?: string; url: string; assetId: string }> = [];
-      for (let index = 0; index < contract.shotCount; index += 1) {
-        activeShotIndex = index;
-        setSelectedShotIndex(index);
+      let scenesAnimated = 0;
+      setRenderShots((shots) => shots.map((shot) => ({ ...shot, status: "animating", error: undefined })));
+      setRenderProgress(`Animating ${contract.shotCount} four-second scenes together`);
+      const shotResults = await mapScenes(contract.shotCount, async (index) => {
         const directedScene = authoredScenes[index];
         const frameData = frameResults[index];
-        setRenderFrameUrl(frameData.frameUrl);
-        setRenderShots((shots) => shots.map((shot, shotIndex) => (
-          shotIndex === index ? { ...shot, status: "animating", error: undefined } : shot
-        )));
-        setRenderProgress(`Animating four-second scene ${index + 1} of ${contract.shotCount}`);
         const motionActors = resolveSceneActors(directedScene, cast).present;
         const motionPrompt = buildShotVideoPrompt({
           productionTitle: story.title, productionLogline: story.logline, scene: directedScene,
@@ -975,14 +997,13 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
         });
         const videoData = await videoResponse.json() as { url?: string; assetId?: string; error?: string };
         if (!videoResponse.ok || !videoData.url || !videoData.assetId) {
+          activeShotIndex = index;
           throw new Error(videoData.error ?? `Scene ${index + 1} did not produce a saved video.`);
         }
-        shotResults.push({
-          frameUrl: frameData.frameUrl,
-          frameAssetId: frameData.frameAssetId,
-          url: videoData.url,
-          assetId: videoData.assetId,
-        });
+        scenesAnimated += 1;
+        setSelectedShotIndex(index);
+        setRenderFrameUrl(frameData.frameUrl);
+        setRenderProgress(`Animated ${scenesAnimated} of ${contract.shotCount} scenes`);
         setRenderShots((shots) => shots.map((shot, shotIndex) => (
           shotIndex === index
             ? {
@@ -995,7 +1016,13 @@ export function ProductionWorkspace({ storyId }: { storyId: string }) {
               }
             : shot
         )));
-      }
+        return {
+          frameUrl: frameData.frameUrl,
+          frameAssetId: frameData.frameAssetId,
+          url: videoData.url as string,
+          assetId: videoData.assetId as string,
+        };
+      });
 
       activeRun = await transitionStep(activeRun, "shot-packages", "complete", {
         output: {
