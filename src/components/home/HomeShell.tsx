@@ -7,12 +7,7 @@ import { ARCHETYPE_HUE, ARCHETYPE_LABEL, hsl } from "@/lib/format";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import type { HomepageBroll } from "@/components/HeroGridCard";
-import {
-  RAIL_PRIMARY,
-  RAIL_SECONDARY,
-  COLLECTIONS,
-  TRENDING_LABELS,
-} from "@/components/home/home-nav";
+import { RAIL_PRIMARY, COLLECTIONS, TRENDING_LABELS } from "@/components/home/home-nav";
 import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
@@ -132,11 +127,18 @@ export default function HomeShell() {
     >
       {/* ── LEFT RAIL ───────────────────────────────────────────────── */}
       <aside className="flex min-h-0 flex-col border-r border-[#202020] bg-[#0a0a0a]">
-        <Link href="/" className="flex h-[4.5rem] shrink-0 items-center gap-2.5 px-5">
-          <span className="relative flex h-7 w-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--accent),var(--accent-secondary))] text-[13px] font-black text-black">
-            C
-          </span>
-          <span className="marquee-title text-[15px] tracking-[0.14em]">CHAPLIN</span>
+        <Link href="/" aria-label="Chaplin home" className="flex h-[4.5rem] shrink-0 items-center px-5">
+          {/* Canonical transparent wordmark, same asset the site header uses. */}
+          <Image
+            src="/brand/chaplin-logo-transparent.png"
+            alt="Chaplin"
+            width={1826}
+            height={585}
+            priority
+            quality={90}
+            sizes="150px"
+            className="h-9 w-auto max-w-[9.5rem] object-contain object-left"
+          />
         </Link>
 
         <nav className="chaplin-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
@@ -158,19 +160,22 @@ export default function HomeShell() {
 
           <div className="my-3 h-px shrink-0 bg-[#202020]" />
 
-          {RAIL_SECONDARY.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
-            >
-              <span className="text-white/45 group-hover:text-white/80">{item.icon}</span>
-              <span className="flex-1">{item.label}</span>
-              {item.badge ? (
-                <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-bold text-paper">{item.badge}</span>
-              ) : null}
-            </Link>
-          ))}
+          {/* The two things a creator actually starts here, matching the
+              create menu the rest of the app already offers. */}
+          <Link
+            href="/characters/new"
+            className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
+          >
+            <span className="text-white/45 group-hover:text-white/80">＋</span>
+            Build an AI actor
+          </Link>
+          <Link
+            href="/studio/write?format=punch"
+            className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[12.5px] font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
+          >
+            <span className="text-white/45 group-hover:text-white/80">＋</span>
+            Make a scene
+          </Link>
         </nav>
 
         <div className="shrink-0 p-3">
@@ -269,8 +274,11 @@ export default function HomeShell() {
               />
             )}
 
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,#080808_2%,rgba(8,8,8,0.92)_26%,rgba(8,8,8,0.35)_52%,transparent_72%)]" />
-            <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#080808] to-transparent" />
+            {/* Light enough to keep the headline legible without flattening the
+                performance behind it. The first version ran near-solid black
+                across the left third and buried the actor. */}
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,8,8,0.86)_0%,rgba(8,8,8,0.55)_28%,rgba(8,8,8,0.12)_48%,transparent_62%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#080808]/85 to-transparent" />
 
             <div className="relative flex h-full max-w-[54%] flex-col justify-center px-7 py-6 lg:px-9">
               <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.22em] text-accent">

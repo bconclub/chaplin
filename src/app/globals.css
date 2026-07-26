@@ -243,19 +243,27 @@ body:has([data-home-shell]) > header + div {
   display: none;
 }
 
-html:has([data-home-shell]) {
-  overflow: hidden;
-}
-
 body:has([data-home-shell]) > main {
-  height: 100dvh;
   min-height: 0;
   padding: 0;
-  overflow: hidden;
 }
 
-body:has([data-home-shell]) {
-  overflow: hidden;
+/*
+  The no-scroll canvas is only correct when the viewport is actually tall enough
+  to hold it. Locking overflow unconditionally made the lower half of the page
+  unreachable on shorter windows, so the lock is height-gated: tall screens get
+  the fixed 100dvh surface the design calls for, anything shorter scrolls.
+*/
+@media (min-height: 860px) {
+  html:has([data-home-shell]),
+  body:has([data-home-shell]) {
+    overflow: hidden;
+  }
+
+  body:has([data-home-shell]) > main {
+    height: 100dvh;
+    overflow: hidden;
+  }
 }
 
 [data-create-toggle] {
