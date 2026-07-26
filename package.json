@@ -16,6 +16,7 @@
     "verify:mobile": "node scripts/verify-mobile.mjs",
     "test:character-card": "node --import tsx --test src/lib/character-card.test.ts",
     "test:prompt-lint": "node --import tsx --test src/lib/prompt-lint.test.ts",
+    "test:prompt-compaction": "node --import tsx --test src/lib/prompt-compaction.test.ts",
     "test:video-types": "node --import tsx --test src/lib/video-brief.test.ts src/lib/production-prompting.test.ts src/lib/shot-director.test.ts",
     "migrate:agni-maya": "tsx scripts/migrate-agni-maya.ts",
     "version:current": "node scripts/version.mjs current",

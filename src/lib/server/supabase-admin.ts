@@ -399,6 +399,44 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   };
 }
 
+export type EnsembleIdentity = {
+  id: string;
+  name: string;
+  archetype: string;
+  personality: string;
+  cardV2: unknown;
+  imageUrl: string | null;
+};
+
+/**
+ * Identity rows for every actor sharing one frame. Caller order is preserved so
+ * the lead actor stays first in the composed prompt and in screen-left staging.
+ */
+export async function getEnsembleIdentities(characterIds: string[]): Promise<EnsembleIdentity[]> {
+  const unique = [...new Set(characterIds.filter(Boolean))];
+  if (!unique.length) return [];
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("characters")
+    .select("id,name,archetype,personality,card_v2,image_url")
+    .in("id", unique);
+  assert(error, "Load ensemble actors");
+  const byId = new Map((data ?? []).map((row) => [row.id as string, row]));
+  return unique.flatMap((id) => {
+    const row = byId.get(id);
+    return row
+      ? [{
+          id: row.id as string,
+          name: row.name as string,
+          archetype: row.archetype as string,
+          personality: (row.personality ?? "") as string,
+          cardV2: row.card_v2,
+          imageUrl: (row.image_url ?? null) as string | null,
+        }]
+      : [];
+  });
+}
+
 export async function getCharacterProductionState(characterId: string) {
   const supabase = adminClient();
   const [voice, assets, character, jobs] = await Promise.all([

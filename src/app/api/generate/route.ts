@@ -38,6 +38,7 @@ import {
 } from "@/lib/production-prompting";
 import { assembleSignatureSfx } from "@/lib/server/signature-sfx";
 import { enforceThemeDuration } from "@/lib/server/audio-postprocess";
+import { compactVisualDirection, requestsStylizedImage } from "@/lib/prompt-compaction";
 import { buildPromptHandoff } from "@/lib/prompt-handoff";
 import { PromptLintError } from "@/lib/prompt-lint";
 
@@ -105,81 +106,41 @@ function mediaPromptWarnings(character: Character | undefined, prompt: string, t
 const REALISM_DIRECTION = "OUTPUT MEDIUM: A visually striking live-action cinematic photograph of a real human being, captured through a physical camera and lens. Preserve natural facial asymmetry, pores, fine hair, believable hands, tactile fabric, grounded body weight, physically plausible light, optical depth, and restrained film grain. Do not render an illustration, cartoon, anime frame, digital painting, 3D render, CGI character, doll, or wax figure.";
 const REALISM_NEGATIVE = "cartoon, anime, illustration, digital painting, concept art, 3D render, CGI character, game art, doll-like face, wax figure, airbrushed skin, synthetic skin, over-smoothed face";
 
-function requestsStylizedImage(prompt: string) {
-  const style = /\b(?:cartoon|anime|manga|animation|animated|illustration|illustrated|digital painting|3d render|cgi|game art|comic(?:-book)?|claymation)\b/i;
-  return prompt.split(/[\n.!?;]/).some((clause) => {
-    const match = style.exec(clause);
-    if (!match) return false;
-    if (/\b(?:locks?|exclusions?|negative prompt)\b/i.test(clause)) return false;
-    const beforeStyle = clause.slice(0, match.index);
-    return !/\b(?:no|not|never|avoid|without|exclude|excluding)\b(?:\W+\w+){0,3}\W*$/i.test(beforeStyle);
-  });
+/**
+ * Provider refusals that are prompt-shaped rather than infrastructural. These are
+ * recoverable: the same shot usually renders once the phrasing that tripped the
+ * filter is softened. Anything else (auth, quota, network) must still fail fast.
+ */
+function isSafetyRejection(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /safety system|safety guidelines|blocked_generation|may contain real person|content[ _]policy|rejected by the safety/i.test(message);
 }
 
-const VISUAL_LABEL_PRIORITY = [
-  "STYLE",
-  "ACTOR",
-  "SUBJECT AND IDENTITY",
-  "SUBJECT",
-  "VISIBLE PERSONALITY",
-  "VISIBLE PERFORMANCE",
-  "PERFORMANCE LOGIC",
-  "DRAMATIC MOMENT",
-  "PLAYABLE MOMENT",
-  "INTENT",
-  "SIGNATURE LOOK",
-  "WORLD",
-  "SET",
-  "CAMERA AND COMPOSITION",
-  "CAMERA",
-  "LIGHTING",
-  "LIGHT",
-  "MOVEMENT",
-  "SECONDARY MOTION",
-  "FINAL FRAME",
-  "CONTINUITY",
-  "LOCKS AND EXCLUSIONS",
-  "LOCKS",
-  "EXCLUSIONS",
-  "NEGATIVE",
-  "RECOGNITION LOCKS",
-  "AUDIO",
-];
-
-function compactVisualDirection(prompt: string, kind: "image" | "video") {
-  const cleaned = prompt
-    .replace(/\r/g, "")
-    .replace(/[ \t]+/g, " ")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const labeled = new Map<string, string>();
-  const maximumCharacters = kind === "image" ? 1800 : 1450;
-  const direct = cleaned.join("\n");
-  if (direct.length <= maximumCharacters) return direct;
-
-  const unlabeled: string[] = [];
-  for (const line of cleaned) {
-    const match = /^([A-Z][A-Z /&+_-]{2,32}):\s*(.+)$/.exec(line);
-    if (!match) {
-      unlabeled.push(line);
-      continue;
-    }
-    const label = match[1].trim();
-    if (!labeled.has(label)) labeled.set(label, match[2].trim());
+/**
+ * Escalating softening passes. Attempt 1 removes real-person framing (the
+ * BytePlus "input image may contain real person" trigger); attempt 2 also
+ * neutralises depicted violence, which is what OpenAI's filter rejects on fight
+ * beats. Identity locks and scene structure are deliberately left intact.
+ */
+function softenPromptForSafety(prompt: string, attempt: number) {
+  let softened = prompt;
+  if (attempt >= 1) {
+    softened = softened
+      .replace(/\breal human being\b/gi, "original fictional character")
+      .replace(/\breal (?:human|person|people)\b/gi, "fictional character")
+      .replace(/\bphotoreal(?:istic)?\b/gi, "naturalistic")
+      .replace(/\blive[- ]action\b/gi, "cinematic")
+      .replace(/\bcelebrity likeness\b/gi, "recognisable likeness");
   }
-
-  const maximumLine = kind === "image" ? 190 : 170;
-  const selected = VISUAL_LABEL_PRIORITY
-    .flatMap((label) => {
-      const value = labeled.get(label);
-      return value ? [`${label}: ${value.slice(0, maximumLine).trim()}`] : [];
-    });
-  const essentials = selected.length >= 3
-    ? selected
-    : [...selected, ...unlabeled.slice(0, kind === "image" ? 5 : 7).map((line) => line.slice(0, maximumLine).trim())];
-  return essentials.join("\n").slice(0, maximumCharacters).trim();
+  if (attempt >= 2) {
+    softened = softened
+      .replace(/\b(?:punch(?:es|ing)?|strike[sd]?|blood(?:y)?|weapon|knife|gun|violence|violent|fight(?:s|ing)?)\b/gi, "confrontation")
+      .replace(/^CONTACT:.*$/gm, "CONTACT: Stage the confrontation as held tension, braced stances, and blocked movement. Do not depict impact or injury.");
+  }
+  return softened;
 }
+
+const MAX_IMAGE_ATTEMPTS = 3;
 
 function visualGenerationPrompt(stage: PipelineStageConfig, prompt: string, kind: "image" | "video") {
   if (kind === "video") return compactVisualDirection(prompt, kind);
@@ -1010,8 +971,29 @@ export async function POST(request: Request) {
             ? input.identityVariationKey.trim().slice(0, 80)
             : crypto.randomUUID())
         : null;
+      // Ensemble scenes name every actor in frame. Absent or single-entry casts
+      // leave the existing single-actor path completely unchanged.
+      const requestedCastIds = Array.isArray(input.castCharacterIds)
+        ? input.castCharacterIds
+          .filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+          .map((value) => value.trim())
+          .slice(0, 6)
+        : [];
+      const castIds = [...new Set([characterId, ...requestedCastIds].filter(Boolean))];
+      const isEnsembleShot = imagePurpose === "scene" && castIds.length > 1;
       const production = await getCharacterProductionState(characterId);
       const canonicalReference = production.visualReference;
+      // One canonical reference per actor, in cast order, so reference N lines up
+      // with "ACTOR LOCK … matches reference image N" in the composed prompt.
+      const ensembleReferences = isEnsembleShot
+        ? (await Promise.all(
+            castIds.map(async (id) => {
+              if (id === characterId) return canonicalReference?.url ?? "";
+              const state = await getCharacterProductionState(id);
+              return state.visualReference?.url ?? "";
+            }),
+          )).filter(Boolean)
+        : [];
       // Rebuilding an identity must not feed the existing face back into the
       // image model. Scene frames inherit the selected canonical actor, while
       // a character sheet deliberately uses the newly generated identity hero
@@ -1024,10 +1006,15 @@ export async function POST(request: Request) {
                 ...requestedReferences,
                 canonicalReference?.url ?? "",
               ]
-            : [
-                canonicalReference?.url ?? requestedReference,
-                ...requestedReferences,
-              ]
+            : isEnsembleShot
+              ? [
+                  ...ensembleReferences,
+                  ...requestedReferences,
+                ]
+              : [
+                  canonicalReference?.url ?? requestedReference,
+                  ...requestedReferences,
+                ]
           ).filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
         : [];
       const reference = references[0] ?? "";
@@ -1040,11 +1027,25 @@ export async function POST(request: Request) {
       const prompt = preserveIdentity
         ? lockVisualIdentity(generatedPrompt, Boolean(reference))
         : `${newIdentityPrompt}\n\nFRESH CASTING PASS ${identityVariationKey}: Create a new original fictional actor from this written brief only. No image reference is attached. Keep explicit user requirements such as medium, age range, cultural context, presentation, and essential wardrobe, but cast a materially different face with its own facial proportions and natural asymmetry. Do not copy, preserve, or derive the face, pose, camera angle, or location from any existing profile, gallery, cover, or previous attempt.`;
-      const configuredNegativePrompt = settingString(
+      const rawNegativePrompt = settingString(
         imageConfig,
         "negativePrompt",
         "multiple people, duplicate face, celebrity likeness, generic pose, plastic skin, distorted anatomy, extra fingers, text, logo, UI, border, watermark"
       );
+      // "multiple people" is correct for a solo portrait and fatal for a
+      // two-hander — it is the instruction that erased the second actor. For an
+      // ensemble, swap it for the failure mode that actually threatens the shot:
+      // the two references collapsing into one blended face.
+      const configuredNegativePrompt = isEnsembleShot
+        ? [
+            rawNegativePrompt
+              .split(",")
+              .map((term) => term.trim())
+              .filter((term) => term && !/^(?:multiple people|duplicate face|two people|group|crowd)$/i.test(term))
+              .join(", "),
+            "blended faces, merged bodies, face swap between actors, one actor duplicated, missing actor, cloned twins",
+          ].filter(Boolean).join(", ")
+        : rawNegativePrompt;
       const cardNegativePrompt = readCharacterCardV2(requestCharacter?.cardV2)?.identity_locks.negative_prompt;
       const referenceMetadata = {
         imagePurpose,
@@ -1058,6 +1059,8 @@ export async function POST(request: Request) {
         referenceImages: references,
         referenceCount: references.length,
         identityVariationKey,
+        castCharacterIds: castIds,
+        ensembleShot: isEnsembleShot,
       };
       const provider = imageProvider(imageConfig.provider);
       const exclusions = stylizedOutput
@@ -1081,16 +1084,17 @@ export async function POST(request: Request) {
           ...(consistencyWarnings.length ? { characterCardConsistencyWarnings: consistencyWarnings } : {}),
         },
       });
-      let generated: GeneratedImage;
-      if (provider === "openrouter") {
-        generated = await generateWithOpenRouter(imageConfig, effectivePrompt, references);
-      } else if (provider === "openai") {
-        generated = await generateWithOpenAI(imageConfig, effectivePrompt, references);
-      } else {
+      const runImageProvider = async (promptText: string): Promise<GeneratedImage> => {
+        if (provider === "openrouter") {
+          return generateWithOpenRouter(imageConfig, promptText, references);
+        }
+        if (provider === "openai") {
+          return generateWithOpenAI(imageConfig, promptText, references);
+        }
         const seedreamFivePro = /dola-seedream-5-0-pro/i.test(imageConfig.model);
         const generationRequest: Record<string, unknown> = {
           model: imageConfig.model,
-          prompt: effectivePrompt,
+          prompt: promptText,
           size: settingString(imageConfig, "size", "2560x1440"),
           response_format: "url",
           watermark: settingBoolean(imageConfig, "watermark", false),
@@ -1112,15 +1116,35 @@ export async function POST(request: Request) {
         const images = result.data as Array<{ url?: string }> | undefined;
         const remoteUrl = images?.[0]?.url;
         if (!remoteUrl) throw new Error("Seedream completed without returning an image.");
-        generated = {
+        return {
           remoteUrl,
           contentType: "image/png",
           providerUsage: result.usage as Record<string, unknown> | undefined,
           requestId: response.requestId,
         };
+      };
+
+      // A safety refusal used to kill the shot outright, which is why a ten-scene
+      // run could end with holes in it. Retry with progressively softer phrasing
+      // before giving up; anything that is not a safety refusal still fails fast.
+      let generated: GeneratedImage | null = null;
+      let safetyAttempts = 0;
+      let safetySoftened = false;
+      for (let attempt = 0; attempt < MAX_IMAGE_ATTEMPTS; attempt += 1) {
+        const attemptPrompt = attempt === 0 ? effectivePrompt : softenPromptForSafety(effectivePrompt, attempt);
+        try {
+          generated = await runImageProvider(attemptPrompt);
+          safetySoftened = attempt > 0;
+          break;
+        } catch (error) {
+          if (!isSafetyRejection(error) || attempt === MAX_IMAGE_ATTEMPTS - 1) throw error;
+          safetyAttempts = attempt + 1;
+        }
       }
+      if (!generated) throw new Error("Image generation did not return a result.");
       const providerMetadata = {
         ...referenceMetadata,
+        ...(safetyAttempts ? { safetyRetryAttempts: safetyAttempts, safetyPromptSoftened: safetySoftened } : {}),
         provider,
         model: imageConfig.model,
         quality: settingString(imageConfig, "quality", "medium"),

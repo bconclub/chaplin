@@ -214,7 +214,7 @@ export default function InfiniteCharacterGallery() {
                 <span className="mt-1 block text-accent">AI actors.</span>
               </h1>
               <p className="mt-4 max-w-md text-xs leading-5 text-white/70 sm:text-sm sm:leading-6">
-                Original actors with locked faces, voices, and worlds—ready for your next{" "}
+                Ready to cast AI actors for{" "}
                 <span
                   key={CASTING_FORMATS[castingFormatIndex]}
                   className="font-semibold text-accent-secondary motion-safe:animate-[chaplin-format-enter_400ms_ease-out]"

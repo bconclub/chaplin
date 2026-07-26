@@ -476,7 +476,21 @@ export default function StoryBuilderForm() {
   }, [world.characters, castQuery]);
 
   function toggleCast(id: string) {
-    setCastIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setCastIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (next.length === prev.length) return prev;
+      // Every existing preview was framed around the previous cast, so it no
+      // longer depicts this scene. Drop the stale stills and say so, rather than
+      // leaving images of actors who are no longer in the story.
+      setScenes((current) => current.map((scene) => (
+        scene.previewImageUrl || scene.previewAssetId
+          ? { ...scene, previewImageUrl: undefined, previewAssetId: undefined }
+          : scene
+      )));
+      setSceneAssistMessage(null);
+      setMagicMessage("Cast changed — scene stills were cleared. Regenerate them so every shot shows the new cast.");
+      return next;
+    });
   }
 
   async function uploadProductImage(file: File) {
@@ -769,8 +783,11 @@ export default function StoryBuilderForm() {
         sceneIndex,
         sceneCount: scenes.length,
       });
+      // Everyone in the cast shares the frame. The lead stays first so reference
+      // image N lines up with "ACTOR LOCK … matches reference image N".
+      const sceneCast = castCharacters.length ? castCharacters : [lead];
       const referenceImages = [
-        lead.imageUrl ?? lead.galleryUrls?.[0] ?? lead.bannerUrl ?? "",
+        ...sceneCast.map((actor) => actor.imageUrl ?? actor.galleryUrls?.[0] ?? actor.bannerUrl ?? ""),
         productImageUrl,
       ].filter(Boolean);
       const prompt = buildShotImagePrompt({
@@ -782,6 +799,7 @@ export default function StoryBuilderForm() {
         format,
         actorName: lead.name,
         actorIdentity: lead.personality,
+        actors: sceneCast.map((actor) => ({ name: actor.name, identity: actor.personality })),
         productName: productImageName,
         hasProductReference: Boolean(productImageUrl),
       });
@@ -791,6 +809,7 @@ export default function StoryBuilderForm() {
         body: JSON.stringify({
           action: "image",
           characterId: lead.id,
+          castCharacterIds: sceneCast.map((actor) => actor.id),
           imagePurpose: "scene",
           referenceImages,
           prompt,

@@ -11,6 +11,12 @@ export type ShotSceneInput = {
   cameraMovementId?: CameraMovementId;
 };
 
+export type ShotActor = {
+  name: string;
+  /** Short visible-identity description; becomes this actor's half of the lock. */
+  identity?: string;
+};
+
 export type ShotPromptInput = {
   productionTitle: string;
   productionLogline?: string;
@@ -20,10 +26,47 @@ export type ShotPromptInput = {
   format?: string;
   actorName: string;
   actorIdentity?: string;
+  /**
+   * Every actor in this frame, lead first. When two or more are supplied the
+   * prompt switches to ensemble grammar: explicit screen staging plus anti-blend
+   * locks. `actorName`/`actorIdentity` remain the single-actor fallback.
+   */
+  actors?: ShotActor[];
   productName?: string;
   hasProductReference?: boolean;
   continuityNote?: string;
 };
+
+/** Stage positions assigned in cast order, so the lead holds screen-left. */
+const STAGE_POSITIONS = [
+  "screen-left, facing screen-right",
+  "screen-right, facing screen-left",
+  "centre frame, between the other two",
+  "background-left, clearly behind the leads",
+  "background-right, clearly behind the leads",
+  "foreground edge, partially cropped",
+];
+
+function shotActors(input: ShotPromptInput): ShotActor[] {
+  const supplied = (input.actors ?? []).filter((actor) => actor?.name?.trim());
+  if (supplied.length) return supplied;
+  return [{ name: input.actorName, identity: input.actorIdentity }];
+}
+
+function castingComposition(actors: ShotActor[]) {
+  const staged = actors.map((actor, index) => `${actor.name} (${STAGE_POSITIONS[index] ?? "clearly separated from the others"})`);
+  return `CASTING COMPOSITION: Exactly ${actors.length} distinct people are in this frame — ${staged.join("; ")}. Every one of them must be fully visible, separately posed, and individually recognisable in a single shared location under one continuous light. Do not merge, blend, average, duplicate, or substitute one actor's face onto another, and do not reduce the frame to a single person.`;
+}
+
+function actorLock(actors: ShotActor[]) {
+  if (actors.length === 1) {
+    return `ACTOR LOCK: ${actors[0].name}. Match the supplied identity reference exactly. ${actors[0].identity ?? ""}`.trim();
+  }
+  const locks = actors.map((actor, index) => (
+    `${actor.name} matches reference image ${index + 1}${actor.identity ? ` — ${actor.identity}` : ""}`
+  ));
+  return `ACTOR LOCK: Each actor is bound to their own reference, in order: ${locks.join("; ")}. Preserve each face, skin tone, hair, age, and wardrobe independently.`;
+}
 
 export type ShotSequenceValidation = {
   valid: boolean;
@@ -156,17 +199,25 @@ export function validateShotSequence(
 
 export function buildShotImagePrompt(input: ShotPromptInput): string {
   const camera = cameraPlanForShot(input);
-  const risks = auditShotScene(input.scene);
+  const actors = shotActors(input);
+  const ensemble = actors.length > 1;
+  // A two-hander's physical contact is the point of the shot, so it must be
+  // directed rather than flagged as a risk to simplify away.
+  const risks = auditShotScene(input.scene).filter((risk) => !(ensemble && risk.code === "complex-contact"));
   return [
     `PURPOSE: Binding first frame for scene ${input.sceneIndex + 1} of ${input.sceneCount} in "${input.productionTitle}".`,
     "SHOT UNIT: This image is the exact visual start of one four-second clip. It is not a portrait, poster, montage, or finished edit.",
     `STORY PROMISE: ${input.productionLogline || "Make the scene's visible change clear without explanatory text."}`,
     `SETTING: ${input.scene.setting || "A specific location grounded in the locked production."}`,
     `DRAMATIC OBJECTIVE: ${input.scene.objective || "Create one visible situation change."}`,
-    `FIRST-FRAME ACTION: Compose the instant immediately before ${input.scene.action || `${input.actorName} begins one concise, camera-readable action.`}`,
+    `FIRST-FRAME ACTION: Compose the instant immediately before ${input.scene.action || `${actors[0].name} begins one concise, camera-readable action.`}`,
     "DISTINCT SHOT RULE: Represent only this scene's authored setting, objective, and starting action. Do not copy the pose, staging, camera angle, or background of another scene in the sequence.",
     "SINGLE-FRAME RULE: Return one full-bleed camera view only. No split screen, tiled variants, storyboard, contact sheet, diptych, triptych, or collage.",
-    `ACTOR LOCK: ${input.actorName}. Match the supplied identity reference exactly. ${input.actorIdentity ?? ""}`.trim(),
+    ...(ensemble ? [castingComposition(actors)] : []),
+    actorLock(actors),
+    ...(ensemble
+      ? [`CONTACT: Stage the interaction physically — state whose hand, shoulder, or weight meets whom, keep both actors' full bodies coherent through the contact, and preserve the ${actors[0].name}-to-${actors[1].name} screen direction. No merged bodies and no detached limbs.`]
+      : []),
     ...(input.hasProductReference
       ? [`PRODUCT LOCK: The supplied ${input.productName || "product"} reference is binding. Preserve exact silhouette, packaging, label placement, proportions, colors, cap, and materials. Keep it readable at its real scale.`]
       : ["STORY EVIDENCE: Show only the physical evidence required by this scene's action and objective. Do not invent a product, storefront, service demonstration, or advertising setup that is absent from the script. Never return an empty portrait-only frame."]),
@@ -182,19 +233,23 @@ export function buildShotImagePrompt(input: ShotPromptInput): string {
 
 export function buildShotVideoPrompt(input: ShotPromptInput): string {
   const camera = cameraPlanForShot(input);
-  const risks = auditShotScene(input.scene);
+  const actors = shotActors(input);
+  const ensemble = actors.length > 1;
+  const risks = auditShotScene(input.scene).filter((risk) => !(ensemble && risk.code === "complex-contact"));
   return [
     `Animate scene ${input.sceneIndex + 1} of ${input.sceneCount} for "${input.productionTitle}" as one continuous five-second silent source clip whose usable action lands by four seconds.`,
     `STORY PROMISE: ${input.productionLogline || input.scene.objective || "One visible action creates one visible change."}`,
     "SOURCE FRAME: The supplied image is the exact first frame and complete art direction. Do not redesign, recompose, or invent a second angle.",
     `SCENE BEAT: ${input.scene.setting || "The established location"}; ${input.scene.objective || "one visible situation change"}.`,
     `0.0-0.8s — ESTABLISH: Hold long enough to read the actor, location, important object or product, and the starting body position.`,
-    `0.8-3.2s — PERFORM: ${input.scene.action || `${input.actorName} completes one concise, physically plausible action.`}`,
+    `0.8-3.2s — PERFORM: ${input.scene.action || `${actors[0].name} completes one concise, physically plausible action.`}`,
     `3.2-4.0s — LAND: Finish the action, settle body and camera motion, and hold a clean final frame that expresses ${input.scene.objective || "the changed situation"}.`,
     `CAMERA PATH — ${camera.movementName}: ${camera.movementPrompt}`,
     `CAMERA LOCK: Preserve ${camera.angle}, ${camera.lens}, the source-image axis, horizon, lens character, subject scale, and established screen direction. No second move and no cut.`,
     "EDIT HANDLE: After the action lands at four seconds, hold the same pose and composition through five seconds with only natural breath and environmental inertia. The master edit uses the first four seconds.",
-    `IDENTITY ANCHOR: Keep ${input.actorName}'s exact face, apparent age, hair, body proportions, skin detail, wardrobe, and distinguishing asymmetry from the supplied image.`,
+    ensemble
+      ? `IDENTITY ANCHOR: Keep all ${actors.length} actors present for the full five seconds — ${actors.map((actor) => actor.name).join(", ")}. Each keeps their own exact face, apparent age, hair, body proportions, skin detail, wardrobe, and distinguishing asymmetry from the supplied frame. Never blend two actors into one, drop an actor out of frame, or swap their positions.`
+      : `IDENTITY ANCHOR: Keep ${actors[0].name}'s exact face, apparent age, hair, body proportions, skin detail, wardrobe, and distinguishing asymmetry from the supplied image.`,
     ...(input.hasProductReference
       ? [`PRODUCT ANCHOR: Keep the visible ${input.productName || "product"} continuously present, correctly shaped, correctly labeled, stable in scale, and physically connected to the stated surface or hand.`]
       : ["STORY ANCHOR: Preserve only the people, objects, and environmental evidence visible in this scene's supplied first frame. Do not invent an advertising setup or borrow objects from another scene."]),
