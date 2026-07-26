@@ -3,6 +3,15 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.16 - 2026-07-26 - Canonical actor workspace logo
+
+- Replaced the improvised circular `C` and separate `CHAPLIN STUDIO` label in
+  the actor-creation workspace with Chaplin's canonical transparent wordmark.
+- Preserved the existing actor navigation, project field, stepper, and header
+  layout while making the brand consistent with the rest of the product.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  Next.js production build.
+
 ## v0.1.15 - 2026-07-26 - Visible custom sound directions
 
 - Restored saved and Magic Write custom voice, signature-SFX, and theme

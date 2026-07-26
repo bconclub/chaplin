@@ -815,9 +815,21 @@ export default function NewCharacterPage() {
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <header className="flex h-[4.35rem] shrink-0 items-center justify-between gap-5 border-b border-white/10 bg-[#080b0a]/95 px-5">
             <div className="flex min-w-0 items-center gap-5">
-              <Link href="/characters" className="flex shrink-0 items-center gap-2 text-sm font-extrabold tracking-[0.08em] text-ink">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-accent text-sm">C</span>
-                <span>CHAPLIN <span className="text-[8px] text-accent">STUDIO</span></span>
+              <Link
+                href="/characters"
+                aria-label="Chaplin actors"
+                className="relative flex h-10 w-[8.75rem] shrink-0 items-center"
+              >
+                <Image
+                  src="/brand/chaplin-logo-transparent.png"
+                  alt="Chaplin"
+                  width={1826}
+                  height={585}
+                  priority
+                  quality={90}
+                  sizes="140px"
+                  className="h-10 w-auto max-w-[8.75rem] object-contain object-left"
+                />
               </Link>
               <span className="h-8 w-px bg-white/10" />
               <label className="flex items-center gap-3 text-xs text-grey">
