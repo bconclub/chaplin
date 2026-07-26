@@ -143,3 +143,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.35 | `1b32a67` | 2026-07-26T09:57:24+05:30 | Make the character room a spoken conversation with memory |
 | v0.1.36 | `8f941b7` | 2026-07-26T10:02:37+05:30 | fix: show homepage video on mobile |
 | v0.1.37 | `c31057a` | 2026-07-26T10:04:57+05:30 | Stop rejecting prompts the route was about to compact anyway |
+| v0.1.38 | `96409c2` | 2026-07-26T10:17:12+05:30 | fix: keep Magic Write identity gender coherent |

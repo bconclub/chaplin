@@ -151,6 +151,7 @@ type CharacterBuilderDraft = {
   version: 1;
   updatedAt: string;
   name: string;
+  nameSource?: "creator" | "generated";
   archetypes: Archetype[];
   characterBrief: string;
   tagline: string;
@@ -294,6 +295,7 @@ export default function NewCharacterPage() {
   const [revealingField, setRevealingField] = useState("");
   const suggestStartedAt = useRef<number | null>(null);
   const magicWriteRunRef = useRef(0);
+  const creatorNamedRef = useRef(false);
   const [recoverableDraft, setRecoverableDraft] = useState<Partial<CharacterBuilderDraft> | null>(null);
   const restoredDraftKey = useRef<string | null>(null);
   const draftStorageKey = `chaplin-character-builder:${currentUserId}`;
@@ -322,6 +324,7 @@ export default function NewCharacterPage() {
       (draft.productionBible ? appearanceDirectionFromBible(draft.productionBible) : "");
     const restoredWorldBrief = draft.worldBrief?.trim() ||
       (draft.productionBible ? worldDirectionFromBible(draft.productionBible) : "");
+    creatorNamedRef.current = draft.nameSource === "creator";
     setName(draft.name ?? "");
     setArchetypes(
       Array.isArray(draft.archetypes) && draft.archetypes.length
@@ -378,6 +381,7 @@ export default function NewCharacterPage() {
         version: 1,
         updatedAt: new Date().toISOString(),
         name,
+        nameSource: creatorNamedRef.current ? "creator" : "generated",
         archetypes,
         characterBrief,
         tagline,
@@ -438,7 +442,10 @@ export default function NewCharacterPage() {
     if (!cname && !cbrief && carchetypes.length === 0) return;
     conciergeRan.current = true;
     const timer = window.setTimeout(() => {
-      if (cname) setName(cname);
+      if (cname) {
+        creatorNamedRef.current = true;
+        setName(cname);
+      }
       if (cbrief) setCharacterBrief(cbrief);
       if (carchetypes.length) setArchetypes(carchetypes);
     }, 0);
@@ -454,6 +461,7 @@ export default function NewCharacterPage() {
       }>).detail;
       const direction = detail?.brief?.trim();
       if (detail?.name?.trim()) {
+        creatorNamedRef.current = true;
         setName((current) => current.trim() ? current : detail.name!.trim());
       }
       if (direction) {
@@ -475,6 +483,11 @@ export default function NewCharacterPage() {
   }, []);
 
   const archetype = archetypes[0] ?? "hero";
+
+  function updateCreatorName(nextName: string) {
+    creatorNamedRef.current = Boolean(nextName.trim());
+    setName(nextName);
+  }
 
   function toggleArchetype(a: Archetype) {
     setArchetypes((current) => {
@@ -533,7 +546,9 @@ export default function NewCharacterPage() {
     target: SuggestionTarget,
     overrides?: { name?: string; characterBrief?: string; archetypes?: Archetype[] }
   ) {
-    const effectiveName = overrides?.name ?? name;
+    const overrideName = overrides?.name?.trim() ?? "";
+    const effectiveName = overrideName ||
+      (target === "all" && !creatorNamedRef.current ? "" : name);
     const effectiveBrief = overrides?.characterBrief ?? characterBrief;
     const effectiveArchetypes = overrides?.archetypes ?? archetypes;
     if (target !== "all" && !effectiveName.trim()) {
@@ -637,6 +652,7 @@ export default function NewCharacterPage() {
           version: 1,
           updatedAt: new Date().toISOString(),
           name: suggestedName,
+          nameSource: creatorNamedRef.current ? "creator" : "generated",
           archetypes: effectiveArchetypes,
           characterBrief: effectiveBrief,
           tagline: suggestion.tagline,
@@ -685,6 +701,7 @@ export default function NewCharacterPage() {
         ];
         reveal.forEach(([label, apply], index) => {
           window.setTimeout(() => {
+            if (magicWriteRunRef.current !== magicWriteRun) return;
             apply();
             setRevealingField(label);
             setSuggestionMessage(`✦ ${label === "bible" ? "Actor Direction Bible" : label.charAt(0).toUpperCase() + label.slice(1)} written…`);
@@ -833,7 +850,7 @@ export default function NewCharacterPage() {
                 Project
                 <input
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(event) => updateCreatorName(event.target.value)}
                   placeholder="Untitled actor"
                   className="w-40 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-accent"
                 />
@@ -1125,7 +1142,7 @@ export default function NewCharacterPage() {
                   <input
                     data-character-field="name"
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) => updateCreatorName(event.target.value)}
                     placeholder="Magic can name the actor"
                     maxLength={50}
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 pr-12 text-xs outline-none focus:border-accent"
@@ -1380,7 +1397,7 @@ export default function NewCharacterPage() {
           <input
             data-character-field="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => updateCreatorName(e.target.value)}
             placeholder="Optional — Magic will suggest one from your brief"
             className="border border-line rounded-sm px-3 py-2 focus:outline-none focus:border-accent"
           />
