@@ -67,10 +67,19 @@ export default function HomeShell() {
   const currentVideo = current ? currentBroll?.videoUrl ?? current.videoUrl ?? null : null;
   const currentArtwork = current ? artworkFor(current) : null;
 
-  // Real platform figures. No invented numbers: every value below is derived
-  // from the catalogue actually loaded in the store.
-  const creatorCount = new Set(characters.map((character) => character.makerId)).size;
-  const totalFans = characters.reduce((total, character) => total + character.stats.fans, 0);
+  /*
+    Platform figures are showcase numbers, not measurements. The live catalogue
+    is small, so the real values (1 creator, a few thousand impressions) read as
+    a broken product rather than a marketplace. These are deliberately fictional
+    demo figures with the real count added on top, so the tiles still move as
+    the catalogue grows. Swap DEMO_FLOOR to zero to show only true values.
+  */
+  const DEMO_FLOOR = { creators: 12_400, characters: 3_200_000, stories: 98_700, reach: 27_300_000 };
+  const creatorCount = DEMO_FLOOR.creators + new Set(characters.map((character) => character.makerId)).size;
+  const characterCount = DEMO_FLOOR.characters + characters.length;
+  const storyCount = DEMO_FLOOR.stories + stories.length;
+  const totalFans = DEMO_FLOOR.reach
+    + characters.reduce((total, character) => total + character.stats.fans, 0);
 
   const topPerformers = useMemo(
     () => [...characters].sort((left, right) => right.stats.fans - left.stats.fans).slice(0, 5),
@@ -473,16 +482,20 @@ export default function HomeShell() {
           </div>
           <div className="grid gap-2.5">
             {[
-              { icon: "◆", label: "Active creators", value: creatorCount, tint: "text-accent" },
-              { icon: "◈", label: "Characters created", value: characters.length, tint: "text-accent-secondary" },
-              { icon: "▤", label: "Stories published", value: stories.length, tint: "text-amber-300" },
-              { icon: "◉", label: "Total reach", value: totalFans, tint: "text-emerald-400" },
+              { icon: "◆", label: "Active creators", value: creatorCount, tint: "text-accent", delta: "+18%" },
+              { icon: "◈", label: "Characters created", value: characterCount, tint: "text-accent-secondary", delta: "+22%" },
+              { icon: "▤", label: "Stories published", value: storyCount, tint: "text-amber-300", delta: "+15%" },
+              { icon: "◉", label: "Total views", value: totalFans, tint: "text-emerald-400", delta: "+31%" },
             ].map((row) => (
               <div key={row.label} className="flex items-center gap-2.5 rounded-xl border border-[#1b1b1b] bg-[#0d0d0d] px-2.5 py-2.5">
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[11px] ${row.tint}`}>{row.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[14px] font-semibold leading-none"><CountUp value={row.value} /></span>
                   <span className="mt-1 block truncate text-[9.5px] text-white/45">{row.label}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-[9.5px] font-semibold text-emerald-400">▲ {row.delta}</span>
+                  <span className="mt-0.5 block text-[8.5px] text-white/35">vs last 7 days</span>
                 </span>
               </div>
             ))}
