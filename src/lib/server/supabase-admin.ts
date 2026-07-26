@@ -644,9 +644,26 @@ export async function getCharacterProductionState(characterId: string) {
             ? { url: featured.banner_url, assetId: null, source: "character-banner" as const }
             : null;
 
+  /*
+    The character's own style sheet: the multi-panel turnaround showing their
+    face from every angle, their build, wardrobe and signature props.
+
+    Without it every scene was generated from a single hero still, so the model
+    had no view of the actor it was not already looking at - and filled the gaps
+    from whoever else was in the production. That is how one character ended up
+    carrying another's weapon. Reading it here makes the sheet available as a
+    binding reference wherever a frame is composed.
+  */
+  const styleSheet = rows.find((asset) => {
+    if (asset.kind !== "gallery") return false;
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    return metadata?.imagePurpose === "character-sheet";
+  });
+
   return {
     voiceId: activeVoiceId,
     voicePreviewUrl: voice.data?.preview_url ?? null,
+    styleSheet: styleSheet ? { url: styleSheet.url, assetId: styleSheet.id } : null,
     latestDialogueUrl: latestDialogue?.url ?? null,
     // A new SFX take belongs to the actor's library, but it is not the
     // character's reusable signature until the creator explicitly selects it.

@@ -1201,6 +1201,16 @@ export async function POST(request: Request) {
                 ]
               : [
                   canonicalReference?.url ?? requestedReference,
+                  /*
+                    The actor's style sheet rides alongside the hero still. A
+                    single still shows one angle, so the model had no view of
+                    the actor it was not already looking at and filled the gaps
+                    from whoever else was in the production - which is how one
+                    character was drawn carrying another's weapon. The sheet
+                    supplies the face from every angle, the build, the wardrobe
+                    and the props that actually belong to them.
+                  */
+                  production.styleSheet?.url ?? "",
                   ...requestedReferences,
                 ]
           ).filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
