@@ -33,6 +33,14 @@ function latestSceneReference(assets: ProductionAsset[]) {
   )?.url ?? "";
 }
 
+function mergeProductionAssets(current: ProductionAsset[], incoming: ProductionAsset[]) {
+  const assets = new Map(current.map((asset) => [asset.id, asset]));
+  incoming.forEach((asset) => assets.set(asset.id, asset));
+  return [...assets.values()].sort(
+    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
+}
+
 type ProductionState = {
   voiceId: string | null;
   voicePreviewUrl: string | null;
@@ -683,8 +691,9 @@ export default function CharacterProductionStudio({
     setStatus(data);
     if (data.production) {
       const assets = data.production.assets ?? [];
-      setAssetHistory(assets);
-      setGeneratedImage(latestSceneReference(assets));
+      setAssetHistory((current) => mergeProductionAssets(current, assets));
+      const latestGeneratedImage = latestSceneReference(assets);
+      if (latestGeneratedImage) setGeneratedImage(latestGeneratedImage);
       setCanonicalReferenceImage(data.production.visualReference?.url ?? "");
       if (data.production.voiceId) setLockedVoiceId(data.production.voiceId);
       if (data.production.voiceId && data.production.voiceId !== character.voiceId) {
@@ -1390,6 +1399,7 @@ export default function CharacterProductionStudio({
         updateAutoStudioStep(2, "generating", "Performing dialogue");
         const automaticSpeechUrl = await audioAction("speech", { speechText: writtenDialogue });
         setSpeechUrl(automaticSpeechUrl);
+        await refreshHistory();
         updateAutoStudioStep(2, "complete", "Dialogue ready");
       } catch (error) {
         updateAutoStudioStep(2, "failed", error instanceof Error ? error.message : "Dialogue generation failed");
@@ -1414,6 +1424,7 @@ export default function CharacterProductionStudio({
         };
         if (!signature.url) throw new Error("The signature sound returned no playable asset.");
         setSfxUrl(signature.url);
+        await refreshHistory();
         updateAutoStudioStep(3, "complete", `${signature.events?.length ?? signatureSfxEventCount} sound events mixed`);
       } catch (error) {
         updateAutoStudioStep(3, "failed", error instanceof Error ? error.message : "Signature sound generation failed");
@@ -1439,6 +1450,7 @@ export default function CharacterProductionStudio({
           grammarVersion: "v3",
         });
         setThemeUrl(automaticThemeUrl);
+        await refreshHistory();
         updateAutoStudioStep(4, "complete", "Theme ready");
       } catch (error) {
         updateAutoStudioStep(4, "failed", error instanceof Error ? error.message : "Theme generation failed");
@@ -1519,6 +1531,7 @@ export default function CharacterProductionStudio({
         } else {
           setGeneratedImage(selected.url);
         }
+        await refreshHistory();
         updateAutoStudioStep(5, "complete", `${imageProviderLabel(selected.provider)} frame selected`);
         return selected.url;
       } catch (error) {
@@ -1594,7 +1607,11 @@ export default function CharacterProductionStudio({
   }
 
   const processingStep = busy
-    ? (busy === "magic-scene" ? activeStep : PRODUCTION_TASK_TO_STEP[busy] ?? activeStep)
+    ? (busy === "magic-scene"
+        ? activeStep
+        : busy === "auto-studio"
+          ? null
+          : PRODUCTION_TASK_TO_STEP[busy] ?? activeStep)
     : quickWriting
       ? QUICK_WRITE_TO_STEP[quickWriting] ?? activeStep
       : null;

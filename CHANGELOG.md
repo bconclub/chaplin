@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.18 - 2026-07-26 - Immediate Studio asset previews
+
+- Fixed Studio Auto incorrectly marking whichever open stage as generating for
+  the full duration of the automation run.
+- Completed dialogue, signature SFX, theme, and still stages now switch from
+  progress placeholders to their playable or visible preview immediately.
+- Refreshes persisted asset history after every automatic media stage and
+  merges concurrent results without dropping assets generated in parallel.
+- Passed TypeScript, ESLint with one pre-existing test warning, and the complete
+  Next.js production build.
+
 ## v0.1.17 - 2026-07-26 - Clean actor creation feedback
 
 - Removed provider attribution and completion boilerplate from the Magic Write
