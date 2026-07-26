@@ -161,3 +161,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.53 | `e279b37` | 2026-07-26T11:20:11+05:30 | Feed tabs, clickable cast mentions, and admin-curated featuring |
 | v0.1.54 | `223df80` | 2026-07-26T11:25:42+05:30 | Deliver videos with locked voice and scene audio |
 | v0.1.55 | `d9d8c10` | 2026-07-26T11:34:20+05:30 | Retry transient step failures and persist the production story |
+| v0.1.56 | `b689411` | 2026-07-26T11:53:34+05:30 | Compose exact ElevenLabs music plans |

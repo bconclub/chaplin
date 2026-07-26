@@ -3,6 +3,17 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.1.57 - 2026-07-26 - Full-width trending rail
+
+- Expanded Trending Now from six to ten distinct AI actors so wide screens stay
+  filled and the rail has real content available beyond the first viewport.
+- Added branded horizontal scrolling with viewport-sized arrow navigation and
+  snap-aligned actor cards.
+- Stopped Curated Collections from immediately repeating the trending faces by
+  sourcing its covers from a separate catalogue pool.
+- Passed focused ESLint, strict TypeScript, and local server rendering with all
+  ten trending cards present.
+
 ## v0.1.56 - 2026-07-26 - Structured Eleven Music composition plans
 
 - Replaced the default overloaded ElevenLabs theme prompt with validated

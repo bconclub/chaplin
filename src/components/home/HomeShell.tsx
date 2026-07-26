@@ -12,7 +12,7 @@ import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
 const FEATURE_ROTATE_MS = 7000;
-const FEATURED_LIMIT = 6;
+const FEATURED_LIMIT = 10;
 
 function artworkFor(character: Character) {
   return character.bannerUrl ?? character.imageUrl ?? character.galleryUrls?.[0] ?? null;
@@ -116,6 +116,20 @@ export default function HomeShell() {
     [characters],
   );
 
+  /*
+    Collection covers must not repeat the faces directly above them. Prefer
+    actors outside the ten-card trending rail, then fill from the catalogue's
+    opposite end only when a small library leaves no alternative.
+  */
+  const collectionCharacters = useMemo(() => {
+    const featuredIds = new Set(featured.map((character) => character.id));
+    const distinct = characters.filter((character) => !featuredIds.has(character.id));
+    const fallback = [...characters]
+      .reverse()
+      .filter((character) => !distinct.some((candidate) => candidate.id === character.id));
+    return [...distinct, ...fallback].slice(0, COLLECTIONS.length);
+  }, [characters, featured]);
+
   useEffect(() => {
     let cancelled = false;
     function load() {
@@ -163,7 +177,12 @@ export default function HomeShell() {
   }
 
   function scrollRow(direction: -1 | 1) {
-    rowRef.current?.scrollBy({ left: direction * 340, behavior: "smooth" });
+    const row = rowRef.current;
+    if (!row) return;
+    row.scrollBy({
+      left: direction * Math.max(340, row.clientWidth * 0.82),
+      behavior: "smooth",
+    });
   }
 
   if (!characters.length || !current) return null;
@@ -348,7 +367,11 @@ export default function HomeShell() {
                 <Link href="/characters" className="text-[10px] font-semibold text-white/45 transition-colors hover:text-accent">View all ›</Link>
               </div>
             </div>
-            <div ref={rowRef} className="no-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-0.5">
+            <div
+              ref={rowRef}
+              className="chaplin-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2"
+              data-trending-rail
+            >
               {featured.map((character) => {
                 const active = character.id === currentId;
                 const artwork = cardArtworkFor(character);
@@ -359,7 +382,7 @@ export default function HomeShell() {
                     onClick={() => { setHeroProgress(0); setActiveId(character.id); }}
                     aria-pressed={active}
                     data-featured-actor={character.id}
-                    className={`group/card relative w-[9.5rem] shrink-0 snap-start overflow-hidden rounded-xl border text-left transition-all duration-300 sm:w-[10.5rem] ${
+                    className={`group/card relative w-[9.25rem] shrink-0 snap-start overflow-hidden rounded-xl border text-left transition-all duration-300 sm:w-[10rem] 2xl:w-[10.5rem] ${
                       active
                         ? "border-accent shadow-[0_0_0_1px_rgba(242,78,112,0.35),0_14px_34px_rgba(0,0,0,0.5)]"
                         : "border-[#202020] hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
@@ -416,7 +439,8 @@ export default function HomeShell() {
             </h2>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
               {COLLECTIONS.map((collection, index) => {
-                const artwork = cardArtworkFor(featured[index % featured.length]);
+                const collectionCharacter = collectionCharacters[index % collectionCharacters.length];
+                const artwork = collectionCharacter ? cardArtworkFor(collectionCharacter) : null;
                 return (
                   <Link
                     key={collection.title}
