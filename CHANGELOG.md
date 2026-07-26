@@ -3,7 +3,7 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
-## v0.1.26 - 2026-07-26 - Unified production workspace header
+## v0.1.28 - 2026-07-26 - Unified production workspace header
 
 - Moved Magic Scene into the production header instead of stacking it as a
   separate full-width toolbar.

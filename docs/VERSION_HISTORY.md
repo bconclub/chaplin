@@ -131,4 +131,5 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.23 | `6d2f06c` | 2026-07-26T09:20:12+05:30 | Add Replicate open-weights video fallback |
 | v0.1.24 | `b90d7d5` | 2026-07-26T09:20:12+05:30 | Stop prompt lint from cancelling paid generation |
 | v0.1.25 | `77941f6` | 2026-07-26T09:21:30+05:30 | Changelog for v0.1.19 |
-| v0.1.26 | `ffbb81e` | 2026-07-26T09:29:02+05:30 | fix: unify production workspace header |
+| v0.1.26 | `819a67b` | 2026-07-26T09:30:44+05:30 | Keep identity references clean and start new actors blank |
+| v0.1.27 | `021b3e6` | 2026-07-26T09:34:06+05:30 | fix: unify production workspace header |
