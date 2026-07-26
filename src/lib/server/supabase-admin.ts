@@ -174,7 +174,9 @@ export async function listCharacters(): Promise<Character[]> {
       .eq("status", "active"),
     supabase
       .from("media_assets")
-      .select("id,character_id,kind,url,created_at")
+      // metadata carries imagePurpose and the ensemble/cast markers that decide
+      // whether an asset is a finished photo or a discarded casting attempt.
+      .select("id,character_id,kind,url,metadata,created_at")
       .in("kind", ["avatar", "banner", "gallery", "video"])
       .not("character_id", "is", null)
       .order("created_at", { ascending: false }),
@@ -187,11 +189,38 @@ export async function listCharacters(): Promise<Character[]> {
   const voiceByCharacter = new Map(
     (voices.data ?? []).map((voice) => [voice.character_id, voice.provider_voice_id])
   );
+  /*
+    Every generated image is stored with kind "gallery", including the identity
+    candidates produced while casting a face. Those are drafts: a creator
+    generates several, keeps one, and the rest are never chosen. They were all
+    being published to the actor's public gallery. Only finished work belongs
+    there — scene stills and uploads — never a discarded casting attempt, and
+    never a frame built from another actor's reference.
+  */
+  const isPublishableGalleryAsset = (asset: { kind: string; metadata: unknown; character_id: string | null }) => {
+    if (asset.kind !== "gallery") return false;
+    const metadata = asset.metadata as Record<string, unknown> | null;
+    if (metadata?.imagePurpose === "identity" || metadata?.imagePurpose === "character-sheet") return false;
+    if (metadata?.ensembleShot === true) return false;
+    const cast = metadata?.castCharacterIds;
+    if (Array.isArray(cast) && cast.filter(Boolean).length > 1) return false;
+    const references = metadata?.referenceImages;
+    if (Array.isArray(references)) {
+      const borrowed = references.some((reference) => {
+        if (typeof reference !== "string") return false;
+        const owner = /\/character-media\/([^/]+)\//.exec(reference)?.[1];
+        return Boolean(owner) && owner !== asset.character_id;
+      });
+      if (borrowed) return false;
+    }
+    return true;
+  };
+
   const mediaByCharacter = new Map<string, { avatar?: string; banner?: string; video?: string; gallery: string[] }>();
   for (const asset of assets.data ?? []) {
     if (!asset.character_id) continue;
     const media = mediaByCharacter.get(asset.character_id) ?? { gallery: [] };
-    if (asset.kind === "gallery") media.gallery.push(asset.url);
+    if (isPublishableGalleryAsset(asset)) media.gallery.push(asset.url);
     if (asset.kind === "avatar" && !media.avatar) media.avatar = asset.url;
     if (asset.kind === "banner" && !media.banner) media.banner = asset.url;
     if (asset.kind === "video" && !media.video) media.video = asset.url;
