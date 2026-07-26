@@ -187,8 +187,14 @@ export const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
         // the exact voice, scene effects, and theme stems into delivery.
         generateAudio: true,
         watermark: false,
-        pollIntervalSeconds: 5,
-        maximumPolls: 55,
+        // Seedance finishes well inside one of these, so a five-second gap meant
+        // a finished shot sat unnoticed for most of it. Checked more often now
+        // that polling no longer wastes an interval before its first look.
+        pollIntervalSeconds: 2,
+        // Raised alongside the shorter interval so the overall wait budget is
+        // unchanged (2s x 140 = 280s, previously 5s x 55 = 275s). Polling more
+        // often must not shorten how long a slow render is allowed to take.
+        maximumPolls: 140,
       },
     },
   },

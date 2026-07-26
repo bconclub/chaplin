@@ -1508,8 +1508,19 @@ export async function POST(request: Request) {
         const taskId = createdResponse.data.id;
         if (typeof taskId !== "string") throw new Error("Seedance did not return a task ID.");
         let task: Record<string, unknown> = {};
+        /*
+          Ask before waiting.
+
+          This slept a full interval before its first check, so a shot that was
+          already finished still cost that interval, and every later check was
+          up to one interval behind the provider. The studio therefore kept
+          showing a progress bar for a video the feed and asset canvas had
+          already received. Polling now checks immediately and sleeps only
+          between attempts, which removes a guaranteed dead wait from every
+          render and halves the average detection lag.
+        */
         for (let attempt = 0; attempt < maximumPolls; attempt += 1) {
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           task = (await modelArk(`/contents/generations/tasks/${encodeURIComponent(taskId)}`)).data;
           if (task.status === "succeeded") break;
           if (["failed", "cancelled", "expired"].includes(String(task.status))) {
