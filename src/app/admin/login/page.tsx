@@ -7,8 +7,10 @@ import { getClientAuthIdentity } from "@/lib/client-auth";
 
 function SuperAdminLoginForm() {
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("chaplin@chaplin.in");
-  const [password, setPassword] = useState("chaplin");
+  // Never pre-fill these. The page used to ship the real Super Admin
+  // credentials in the markup, so signing in took one click by anyone.
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

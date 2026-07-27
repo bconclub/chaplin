@@ -11,6 +11,7 @@ import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
 const FEATURE_ROTATE_MS = 7000;
+const CAST_USES = ["UGC", "ads", "films", "microdramas"] as const;
 const FEATURED_LIMIT = 10;
 
 function artworkFor(character: Character) {
@@ -53,6 +54,7 @@ export default function HomeShell() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [heroProgress, setHeroProgress] = useState(0);
+  const [castUseIndex, setCastUseIndex] = useState(0);
   const rowRef = useRef<HTMLDivElement | null>(null);
 
   const brollByCharacter = useMemo(
@@ -181,6 +183,19 @@ export default function HomeShell() {
   // the catalogue across a long session.
   useEffect(() => {
     const timer = window.setInterval(() => setShuffleTick((tick) => tick + 1), 45_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  /*
+    The hero line names one use at a time and cycles, rather than listing all
+    of them and trailing off with "and more" — a rotating word reads as the
+    range of the product without the sentence going vague at the end.
+  */
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setCastUseIndex((index) => (index + 1) % CAST_USES.length),
+      2_200,
+    );
     return () => window.clearInterval(timer);
   }, []);
 
@@ -357,24 +372,43 @@ export default function HomeShell() {
               </p>
 
               <div className="flex min-h-0 flex-1 flex-col justify-center py-3 sm:max-w-[62%] lg:max-w-[54%]">
-                <h1 className="reel-title text-[clamp(1.6rem,6.5vw,3.4rem)] leading-[0.94] tracking-[-0.035em] sm:text-[clamp(1.9rem,3.4vw,3.4rem)]">
+                {/* Scaled up with the taller hero — at 65% of the screen the
+                    old sizes read as a caption under a very large picture. */}
+                <h1 className="reel-title text-[clamp(1.9rem,7vw,3.6rem)] leading-[0.94] tracking-[-0.035em] sm:text-[clamp(2.4rem,4.2vw,4.6rem)]">
                   <span className="block">The world of</span>
                   <span className="block text-accent">AI actors.</span>
                 </h1>
-                <p className="mt-2.5 max-w-sm text-[12.5px] leading-5 text-white/60">
-                  Ready to cast AI actors for <strong className="font-semibold text-ink">UGC</strong>, ads, films,
-                  microdramas and more.
+                <p
+                  className="mt-3.5 max-w-md text-[15px] leading-6 text-white/65 sm:text-[16px] sm:leading-7"
+                  /* A screen reader would otherwise hear whichever single word
+                     happened to be showing. */
+                  aria-label={`Ready to cast AI actors for ${CAST_USES.join(", ")}.`}
+                >
+                  <span aria-hidden="true">Ready to cast AI actors for</span>{" "}
+                  {/* Reserves the width of the longest word so the line does not
+                      jog sideways on each swap. */}
+                  <span className="relative inline-block">
+                    <span aria-hidden="true" className="invisible font-semibold">
+                      {CAST_USES.reduce((longest, use) => (use.length > longest.length ? use : longest))}
+                    </span>
+                    <strong
+                      key={CAST_USES[castUseIndex]}
+                      className="absolute inset-0 font-semibold text-accent motion-safe:animate-[chaplin-format-enter_0.4s_ease-out]"
+                    >
+                      {CAST_USES[castUseIndex]}
+                    </strong>
+                  </span>
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                <div className="mt-5 flex flex-wrap items-center gap-3">
                   <Link
                     href="/characters"
-                    className="rounded-full bg-accent px-5 py-2.5 text-[12.5px] font-bold text-paper shadow-[0_10px_30px_rgba(242,78,112,0.28)] transition-transform hover:-translate-y-0.5"
+                    className="rounded-full bg-accent px-6 py-3 text-[14px] font-bold text-paper shadow-[0_10px_30px_rgba(242,78,112,0.28)] transition-transform hover:-translate-y-0.5"
                   >
                     Explore actors →
                   </Link>
                   <Link
                     href={`/characters/${current.id}`}
-                    className="rounded-full border border-white/22 bg-black/25 px-5 py-2.5 text-[12.5px] font-semibold backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+                    className="rounded-full border border-white/22 bg-black/25 px-6 py-3 text-[14px] font-semibold backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
                   >
                     Meet {current.name.split(" ")[0]}
                   </Link>
@@ -384,12 +418,12 @@ export default function HomeShell() {
               {/* Identity and performance, on their own row rather than layered. */}
               <div className="flex shrink-0 items-end justify-between gap-6">
                 <div className="min-w-0">
-                  <p className="marquee-title truncate text-[15px] uppercase tracking-[0.01em] sm:text-[17px]">{current.name}</p>
-                  <p className="mt-0.5 truncate text-[10.5px] text-accent">
+                  <p className="marquee-title truncate text-[18px] uppercase tracking-[0.01em] sm:text-[21px]">{current.name}</p>
+                  <p className="mt-1 truncate text-[12px] text-accent">
                     {ARCHETYPE_LABEL[current.archetype]}
                     <span className="text-white/40"> · {current.licenseType === "open" ? "Open licence" : `${current.royaltyRate}% royalty`}</span>
                   </p>
-                  <p className="mt-0.5 max-w-md truncate text-[11px] text-white/50">{current.tagline}</p>
+                  <p className="mt-1 max-w-md truncate text-[12.5px] text-white/50">{current.tagline}</p>
                 </div>
                 <dl className="hidden shrink-0 items-end gap-5 sm:flex lg:gap-6">
                   {[
@@ -490,7 +524,11 @@ export default function HomeShell() {
                         />
                       )}
                       <span className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/45" />
-                      <span className="absolute left-1.5 top-1.5 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-[0.1em] text-white/85 backdrop-blur-md">
+                      {/* Bottom-left, not top-left: the crop is anchored high
+                          so the face occupies the top of the frame, and the
+                          badge was landing across it. Duration holds the
+                          opposite corner. */}
+                      <span className="absolute bottom-1.5 left-1.5 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-[0.1em] text-white/85 backdrop-blur-md">
                         {ARCHETYPE_LABEL[character.archetype]}
                       </span>
                       <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold tabular-nums text-white/80">
@@ -560,7 +598,8 @@ export default function HomeShell() {
                         />
                       )}
                       <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
-                      <span className="absolute left-1.5 top-1.5 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-[0.1em] text-white/85 backdrop-blur-md">
+                      {/* Bottom-left for the same reason as the clip cards. */}
+                      <span className="absolute bottom-1.5 left-1.5 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-[0.1em] text-white/85 backdrop-blur-md">
                         {ARCHETYPE_LABEL[character.archetype]}
                       </span>
                     </span>

@@ -118,8 +118,24 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAuthClient();
 
     if (action === "admin-login") {
-      const expectedEmail = (process.env.SUPER_ADMIN_EMAIL ?? "chaplin@chaplin.in").trim().toLowerCase();
-      const expectedPassword = process.env.SUPER_ADMIN_PASSWORD ?? "chaplin";
+      /*
+        Fail closed. These used to fall back to a hardcoded
+        chaplin@chaplin.in / "chaplin", which the login page also pre-filled —
+        so anyone who opened /admin/login and pressed the button was handed
+        full Super Admin, and ensureSuperAdminUser below then created that
+        account for real. No credential is better than a published one: with
+        the env vars unset, admin login is simply unavailable.
+      */
+      const expectedEmail = (process.env.SUPER_ADMIN_EMAIL ?? "").trim().toLowerCase();
+      const expectedPassword = process.env.SUPER_ADMIN_PASSWORD ?? "";
+      if (!expectedEmail || !expectedPassword) {
+        throw new Error(
+          "Super Admin sign-in is not configured on this deployment. Set SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD.",
+        );
+      }
+      if (expectedPassword.length < 12) {
+        throw new Error("SUPER_ADMIN_PASSWORD must be at least 12 characters.");
+      }
       if (email !== expectedEmail || password !== expectedPassword) {
         throw new Error("Incorrect Super Admin email or password.");
       }

@@ -3,6 +3,27 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.2.15 - 2026-07-27 - Close the Super Admin default credential; hero typography
+
+- **Security (breaking):** `/api/auth` no longer falls back to a hardcoded
+  `chaplin@chaplin.in` / `chaplin` when `SUPER_ADMIN_EMAIL` and
+  `SUPER_ADMIN_PASSWORD` are unset, and `/admin/login` no longer pre-fills
+  those credentials into the form. Previously anyone who opened the login page
+  and pressed the button was granted full Super Admin, and the account was then
+  created for real in Supabase. Admin sign-in now fails closed with an explicit
+  message until both env vars are set; the password must be 12+ characters.
+- User-facing: **admin sign-in will stop working on any deployment where those
+  two environment variables are not set.** Set them to restore access.
+- Hero type scaled up with the taller hero — headline 54px to 74px, supporting
+  line 12.5px to 16px, actor name 17px to 21px.
+- The hero line now rotates one use at a time (UGC / ads / films / microdramas)
+  instead of listing them and trailing off with "and more". Width is reserved
+  for the longest word so the line does not jog, the animation is gated behind
+  `prefers-reduced-motion`, and the full list is exposed to screen readers.
+- Archetype badges moved from top-left to bottom-left on both shelves. The card
+  crop is anchored high, so the badge was landing across the actor's face.
+- `(pending)`
+
 ## v0.1.60 - 2026-07-26 - Correct Eleven Music v2 plan schema
 
 - Replaced the legacy `sections`, `positive_global_styles`, and
