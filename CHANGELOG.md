@@ -3,6 +3,15 @@
 This changelog records user-facing product changes, production-pipeline changes,
 provider integrations, and the validation boundary for each major Chaplin update.
 
+## v0.2.16 - 2026-07-27 - Step back through the hero
+
+- The hero now has previous / next controls. It advances on its own — when a
+  clip ends, or on a timer for a still — so a viewer who wanted the one that
+  just passed had to hunt for it in the rail, and could not reach it at all
+  once it scrolled out of the rail. Wraps in both directions.
+- User-facing: `‹` and `›` sit beside the mute button, top-right of the hero.
+- `(pending)`
+
 ## v0.2.15 - 2026-07-27 - Close the Super Admin default credential; hero typography
 
 - **Security (breaking):** `/api/auth` no longer falls back to a hardcoded
@@ -22,7 +31,7 @@ provider integrations, and the validation boundary for each major Chaplin update
   `prefers-reduced-motion`, and the full list is exposed to screen readers.
 - Archetype badges moved from top-left to bottom-left on both shelves. The card
   crop is anchored high, so the badge was landing across the actor's face.
-- `(pending)`
+- `(72db047)`
 
 ## v0.1.60 - 2026-07-26 - Correct Eleven Music v2 plan schema
 

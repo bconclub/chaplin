@@ -209,11 +209,17 @@ export default function HomeShell() {
     return () => window.clearTimeout(timer);
   }, [currentId, currentVideo, featured]);
 
-  function advance() {
+  // Wraps in both directions, so "previous" from the first actor is the last
+  // rather than a dead button.
+  function stepHero(delta: -1 | 1) {
     if (!currentId || featured.length < 2) return;
     const index = featured.findIndex((character) => character.id === currentId);
     setHeroProgress(0);
-    setActiveId(featured[(index + 1) % featured.length].id);
+    setActiveId(featured[(index + delta + featured.length) % featured.length].id);
+  }
+
+  function advance() {
+    stepHero(1);
   }
 
   function scrollRow(direction: -1 | 1) {
@@ -448,21 +454,49 @@ export default function HomeShell() {
               that did nothing a viewer wanted. Sound is the thing they actually
               cannot get to.
             */}
-            {currentVideo && (
-              <button
-                type="button"
-                onClick={() => {
-                  const video = videoRef.current;
-                  if (!video) return;
-                  video.muted = !video.muted;
-                  setHeroMuted(video.muted);
-                }}
-                aria-label={heroMuted ? `Unmute ${current.name}` : `Mute ${current.name}`}
-                className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[13px] backdrop-blur-md transition-all hover:scale-105 hover:border-accent hover:text-accent lg:right-6 lg:top-6"
-              >
-                {heroMuted ? "🔇" : "🔊"}
-              </button>
-            )}
+            {/*
+              The hero advances on its own — when a clip ends, or on a timer for
+              a still. Without a way back, a viewer who wanted the one that just
+              passed had to hunt for it in the rail, and had no way at all to
+              reach it once it scrolled off. These step the hero directly.
+            */}
+            <div className="absolute right-4 top-4 z-20 flex items-center gap-2 lg:right-6 lg:top-6">
+              {featured.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => stepHero(-1)}
+                    aria-label="Previous actor"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[13px] backdrop-blur-md transition-all hover:scale-105 hover:border-accent hover:text-accent"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => stepHero(1)}
+                    aria-label="Next actor"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[13px] backdrop-blur-md transition-all hover:scale-105 hover:border-accent hover:text-accent"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+              {currentVideo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const video = videoRef.current;
+                    if (!video) return;
+                    video.muted = !video.muted;
+                    setHeroMuted(video.muted);
+                  }}
+                  aria-label={heroMuted ? `Unmute ${current.name}` : `Mute ${current.name}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-[13px] backdrop-blur-md transition-all hover:scale-105 hover:border-accent hover:text-accent"
+                >
+                  {heroMuted ? "🔇" : "🔊"}
+                </button>
+              )}
+            </div>
 
             <span className="absolute inset-x-0 bottom-0 z-30 h-0.5 bg-white/10">
               <span
