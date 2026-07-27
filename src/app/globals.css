@@ -301,15 +301,24 @@ body:has([data-home-shell]) > main {
 }
 
 /*
-  The home columns must never paint a scrollbar track. They were `overflow-y:
-  auto`, which reserves and renders a gutter in Chromium even when
-  scrollHeight === clientHeight, so a rail appeared down the right edge with
-  nothing to scroll. Content that will not fit is dropped by the rules below
-  rather than hidden behind a bar.
+  The home columns must never paint a scrollbar track — that rail down the right
+  edge with nothing to scroll was `overflow-y: auto` reserving a gutter.
+
+  But `overflow: hidden` then silently clipped 692px of real sidebar content on
+  an 808px column. Five panels of genuine content do not fit a laptop viewport,
+  so the choice is to drop panels or to let the column move. It moves, with the
+  bar hidden: the wheel reaches everything, nothing is lost, and no gutter is
+  painted. The page itself still never scrolls.
 */
 [data-home-shell] [data-home-scroll] {
-  overflow: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+[data-home-shell] [data-home-scroll]::-webkit-scrollbar {
+  display: none;
 }
 
 /*
@@ -325,7 +334,12 @@ body:has([data-home-shell]) > main {
   }
 }
 
-@media (max-height: 940px) {
+/*
+  940px was far too eager: a 937px window dropped both optional sidebar panels
+  and left the whole lower half of the column empty. The gate only exists for
+  genuinely short windows, so it sits well below the common laptop heights.
+*/
+@media (max-height: 720px) {
   [data-home-optional] {
     display: none;
   }

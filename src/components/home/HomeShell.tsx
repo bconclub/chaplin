@@ -110,6 +110,22 @@ export default function HomeShell() {
   const totalViews = DEMO_FLOOR.reach
     + characters.reduce((total, character) => total + character.stats.socialViews, 0);
 
+  /*
+    Actors with a real clip attached, ranked by reach. The panel is a shelf of
+    things you can watch, so an actor with no video does not belong in it — an
+    empty tile would be worse than a shorter list.
+  */
+  const topReels = useMemo(
+    () => characters
+      .filter((character) => brollByCharacter.get(character.id)?.videoUrl || character.videoUrl)
+      .sort((left, right) =>
+        right.stats.socialViews - left.stats.socialViews
+        || right.stats.socialImpressions - left.stats.socialImpressions
+        || right.stats.castings - left.stats.castings)
+      .slice(0, 4),
+    [characters, brollByCharacter],
+  );
+
   const topPerformers = useMemo(
     () => [...characters].sort((left, right) =>
       right.stats.socialImpressions - left.stats.socialImpressions
@@ -555,6 +571,53 @@ export default function HomeShell() {
             })}
           </ol>
         </section>
+
+        {/* Top reels — actors that actually have a clip, so the panel is a
+            shelf of watchable work rather than another list of names. */}
+        {topReels.length > 0 && (
+          <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">
+                <span aria-hidden="true">▶</span> Top reels
+              </h2>
+              <Link href="/characters" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {topReels.map((character) => {
+                const artwork = cardArtworkFor(character);
+                return (
+                  <Link
+                    key={character.id}
+                    href={`/characters/${character.id}`}
+                    className="group/reel relative block overflow-hidden rounded-lg border border-[#1b1b1b] transition-colors hover:border-accent/45"
+                  >
+                    <span className="relative block aspect-[4/5] w-full overflow-hidden bg-[#0d0d0d]">
+                      {artwork && (
+                        <Image
+                          src={artwork}
+                          alt=""
+                          fill
+                          sizes="150px"
+                          className="object-cover object-[68%_22%] transition-transform duration-500 group-hover/reel:scale-[1.06]"
+                        />
+                      )}
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+                      <span className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/50 text-[8px] backdrop-blur-md">
+                        ▶
+                      </span>
+                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[7.5px] font-semibold tabular-nums text-white/80">
+                        {clipLength(character)}
+                      </span>
+                      <span className="absolute inset-x-1 bottom-1 pr-8">
+                        <span className="block truncate text-[9.5px] font-semibold text-ink">{character.name}</span>
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
           <h2 className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Trending</h2>
