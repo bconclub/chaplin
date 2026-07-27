@@ -7,7 +7,6 @@ import { ARCHETYPE_HUE, ARCHETYPE_LABEL, hsl } from "@/lib/format";
 import { useChaplinStore } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import type { HomepageBroll } from "@/components/HeroGridCard";
-import { TRENDING_LABELS } from "@/components/home/home-nav";
 import CountUp from "@/components/home/CountUp";
 
 /** Cycles the featured performance so the library reads as alive, not static. */
@@ -141,7 +140,7 @@ export default function HomeShell() {
       right.stats.socialImpressions - left.stats.socialImpressions
       || right.stats.socialViews - left.stats.socialViews
       || right.stats.fans - left.stats.fans
-    ).slice(0, 5),
+    ).slice(0, 8),
     [characters],
   );
 
@@ -471,7 +470,7 @@ export default function HomeShell() {
                         : "border-[#202020] hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
                     }`}
                   >
-                    <span className="relative block h-[clamp(5.5rem,17vh,10rem)] w-full overflow-hidden bg-[#0d0d0d]">
+                    <span className="relative block h-[clamp(5rem,14vh,8.5rem)] w-full overflow-hidden bg-[#0d0d0d]">
                       {artwork ? (
                         <Image
                           src={artwork}
@@ -524,20 +523,29 @@ export default function HomeShell() {
               </h2>
               <Link href="/characters" className="text-[10px] font-semibold text-white/45 transition-colors hover:text-accent">View all ›</Link>
             </div>
-            {/* Three across, not four: at this column width a fourth tile puts
-                the face under 70px, which is a thumbnail rather than a casting
-                decision. */}
-            <div className="grid grid-cols-3 gap-2.5">
-              {(rosterOnly.length ? rosterOnly : featured).slice(0, 3).map((character) => {
+            {/* Column count tracks the width so the row always ends flush and
+                the tiles stay portrait. The fourth is display:none on narrower
+                screens rather than wrapping — a second row would make this
+                panel taller than the clips opposite. 1700px, not 2xl: at 1536
+                this column is still narrow enough that a fourth tile drops the
+                face to ~70px. */}
+            <div className="grid grid-cols-3 gap-2.5 min-[1700px]:grid-cols-4">
+              {(rosterOnly.length ? rosterOnly : featured).slice(0, 4).map((character, index) => {
                 const artwork = cardArtworkFor(character);
                 return (
                   <Link
                     key={character.id}
                     href={`/characters/${character.id}`}
                     data-home-roster-card
-                    className="group/roster block overflow-hidden rounded-xl border border-[#202020] transition-all hover:-translate-y-0.5 hover:border-accent/45"
+                    className={`group/roster overflow-hidden rounded-xl border border-[#202020] transition-all hover:-translate-y-0.5 hover:border-accent/45 ${
+                      index < 3 ? "block" : "hidden min-[1700px]:block"
+                    }`}
                   >
-                    <span className="relative block aspect-[2/3] w-full overflow-hidden bg-[#0d0d0d]">
+                    {/* Same height token as the clip cards opposite. An aspect
+                        ratio here made these tiles grow with the column width
+                        while the clips stayed fixed, so the two shelves never
+                        lined up. */}
+                    <span className="relative block h-[clamp(5rem,14vh,8.5rem)] w-full overflow-hidden bg-[#0d0d0d]">
                       {artwork && (
                         <Image
                           src={artwork}
@@ -554,7 +562,7 @@ export default function HomeShell() {
                     </span>
                     <span className="block px-2 pb-2 pt-1.5">
                       <span className="block truncate text-[11.5px] font-semibold">{character.name}</span>
-                      <span className="mt-0.5 block truncate text-[9px] text-white/45">
+                      <span className="mt-1 block truncate text-[8px] text-white/45">
                         {character.licenseType === "open" ? "Open licence" : `${character.royaltyRate}% royalty`}
                       </span>
                     </span>
@@ -562,23 +570,16 @@ export default function HomeShell() {
                 );
               })}
             </div>
-            {/* The three tiles leave a gap at the foot of the column; this uses
-                it to say how much more there actually is, rather than nothing. */}
-            <Link
-              href="/characters"
-              className="mt-2.5 flex items-center justify-between rounded-lg border border-[#202020] px-2.5 py-1.5 text-[9.5px] text-white/50 transition-colors hover:border-accent/40 hover:text-white"
-            >
-              <span>{featured.length} actors in the catalogue</span>
-              <span aria-hidden="true">›</span>
-            </Link>
           </section>
         </div>
         </div>
       </div>
 
       {/* ── RIGHT SIDEBAR ───────────────────────────────────────────── */}
-      <aside className="chaplin-scrollbar hidden min-h-0 flex-col gap-2 overflow-y-auto border-l border-[#202020] bg-[#0a0a0a] p-2 xl:flex" data-home-scroll>
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+      {/* Two panels only. Highlights keeps its natural height; performers takes
+          whatever is left, so the column ends flush instead of trailing off. */}
+      <aside className="hidden min-h-0 flex-col gap-2 overflow-hidden border-l border-[#202020] bg-[#0a0a0a] p-2 xl:flex" data-home-scroll>
+        <section className="home-frost shrink-0 rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Platform highlights</h2>
             <span className="flex items-center gap-1.5 text-[9px] font-semibold text-emerald-400">
@@ -607,12 +608,12 @@ export default function HomeShell() {
           </div>
         </section>
 
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
-          <div className="mb-3 flex items-center justify-between">
+        <section className="home-frost flex min-h-0 flex-1 flex-col rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+          <div className="mb-3 flex shrink-0 items-center justify-between">
             <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Top performers</h2>
             <Link href="/characters" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
           </div>
-          <ol className="grid gap-2">
+          <ol className="chaplin-scrollbar grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto">
             {topPerformers.map((character, index) => {
               const artwork = cardArtworkFor(character);
               return (
@@ -641,59 +642,6 @@ export default function HomeShell() {
           </ol>
         </section>
 
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
-          <h2 className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Trending</h2>
-          <div className="flex flex-wrap gap-1.5">
-            {TRENDING_LABELS.map((tag) => (
-              <Link
-                key={tag}
-                href="/characters"
-                className="rounded-full border border-[#242424] bg-[#0d0d0d] px-2.5 py-1 text-[10px] font-medium text-white/60 transition-colors hover:border-accent-secondary/60 hover:text-accent-secondary"
-              >
-                {tag}
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Live productions</h2>
-            <Link href="/studio/pipelines" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
-          </div>
-          <ul className="grid gap-2.5">
-            {featured.slice(0, 3).map((character, index) => {
-              const artwork = cardArtworkFor(character);
-              return (
-                <li key={character.id}>
-                  <Link href={`/characters/${character.id}`} className="flex items-center gap-2.5 rounded-xl border border-[#1b1b1b] bg-[#0d0d0d] p-2 transition-colors hover:border-accent/35">
-                    <span className="relative h-11 w-[3.9rem] shrink-0 overflow-hidden rounded-lg">
-                      {artwork ? <Image src={artwork} alt="" fill sizes="64px" className="object-cover" /> : null}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[11.5px] font-semibold">{character.name}</span>
-                        {index === 0 && (
-                          <span className="shrink-0 rounded bg-accent px-1 py-0.5 text-[7.5px] font-bold uppercase tracking-wide text-paper">Live</span>
-                        )}
-                      </span>
-                      <span className="mt-1 flex items-center gap-1.5 text-[9px] text-white/45">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                        {compact(character.stats.castings)} castings · {ARCHETYPE_LABEL[character.archetype]}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          <Link
-            href="/characters"
-            className="mt-3 block rounded-xl bg-accent py-2.5 text-center text-[12px] font-bold text-paper transition-transform hover:-translate-y-0.5"
-          >
-            Explore all actors
-          </Link>
-        </section>
       </aside>
     </div>
   );

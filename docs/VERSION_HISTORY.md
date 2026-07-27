@@ -217,3 +217,4 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.2.9 | `1493567` | 2026-07-27T01:42:28+05:30 | Show a character's context as a graph |
 | v0.2.10 | `4646e28` | 2026-07-27T16:29:44+05:30 | Put the wordmark back on home and stop the rail clipping it |
 | v0.2.11 | `321b4f5` | 2026-07-27T18:48:14+05:30 | Fill the right column and stop it hiding content |
+| v0.2.12 | `6928652` | 2026-07-27T19:30:18+05:30 | Split the home shelf 60/40 into clips and characters |
