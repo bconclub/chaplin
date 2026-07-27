@@ -165,3 +165,55 @@ Chaplin by one version ordinal. Patch and minor counters roll after 99.
 | v0.1.57 | `dfe7d3a` | 2026-07-26T12:20:09+05:30 | Fill and diversify the homepage rails |
 | v0.1.58 | `593b4ae` | 2026-07-26T12:21:34+05:30 | Render voice and theme briefs from global templates |
 | v0.1.59 | `f817503` | 2026-07-26T12:21:34+05:30 | Pin the studio rail action where it can be seen |
+| v0.1.60 | `4f4c0eb` | 2026-07-26T12:27:51+05:30 | Fix Eleven Music v2 chunk plans |
+| v0.1.61 | `7b14bd7` | 2026-07-26T12:28:16+05:30 | Document the verified ElevenLabs composition_plan contract |
+| v0.1.62 | `87ad7e7` | 2026-07-26T12:33:22+05:30 | Make story production handoff visible |
+| v0.1.63 | `bf1b1d2` | 2026-07-26T12:34:25+05:30 | Stop Magic from auto-spending, and pin the cast CTA |
+| v0.1.64 | `3f1eadb` | 2026-07-26T12:36:10+05:30 | Let the asset canvas scroll |
+| v0.1.65 | `c8d05de` | 2026-07-26T12:40:08+05:30 | Add the AUDIO SCENE grammar for audio-aware shots |
+| v0.1.66 | `de7487e` | 2026-07-26T12:42:17+05:30 | Reject a Punch that plays one beat four times |
+| v0.1.67 | `711df90` | 2026-07-26T12:43:39+05:30 | Drop the seeded story rail from the home page |
+| v0.1.68 | `764a381` | 2026-07-26T12:44:56+05:30 | Stop publishing theme briefs to the public feed |
+| v0.1.69 | `544d303` | 2026-07-26T12:48:17+05:30 | Show the script on the clock |
+| v0.1.70 | `471aa75` | 2026-07-26T12:49:21+05:30 | Lint the audio scene block |
+| v0.1.71 | `b11c912` | 2026-07-26T12:50:56+05:30 | Duck the theme under speech and normalise the delivered cut |
+| v0.1.72 | `7e0d631` | 2026-07-26T12:58:15+05:30 | Unblock production: stop rejecting an SFX brief that is clamped anyway |
+| v0.1.73 | `12ad8f6` | 2026-07-26T13:00:27+05:30 | Refuse a script cast with actors it was not written for |
+| v0.1.74 | `fc210a3` | 2026-07-26T13:08:12+05:30 | Stop actors bleeding into each other's scenes |
+| v0.1.75 | `d46b1cc` | 2026-07-26T13:11:16+05:30 | Merge remote-tracking branch 'origin/main' |
+| v0.1.76 | `ff52691` | 2026-07-26T13:14:22+05:30 | Send ElevenLabs the composition plan it documents |
+| v0.1.77 | `80ff4f8` | 2026-07-26T13:16:17+05:30 | Put Studio Auto and Magic Scene on one header row |
+| v0.1.78 | `b9bd109` | 2026-07-26T13:18:40+05:30 | Show each still the moment its provider returns |
+| v0.1.79 | `398a64e` | 2026-07-26T13:22:13+05:30 | Publish only the still the creator keeps |
+| v0.1.80 | `f577ac3` | 2026-07-26T13:23:50+05:30 | Give every shot an audio plan so scenes stop rendering mute |
+| v0.1.81 | `7f69cf3` | 2026-07-26T13:25:38+05:30 | Notice a finished shot when it finishes |
+| v0.1.82 | `5734fb9` | 2026-07-26T13:27:49+05:30 | Name feed media after the actor and make it open them |
+| v0.1.83 | `4b9c047` | 2026-07-26T13:29:33+05:30 | Stop shredding a prose theme description into style tags |
+| v0.1.84 | `892b2e2` | 2026-07-26T13:30:57+05:30 | Let the character room's theme be paused |
+| v0.1.85 | `39b9137` | 2026-07-26T13:34:54+05:30 | Render the production inside the studio |
+| v0.1.86 | `73755d4` | 2026-07-26T13:36:42+05:30 | Add an Upcoming tab for shows in production |
+| v0.1.87 | `1fc930b` | 2026-07-26T13:37:58+05:30 | Stop sending Seedance a first frame and a voice reference together |
+| v0.1.88 | `7d2daf9` | 2026-07-26T13:39:14+05:30 | Direct the shot to perform, not to stand and wait |
+| v0.1.89 | `6b29638` | 2026-07-26T13:41:23+05:30 | Bind scene frames to the actor's own style sheet |
+| v0.1.90 | `950b2ca` | 2026-07-26T13:44:23+05:30 | Address composition plans to the model that accepts them |
+| v0.1.91 | `a1ee4a4` | 2026-07-26T13:46:05+05:30 | Make the theme an arrangement instead of a few chimes |
+| v0.1.92 | `746fbaa` | 2026-07-26T13:57:00+05:30 | Refuse a concept that names an actor it did not cast |
+| v0.1.93 | `559a094` | 2026-07-26T15:29:46+05:30 | Let each actor audition in their own words |
+| v0.1.94 | `bbd2474` | 2026-07-26T15:36:14+05:30 | Keep the location's sound in the delivered cut |
+| v0.1.95 | `5bbb134` | 2026-07-26T15:39:12+05:30 | Let the actor actually speak in the shot |
+| v0.1.96 | `74024ef` | 2026-07-26T15:48:29+05:30 | Say why live voice playback failed |
+| v0.1.97 | `2b109db` | 2026-07-26T15:51:50+05:30 | Do not lose a production to one orphaned voice |
+| v0.1.98 | `90950d5` | 2026-07-26T16:24:33+05:30 | Stop shots running backwards, and let feed media play |
+| v0.1.99 | `0c49630` | 2026-07-26T16:26:58+05:30 | Publish the finished cut when it is approved |
+| v0.2.0 | `8fb9c8d` | 2026-07-26T16:35:09+05:30 | Make the home hero fit a phone |
+| v0.2.1 | `5786b59` | 2026-07-26T16:36:24+05:30 | Prefer the BytePlus still when picking a video seed |
+| v0.2.2 | `f9987c5` | 2026-07-26T16:42:45+05:30 | Make a finished cut watchable |
+| v0.2.3 | `587131c` | 2026-07-26T16:50:49+05:30 | Render the scenes of a production at the same time |
+| v0.2.4 | `bab0c4d` | 2026-07-26T16:57:42+05:30 | Retry a scene the provider dropped rather than losing the batch |
+| v0.2.5 | `1c633fe` | 2026-07-27T00:25:18+05:30 | Show live provider readiness in admin |
+| v0.2.6 | `71428d4` | 2026-07-27T00:48:43+05:30 | Make the home page fit the viewport instead of scrolling |
+| v0.2.7 | `c8d2fc4` | 2026-07-27T01:24:56+05:30 | Rebuild the home hero and give every page one width |
+| v0.2.8 | `cc319b3` | 2026-07-27T01:36:06+05:30 | Stop the hero crop cutting actors' heads off |
+| v0.2.9 | `1493567` | 2026-07-27T01:42:28+05:30 | Show a character's context as a graph |
+| v0.2.10 | `4646e28` | 2026-07-27T16:29:44+05:30 | Put the wordmark back on home and stop the rail clipping it |
+| v0.2.11 | `321b4f5` | 2026-07-27T18:48:14+05:30 | Fill the right column and stop it hiding content |

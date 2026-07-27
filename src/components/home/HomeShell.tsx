@@ -111,20 +111,30 @@ export default function HomeShell() {
     + characters.reduce((total, character) => total + character.stats.socialViews, 0);
 
   /*
-    Actors with a real clip attached, ranked by reach. The panel is a shelf of
-    things you can watch, so an actor with no video does not belong in it — an
-    empty tile would be worse than a shorter list.
+    The bottom band is 60/40: what you can watch now, and who else is on the
+    shelf. Reels were crammed into the right rail where four tiles competed with
+    four other panels; a clip earns the wide column, and the roster reads fine
+    narrow. Each list falls back to the full featured set so neither column can
+    render empty on a thin catalogue.
   */
-  const topReels = useMemo(
-    () => characters
-      .filter((character) => brollByCharacter.get(character.id)?.videoUrl || character.videoUrl)
-      .sort((left, right) =>
-        right.stats.socialViews - left.stats.socialViews
-        || right.stats.socialImpressions - left.stats.socialImpressions
-        || right.stats.castings - left.stats.castings)
-      .slice(0, 4),
-    [characters, brollByCharacter],
+  const watchNow = useMemo(
+    () => featured.filter((character) => brollByCharacter.get(character.id)?.videoUrl || character.videoUrl),
+    [featured, brollByCharacter],
   );
+  /*
+    The 40 column must not repeat the faces already sitting in the 60 rail.
+    A character with no clip belongs here by definition; but today the whole
+    catalogue has video, so top up from the tail of the rail instead — the
+    ones you would otherwise have to scroll to reach.
+  */
+  const rosterOnly = useMemo(() => {
+    const noClip = featured.filter(
+      (character) => !(brollByCharacter.get(character.id)?.videoUrl || character.videoUrl),
+    );
+    if (noClip.length >= 4) return noClip;
+    const unseen = watchNow.slice(4).filter((character) => !noClip.includes(character));
+    return [...noClip, ...unseen];
+  }, [featured, brollByCharacter, watchNow]);
 
   const topPerformers = useMemo(
     () => [...characters].sort((left, right) =>
@@ -221,8 +231,8 @@ export default function HomeShell() {
               height={585}
               priority
               quality={90}
-              sizes="132px"
-              className="h-7 w-auto max-w-[8.25rem] object-contain object-left"
+              sizes="264px"
+              className="h-14 w-auto max-w-[16.5rem] object-contain object-left"
             />
           </Link>
           <label className="relative mx-auto flex w-full max-w-[36rem] items-center">
@@ -427,11 +437,12 @@ export default function HomeShell() {
             </span>
           </section>
 
-          {/* ── TRENDING NOW ─────────────────────────────────────── */}
-          <section className="shrink-0 home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
+          {/* ── WATCH NOW (60) · CHARACTERS (40) ──────────────────── */}
+          <div className="grid shrink-0 gap-2.5 lg:grid-cols-[3fr_2fr]">
+          <section className="home-frost min-w-0 rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-watch-now>
             <div className="mb-3 flex items-center justify-between px-0.5">
               <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
-                <span aria-hidden="true">🔥</span> Trending now
+                <span aria-hidden="true">▶</span> Watch now
               </h2>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => scrollRow(-1)} aria-label="Scroll left" className="flex h-6 w-6 items-center justify-center rounded-full border border-[#252525] text-[10px] text-white/50 transition-colors hover:border-accent hover:text-accent">‹</button>
@@ -444,7 +455,7 @@ export default function HomeShell() {
               className="chaplin-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2"
               data-trending-rail
             >
-              {featured.map((character) => {
+              {(watchNow.length ? watchNow : featured).map((character) => {
                 const active = character.id === currentId;
                 const artwork = cardArtworkFor(character);
                 return (
@@ -504,6 +515,64 @@ export default function HomeShell() {
             </div>
           </section>
 
+          {/* The 40: who else is on the shelf. Portrait tiles, because this
+              column is about the face rather than the clip. */}
+          <section className="home-frost min-w-0 rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-roster>
+            <div className="mb-3 flex items-center justify-between px-0.5">
+              <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
+                <span aria-hidden="true">◈</span> Characters
+              </h2>
+              <Link href="/characters" className="text-[10px] font-semibold text-white/45 transition-colors hover:text-accent">View all ›</Link>
+            </div>
+            {/* Three across, not four: at this column width a fourth tile puts
+                the face under 70px, which is a thumbnail rather than a casting
+                decision. */}
+            <div className="grid grid-cols-3 gap-2.5">
+              {(rosterOnly.length ? rosterOnly : featured).slice(0, 3).map((character) => {
+                const artwork = cardArtworkFor(character);
+                return (
+                  <Link
+                    key={character.id}
+                    href={`/characters/${character.id}`}
+                    data-home-roster-card
+                    className="group/roster block overflow-hidden rounded-xl border border-[#202020] transition-all hover:-translate-y-0.5 hover:border-accent/45"
+                  >
+                    <span className="relative block aspect-[2/3] w-full overflow-hidden bg-[#0d0d0d]">
+                      {artwork && (
+                        <Image
+                          src={artwork}
+                          alt=""
+                          fill
+                          sizes="180px"
+                          className="object-cover object-[68%_22%] transition-transform duration-500 group-hover/roster:scale-[1.06]"
+                        />
+                      )}
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
+                      <span className="absolute left-1.5 top-1.5 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 text-[7.5px] font-bold uppercase tracking-[0.1em] text-white/85 backdrop-blur-md">
+                        {ARCHETYPE_LABEL[character.archetype]}
+                      </span>
+                    </span>
+                    <span className="block px-2 pb-2 pt-1.5">
+                      <span className="block truncate text-[11.5px] font-semibold">{character.name}</span>
+                      <span className="mt-0.5 block truncate text-[9px] text-white/45">
+                        {character.licenseType === "open" ? "Open licence" : `${character.royaltyRate}% royalty`}
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+            {/* The three tiles leave a gap at the foot of the column; this uses
+                it to say how much more there actually is, rather than nothing. */}
+            <Link
+              href="/characters"
+              className="mt-2.5 flex items-center justify-between rounded-lg border border-[#202020] px-2.5 py-1.5 text-[9.5px] text-white/50 transition-colors hover:border-accent/40 hover:text-white"
+            >
+              <span>{featured.length} actors in the catalogue</span>
+              <span aria-hidden="true">›</span>
+            </Link>
+          </section>
+        </div>
         </div>
       </div>
 
@@ -571,53 +640,6 @@ export default function HomeShell() {
             })}
           </ol>
         </section>
-
-        {/* Top reels — actors that actually have a clip, so the panel is a
-            shelf of watchable work rather than another list of names. */}
-        {topReels.length > 0 && (
-          <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">
-                <span aria-hidden="true">▶</span> Top reels
-              </h2>
-              <Link href="/characters" className="text-[9.5px] font-semibold text-white/40 transition-colors hover:text-accent">View all ›</Link>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {topReels.map((character) => {
-                const artwork = cardArtworkFor(character);
-                return (
-                  <Link
-                    key={character.id}
-                    href={`/characters/${character.id}`}
-                    className="group/reel relative block overflow-hidden rounded-lg border border-[#1b1b1b] transition-colors hover:border-accent/45"
-                  >
-                    <span className="relative block aspect-[4/5] w-full overflow-hidden bg-[#0d0d0d]">
-                      {artwork && (
-                        <Image
-                          src={artwork}
-                          alt=""
-                          fill
-                          sizes="150px"
-                          className="object-cover object-[68%_22%] transition-transform duration-500 group-hover/reel:scale-[1.06]"
-                        />
-                      )}
-                      <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-                      <span className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/25 bg-black/50 text-[8px] backdrop-blur-md">
-                        ▶
-                      </span>
-                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[7.5px] font-semibold tabular-nums text-white/80">
-                        {clipLength(character)}
-                      </span>
-                      <span className="absolute inset-x-1 bottom-1 pr-8">
-                        <span className="block truncate text-[9.5px] font-semibold text-ink">{character.name}</span>
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
         <section className="home-frost rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-optional>
           <h2 className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-accent">Trending</h2>
