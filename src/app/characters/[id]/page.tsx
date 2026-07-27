@@ -166,10 +166,17 @@ export default function CharacterProfilePage() {
         </button>
       )}
 
-      {/* Every actor gets the same 16:9 casting stage. The video fills this
-          frame edge-to-edge, so profile cards never change size by media. */}
+      {/* Every actor gets the same casting stage, so profile cards never change
+          size by media. 16:9 is the shape, but height is capped against the
+          viewport: at full page width the ratio alone made this frame ~970px
+          tall, which pushed the name, tagline and every stat below the fold —
+          the actor's own page opened on nothing but a playing clip. The media
+          is object-cover inside, so the cap crops rather than distorts. */}
       <div className="poster-card overflow-hidden rounded-xl" data-character-profile-hero>
-        <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16 / 9" }}>
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ aspectRatio: "16 / 9", maxHeight: "62vh" }}
+        >
           <CharacterBroll character={character} />
           <div className="absolute inset-0 flex max-w-[78%] flex-col justify-end gap-1 p-4 pb-4 sm:max-w-[52%] sm:gap-2 sm:p-8 lg:p-10">
             <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">

@@ -319,7 +319,10 @@ export default function CharacterBroll({ character }: { character: Character }) 
           loop
           playsInline
           preload="metadata"
-          className="absolute inset-0 h-full w-full object-cover object-center"
+          /* Anchored high and right to match the still above. The profile frame
+             is now capped against viewport height, so a centred crop of a
+             portrait clip takes the head off the top of the shot. */
+          className="absolute inset-0 h-full w-full object-cover object-[68%_25%]"
         />
       )}
       {dialogueSource && <audio ref={dialogueRef} src={dialogueSource} preload="metadata" onEnded={() => handleTrackEnded("voice")} data-broll-track="voice" />}

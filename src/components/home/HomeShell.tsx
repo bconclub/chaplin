@@ -273,7 +273,9 @@ export default function HomeShell() {
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-2.5 sm:p-3" data-home-scroll>
+        {/* Tighter vertical padding than horizontal: every pixel taken off the
+            top and bottom here goes straight to the hero, which is flex-1. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2.5 py-2 sm:px-3" data-home-scroll>
           {/* ── HERO ─────────────────────────────────────────────── */}
           <section
             /*
@@ -438,8 +440,8 @@ export default function HomeShell() {
 
           {/* ── WATCH NOW (60) · CHARACTERS (40) ──────────────────── */}
           <div className="grid shrink-0 gap-2.5 lg:grid-cols-[3fr_2fr]">
-          <section className="home-frost min-w-0 rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-watch-now>
-            <div className="mb-3 flex items-center justify-between px-0.5">
+          <section className="home-frost min-w-0 rounded-2xl px-3.5 py-2.5 backdrop-blur-2xl backdrop-saturate-150" data-home-watch-now>
+            <div className="mb-2 flex items-center justify-between px-0.5">
               <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
                 <span aria-hidden="true">▶</span> Watch now
               </h2>
@@ -451,7 +453,9 @@ export default function HomeShell() {
             </div>
             <div
               ref={rowRef}
-              className="chaplin-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2"
+              /* The ‹ › buttons above are the affordance; a visible track here
+                 only ate height off the hero. */
+              className="no-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto"
               data-trending-rail
             >
               {(watchNow.length ? watchNow : featured).map((character) => {
@@ -516,8 +520,8 @@ export default function HomeShell() {
 
           {/* The 40: who else is on the shelf. Portrait tiles, because this
               column is about the face rather than the clip. */}
-          <section className="home-frost min-w-0 rounded-2xl p-3.5 backdrop-blur-2xl backdrop-saturate-150" data-home-roster>
-            <div className="mb-3 flex items-center justify-between px-0.5">
+          <section className="home-frost min-w-0 rounded-2xl px-3.5 py-2.5 backdrop-blur-2xl backdrop-saturate-150" data-home-roster>
+            <div className="mb-2 flex items-center justify-between px-0.5">
               <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em]">
                 <span aria-hidden="true">◈</span> Characters
               </h2>
