@@ -195,6 +195,20 @@ export default function HomeShell() {
       {/* ── CENTER COLUMN ───────────────────────────────────────────── */}
       <div className="flex min-h-0 min-w-0 flex-col">
         <header className="flex h-[4.5rem] shrink-0 items-center gap-4 border-b border-[#202020] px-5">
+          {/* Home lost its wordmark when the bespoke rail was removed — the app
+              rail carries no brand, so nothing identified the product here. */}
+          <Link href="/" aria-label="Chaplin home" className="hidden shrink-0 items-center sm:flex">
+            <Image
+              src="/brand/chaplin-logo-transparent.png"
+              alt="Chaplin"
+              width={1826}
+              height={585}
+              priority
+              quality={90}
+              sizes="132px"
+              className="h-7 w-auto max-w-[8.25rem] object-contain object-left"
+            />
+          </Link>
           <label className="relative mx-auto flex w-full max-w-[36rem] items-center">
             <span className="pointer-events-none absolute left-3.5 text-white/35">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

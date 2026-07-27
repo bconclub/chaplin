@@ -386,6 +386,15 @@ body:has([data-home-shell]) > main {
     transform: translate3d(-50%, 0, 0) !important;
   }
 
+  /*
+    The header is fixed and full-width, so the rail sits on top of its left
+    edge and clipped the wordmark to "HAPLIN". Main reserved the rail's room;
+    the header never did.
+  */
+  body > header > div {
+    padding-left: 6.5rem;
+  }
+
   body > main {
     padding-left: 5.5rem;
   }
